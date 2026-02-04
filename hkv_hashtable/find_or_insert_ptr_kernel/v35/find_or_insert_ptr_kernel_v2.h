@@ -42,9 +42,9 @@ LAUNCH_BOUND(THREAD_NUM) inline void find_or_insert_ptr_kernel_vf_v2(
     uint32_t bucket_max_size, uint32_t dim, GM_ADDR keys_gm,
     GM_ADDR value_ptrs_gm, GM_ADDR scores_gm, GM_ADDR key_ptrs_gm, uint64_t n,
     GM_ADDR founds_gm, uint64_t global_epoch, uint64_t cur_score,
-    uint32_t blockIdx, uint64_t thread_all,uint32_t max_bucket_shift,
-    uint64_t capacity_divisor_magic, uint64_t capacity,
-    uint64_t capacity_divisor_shift, uint64_t n_align_warp) {
+    uint32_t blockIdx, uint64_t thread_all, uint32_t max_bucket_shift,
+    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
+    uint64_t n_align_warp, uint64_t capacity) {
   if (!buckets_gm) {
     return;
   }
