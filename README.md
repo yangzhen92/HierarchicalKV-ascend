@@ -42,7 +42,7 @@
     注意：此安装方式仅用作本地简单验证时使用，未考虑网络安全等问题，谨慎使用！
     参考示例如下，请修改HKV_HOME为实际hkv目录路径。
     ```bash
-    export HKV_HOME=/home/Ascend/cust_op/hkv
+    export HKV_HOME=/home/Ascend/HierarchicalKV-ascend
     wget https://github.com/google/googletest/archive/refs/tags/release-1.11.0.tar.gz --no-check-certificate &&
     tar xf release-1.11.0.tar.gz && cd googletest-release-1.11.0 &&
     cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_CXX_FLAGS="-D_GLIBCXX_USE_CXX11_ABI=0" -DCMAKE_INSTALL_PREFIX=$HKV_HOME/3rdparty/googletest -DCMAKE_INSTALL_LIBDIR=lib . &&
