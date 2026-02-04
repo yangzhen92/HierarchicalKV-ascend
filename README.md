@@ -19,7 +19,7 @@
   - 打开样例目录   
     以命令行方式下载样例代码，master分支为例。
     ```bash
-    cd ${git_clone_path}/RecSDK/cust_op/hkv/
+    cd ${git_clone_path}/HierarchicalKV-ascend
     ```
 
   - 配置环境变量
