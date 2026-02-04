@@ -152,49 +152,49 @@ LAUNCH_BOUND(THREAD_NUM) inline void find_or_insert_ptr_kernel_vf_v2(
                                               false);
               break;
             }
-          }
-        } while (true);
-        // 3.3 找到了，跳出循环
-        if (occupy_result == OccupyResult::DUPLICATE) {
-          break;
-          // 3.4 未找到，且桶已满，进行下一波对比
-        } else if (cur_bucket_size == bucket_max_size) {
-          continue;
-        }
-        // 3.5 未找到，桶未满，找空桶
-        VecD_Comp empty_digests_ = empty_digests<K>();
-        cmp_result = vcmpeq4(probe_digests, empty_digests_);
-        cmp_result &= 0x01010101;
-        do {
-          if (cmp_result == 0) {
+          } while (true);
+          // 3.3 找到了，跳出循环
+          if (occupy_result == OccupyResult::DUPLICATE) {
             break;
-          }
-          uint32_t index =
-              (Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
-          cmp_result &= (cmp_result - 1);
-          possible_pos = pos_cur + index;
-          if (offset == 0 && possible_pos < key_pos) {
+            // 3.4 未找到，且桶已满，进行下一波对比
+          } else if (cur_bucket_size == bucket_max_size) {
             continue;
           }
+          // 3.5 未找到，桶未满，找空桶
+          VecD_Comp empty_digests_ = empty_digests<K>();
+          cmp_result = vcmpeq4(probe_digests, empty_digests_);
+          cmp_result &= 0x01010101;
+          do {
+            if (cmp_result == 0) {
+              break;
+            }
+            uint32_t index =
+                (Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+            cmp_result &= (cmp_result - 1);
+            possible_pos = pos_cur + index;
+            if (offset == 0 && possible_pos < key_pos) {
+              continue;
+            }
 
-          auto current_key_ptr = BUCKET::keys(bucket_keys, possible_pos);
-          auto try_key =
-              Simt::AtomicCas(current_key_ptr, static_cast<K>(EMPTY_KEY),
-                              static_cast<K>(LOCKED_KEY));
-          // 3.6 找到空位，尝试抢占
-          if (try_key == static_cast<K>(EMPTY_KEY)) {
-            occupy_result = OccupyResult::OCCUPIED_EMPTY;
-            key_pos = possible_pos;
-            ScoreFunctor::update_with_digest(bucket_keys, key_pos, scores,
-                                             kv_idx, score, bucket_max_size,
-                                             get_digest<K>(key), true);
-            atomicAdd(bucket_size, 1);
+            auto current_key_ptr = BUCKET::keys(bucket_keys, possible_pos);
+            auto try_key =
+                Simt::AtomicCas(current_key_ptr, static_cast<K>(EMPTY_KEY),
+                                static_cast<K>(LOCKED_KEY));
+            // 3.6 找到空位，尝试抢占
+            if (try_key == static_cast<K>(EMPTY_KEY)) {
+              occupy_result = OccupyResult::OCCUPIED_EMPTY;
+              key_pos = possible_pos;
+              ScoreFunctor::update_with_digest(bucket_keys, key_pos, scores,
+                                              kv_idx, score, bucket_max_size,
+                                              get_digest<K>(key), true);
+              atomicAdd(bucket_size, 1);
+              break;
+            }
+          } while (true);
+          // 3.7 抢占到空位，跳出循环，否则进行下一波对比
+          if (occupy_result == OccupyResult::OCCUPIED_EMPTY) {
             break;
           }
-        } while (true);
-        // 3.7 抢占到空位，跳出循环，否则进行下一波对比
-        if (occupy_result == OccupyResult::OCCUPIED_EMPTY) {
-          break;
         }
       }
     } else {
