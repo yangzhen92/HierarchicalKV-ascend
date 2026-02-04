@@ -35,7 +35,7 @@ using namespace AscendC;
 
 constexpr uint32_t THREAD_NUM = 512;
 template <typename K = uint64_t, typename V = float, typename S = uint64_t,
-          int Strategy = -1>
+          int Strategy = -1, int32_t EVICT_GROUP_SIZE = 16>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM) inline void find_or_insert_ptr_kernel_vf_v2(
     GM_ADDR buckets_gm, GM_ADDR buckets_size_gm, uint64_t buckets_num,
@@ -75,6 +75,8 @@ LAUNCH_BOUND(THREAD_NUM) inline void find_or_insert_ptr_kernel_vf_v2(
       reinterpret_cast<__gm__ K * __gm__*>(key_ptrs_gm);
   __gm__ bool* __restrict__ founds = reinterpret_cast<__gm__ bool*>(founds_gm);
   __gm__ S* __restrict__ scores = reinterpret_cast<__gm__ S*>(scores_gm);
+  S score = static_cast<S>(EMPTY_SCORE);
+  constexpr uint32_t STRIDE = sizeof(VecD_Comp) / sizeof(D);
 
   uint32_t key_pos = 0;
   K key = 0;
@@ -82,7 +84,7 @@ LAUNCH_BOUND(THREAD_NUM) inline void find_or_insert_ptr_kernel_vf_v2(
   __gm__ V* bucket_values = nullptr;
   __gm__ S* bucket_scores = nullptr;
   __gm__ int32_t* bucket_size = nullptr;
-  for (uint64_t kv_idx = block_index * blockDim.x + threadIdx.x;
+  for (uint64_t kv_idx = blockIdx * blockDim.x + threadIdx.x;
        kv_idx < n_align_warp; kv_idx += thread_all) {
     VecD_Comp target_digests{0};
     OccupyResult occupy_result{OccupyResult::INITIAL};
