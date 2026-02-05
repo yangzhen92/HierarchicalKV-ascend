@@ -151,6 +151,7 @@ bool IS_VACANT_KEY(K key) {
 }
 
 #if !defined(__CCE__)
+__attribute__((unused))
 static aclError init_reserved_keys(int index) {
   if (index < 1 || index > MAX_RESERVED_KEY_BIT) {
     // index = 0 is the default,
