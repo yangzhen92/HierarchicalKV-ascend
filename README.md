@@ -9,7 +9,7 @@
 
 ## 前言
 
-本项目参考[NVIDIA HierarchicalKV(Beta)](https://github.com/NVIDIA-Merlin/HierarchicalKV.git)，实现了Ascend950系列架构下HKV HashTable的移植样例。
+本项目参考[NVIDIA HierarchicalKV(Beta)](https://github.com/NVIDIA-Merlin/HierarchicalKV.git)，实现了昇腾A5架构下HKV HashTable的移植样例。
 
 ## 概述
 
