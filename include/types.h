@@ -19,7 +19,9 @@
 
 #include <stddef.h>
 #include <cstdint>
+#include <cstdio>
 #include <limits>
+#include <string>
 #include "cuda2npu.h"
 #include "utils.h"
 namespace npu {
