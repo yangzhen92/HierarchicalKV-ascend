@@ -78,13 +78,6 @@ target_include_directories(hkv_includes INTERFACE
 
 add_compile_options(-std=c++17 -D_GLIBCXX_USE_CXX11_ABI=0)
 
-target_include_directories(hkv_demo PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_include_directories(hkv_benchmark PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
 target_compile_options(hkv_demo PRIVATE
   $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},cpu>:-g>>
   -O2 -Wall -Werror -DSOC_VERSION="${SOC_VERSION}"
@@ -137,9 +130,15 @@ target_link_libraries(hkv_benchmark PRIVATE
 
 if(ENABLE_TEST STREQUAL 1)
   enable_testing()
+  set(INSTALL_GTEST OFF CACHE BOOL "Disable installation of GTest" FORCE)
+  set(INSTALL_GMOCK OFF CACHE BOOL "Disable installation of GMock" FORCE)
+  add_subdirectory(3rdparty/gtest)
   add_subdirectory(tests)
 endif()
 
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+  DESTINATION ./
+)
 install(TARGETS hkv_demo
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
