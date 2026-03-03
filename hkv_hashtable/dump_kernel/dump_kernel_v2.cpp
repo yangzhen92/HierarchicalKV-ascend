@@ -68,7 +68,7 @@ extern "C" __global__ __aicore__ void dump_kernel_v2(
       group_size,
       DISPATCH_VALUE_SIZE(
           value_size,
-          (Simt::VF_CALL<dump_kernel_vf_v2<K, DTYPE, S, pred_func_ptr, GROUP_SIZE>>(
+          (Simt::VF_CALL<dump_kernel_vf_v2<K, DTYPE, S, GROUP_SIZE>>(
               Simt::Dim3{static_cast<uint32_t>(THREAD_NUM)}, table, buckets,
               pattern, threshold,
               keys, vals, scores, offset, search_length, total_thread_num,
@@ -86,9 +86,9 @@ void dump_kernel_v2_do(uint32_t blockDim, void* stream, void* table,
                        void* keys, void* vals, void* scores,
                        const size_t offset, const size_t search_length,
                        void* dump_counter, uint32_t value_size,
-                       int32_t group_size, uint32_t dim) {
+                       int32_t group_size, uint32_t dim, void* pred_func) {
   dump_kernel_v2<<<blockDim, UB_SIZE, stream>>>(
-      (GM_ADDR)table, (GM_ADDR)buckets, pattern, threshold, (GM_ADDR)keys,
+      pred_func, (GM_ADDR)table, (GM_ADDR)buckets, pattern, threshold, (GM_ADDR)keys,
       (GM_ADDR)vals, (GM_ADDR)scores, offset, search_length,
       (GM_ADDR)dump_counter, value_size, group_size, dim);
 }

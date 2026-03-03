@@ -124,10 +124,11 @@ __simt_vf__ __aicore__ LAUNCH_BOUND(THREAD_NUM) inline void dump_kernel_vf(
   }
 }
 
-template <class K, class V, class S,
-          template <typename, typename> class PredFunctor,  int32_t GROUP_SIZE = 16>
+// template <class K, class V, class S,
+//           template <typename, typename> class PredFunctor,  int32_t GROUP_SIZE = 16>
+template <class K, class V, class S, int32_t GROUP_SIZE = 16>
 __simt_vf__ __aicore__ LAUNCH_BOUND(THREAD_NUM) inline void dump_kernel_vf_v2(
-    GM_ADDR table_gm, GM_ADDR buckets_gm, void* pattern, void* threshold,
+    GM_ADDR table_gm, GM_ADDR buckets_gm, const K& pattern, conset S& threshold,
     GM_ADDR key_gm, GM_ADDR val_gm,
     GM_ADDR score_gm, const size_t offset, const size_t search_length,
     const uint64_t total_thread_num, GM_ADDR dump_counter_gm,
@@ -138,8 +139,8 @@ __simt_vf__ __aicore__ LAUNCH_BOUND(THREAD_NUM) inline void dump_kernel_vf_v2(
     return;
   }
 
-  const K* __restrict__ d_pattern = reinterpret_cast<const K*>(pattern);
-  const S* __restrict__ d_threshold = reinterpret_cast<const S*>(threshold);
+  // const K* __restrict__ d_pattern = reinterpret_cast<const K*>(pattern);
+  // const S* __restrict__ d_threshold = reinterpret_cast<const S*>(threshold);
 
   // 将 void* 转换为正确的函数指针类型
   using PredFuncType = bool (*)(const K&, const S&, const K&, const S&);
@@ -176,7 +177,7 @@ __simt_vf__ __aicore__ LAUNCH_BOUND(THREAD_NUM) inline void dump_kernel_vf_v2(
     const K key{bucket_keys_ptr[key_idx]};
     const S score{bucket_scores_ptr[key_idx]};
 
-    if (!IS_RESERVED_KEY<K>(key) && pred(key, score, *d_pattern, *d_threshold)) {
+    if (!IS_RESERVED_KEY<K>(key) && pred(key, score, pattern, threshold)) {
       size_t local_index{atomicAdd(block_acc, 1u)};
       block_tuples[local_index].key = key;
       block_tuples[local_index].value = reinterpret_cast<uint64_t>(&bucket_values_ptr[key_idx * dim_in]);
