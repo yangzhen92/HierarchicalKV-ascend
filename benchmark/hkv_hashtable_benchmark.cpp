@@ -296,9 +296,13 @@ float test_one_api(std::shared_ptr<Table>& table, const API_Select api,
         NPU_CHECK(
             aclrtMemset(d_dump_counter, sizeof(size_t), 0, sizeof(size_t)));
         K pattern = 0;
-        table->template export_batch_if<ExportIfPredFunctor>(
-            pattern, threshold, key_num_per_op_warmup, 0, d_dump_counter,
-            d_keys, d_vectors, d_scores, stream);
+        // table->template export_batch_if<ExportIfPredFunctor>(
+        //     pattern, threshold, key_num_per_op_warmup, 0, d_dump_counter,
+        //     d_keys, d_vectors, d_scores, stream);
+        table->export_batch_if(
+        ExportIfPredFunctor<uint64_t, uint64_t>::static_predicate,
+        pattern, threshold, key_num_per_op_warmup, 0, d_dump_counter,
+        d_keys, d_vectors, d_scores, stream);
         NPU_CHECK(aclrtSynchronizeStream(stream));
         NPU_CHECK(aclrtFree(d_dump_counter));
         break;
@@ -452,10 +456,14 @@ float test_one_api(std::shared_ptr<Table>& table, const API_Select api,
       NPU_CHECK(aclrtMemset(d_dump_counter, sizeof(size_t), 0, sizeof(size_t)));
       timer.start();
       K pattern = 0;
-      table->template export_batch_if<ExportIfPredFunctor>(
-          pattern, threshold, key_num_per_op / target_load_factor *
-          safe_ratio, 0, d_dump_counter, d_keys, d_vectors, d_scores,
-          stream);
+      // table->template export_batch_if<ExportIfPredFunctor>(
+      //     pattern, threshold, key_num_per_op / target_load_factor *
+      //     safe_ratio, 0, d_dump_counter, d_keys, d_vectors, d_scores,
+      //     stream);
+      table->export_batch_if(
+        ExportIfPredFunctor<uint64_t, uint64_t>::static_predicate,
+        pattern, threshold, key_num_per_op / target_load_factor * safe_ratio,
+        0, d_dump_counter, d_keys, d_vectors, d_scores, stream);
       NPU_CHECK(aclrtSynchronizeStream(stream));
       timer.end();
       NPU_CHECK(aclrtFree(d_dump_counter));

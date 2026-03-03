@@ -1971,15 +1971,55 @@ class HashTable : public HashTableBase<K, V, S> {
    * memory. Reducing the value for @p n is currently required if this exception
    * occurs.
    */
-  template <template <typename, typename> class PredFunctor>
-  void export_batch_if(const key_type& pattern, const score_type& threshold,
+  // template <template <typename, typename> class PredFunctor>
+  // void export_batch_if(const key_type& pattern, const score_type& threshold,
+  //                      size_type n, const size_type offset,
+  //                      size_type* d_counter,
+  //                      key_type* keys,                // (n)
+  //                      value_type* values,            // (n, DIM)
+  //                      score_type* scores = nullptr,  // (n)
+  //                      aclrtStream stream = 0) const {
+
+  void export_batch_if(bool (*pred_func)(const key_type&, const score_type&, const key_type&, const score_type&),
+                       const key_type& pattern, const score_type& threshold,
                        size_type n, const size_type offset,
                        size_type* d_counter,
                        key_type* keys,                // (n)
                        value_type* values,            // (n, DIM)
                        score_type* scores = nullptr,  // (n)
                        aclrtStream stream = 0) const {
-    std::cout << "[Unsupport export_batch_if yet]\n";
+    //std::cout << "[support export_batch_if yet]\n";
+
+    // std::unique_ptr<read_shared_lock> lock_ptr;
+    // if (options_.api_lock) {
+    //   lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
+    // }
+    NPU_CHECK(aclrtMemset(d_counter, 0, sizeof(size_type), stream));
+    // 将 pattern 和 threshold 拷贝到设备内存
+  key_type* d_pattern;
+  score_type* d_threshold;
+  NPU_CHECK(aclrtMalloc(&d_pattern, sizeof(key_type), ACL_MEM_MALLOC_NORMAL_ONLY));
+  NPU_CHECK(aclrtMalloc(&d_threshold, sizeof(score_type), ACL_MEM_MALLOC_NORMAL_ONLY));
+  NPU_CHECK(aclrtMemcpy(d_pattern, sizeof(key_type), &pattern, sizeof(key_type), ACL_MEMCPY_HOST_TO_DEVICE));
+  NPU_CHECK(aclrtMemcpy(d_threshold, sizeof(score_type), &threshold, sizeof(score_type), ACL_MEMCPY_HOST_TO_DEVICE));
+
+    if (offset >= table_->capacity) {
+      return;
+    }
+    n = std::min(table_->capacity - offset, n);
+    if (n == 0) {
+      return;
+    }
+#ifdef USE_DUMP_KERNEL_ASC
+    extern void dump_kernel_v2_do(uint32_t , void*, void*, void*, void*, void*, void*, void*, void*,
+      const size_t ,const size_t ,void*, uint32_t, int32_t, uint32_t, void*);
+    dump_kernel_v2_do(block_dim_, stream, d_table_, table_->buckets, d_pattern, d_threshold, keys, values,
+                   scores, offset, n, d_counter, value_move_opt_.size,
+                   value_move_opt_.cg_size, value_move_opt_.dim, pred_func);
+#else
+  // 释放临时内存
+  aclrtFree(d_pattern);
+  aclrtFree(d_threshold);
 
     NpuCheckError();
   }

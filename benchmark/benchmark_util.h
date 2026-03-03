@@ -173,6 +173,11 @@ struct ExportIfPredFunctor {
                                              const S& threshold) {
     return score > threshold;
   }
+  __forceinline__ __device__ static bool static_predicate(
+      const K& key, const S& score, const K& pattern, const S& threshold) {
+    ExportIfPredFunctor<K, S> functor;
+    return functor(key, score, pattern, threshold);
+  }
 };
 
 }  // namespace benchmark

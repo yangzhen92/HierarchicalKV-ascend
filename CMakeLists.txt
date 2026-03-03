@@ -48,11 +48,13 @@ endif()
 
 set_source_files_properties(
     ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/dump_kernel/dump_kernel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/dump_kernel/dump_kernel_v2.cpp
     PROPERTIES LANGUAGE ASC
 )
 
 add_library(kernel_lib SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/dump_kernel/dump_kernel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/dump_kernel/dump_kernel_v2.cpp
 )
 
 set_target_properties(kernel_lib PROPERTIES
