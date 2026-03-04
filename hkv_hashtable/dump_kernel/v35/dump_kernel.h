@@ -128,12 +128,12 @@ __simt_vf__ __aicore__ LAUNCH_BOUND(THREAD_NUM) inline void dump_kernel_vf(
 //           template <typename, typename> class PredFunctor,  int32_t GROUP_SIZE = 16>
 template <class K, class V, class S, int32_t GROUP_SIZE = 16>
 __simt_vf__ __aicore__ LAUNCH_BOUND(THREAD_NUM) inline void dump_kernel_vf_v2(
-    GM_ADDR table_gm, GM_ADDR buckets_gm, const K& pattern, conset S& threshold,
+    GM_ADDR table_gm, GM_ADDR buckets_gm, const K& pattern, const S& threshold,
     GM_ADDR key_gm, GM_ADDR val_gm,
     GM_ADDR score_gm, const size_t offset, const size_t search_length,
     const uint64_t total_thread_num, GM_ADDR dump_counter_gm,
     uint64_t ub_shared_kvs_mem, __ubuf__ uint32_t* block_acc,
-    __ubuf__ uint32_t* global_acc, uint32_t dim_in, uint32_t blockIdx, void* pred_func) {
+    __ubuf__ uint32_t* global_acc, uint32_t dim_in, uint32_t blockIdx, __gm__ void* pred_func) {
   if ((!table_gm) || (!buckets_gm) || (!key_gm) || (!val_gm) ||
       (!dump_counter_gm)) {
     return;
