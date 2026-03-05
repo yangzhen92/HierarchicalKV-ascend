@@ -31,19 +31,24 @@
 #include <shared_mutex>
 #include <string>
 #include <type_traits>
-#include "../hkv_hashtable/dump_kernel/dump_kernel.h"
-#include "../hkv_hashtable/rehash_kernel/rehash_kernel.h"
-#include "../hkv_hashtable/clear_kernel/clear_kernel.h"
-#include "../hkv_hashtable/find_and_update_kernel/find_and_update_kernel_with_filter.h"
-#include "../hkv_hashtable/find_and_update_kernel/find_and_update_kernel.h"
-#include "../hkv_hashtable/find_ptr_kernel/find_ptr_with_digest_kernel.h"
-#include "../hkv_hashtable/find_ptr_kernel/find_ptr_kernel.h"
-#include "../hkv_hashtable/assign_scores_kernel/assign_scores_kernel_with_filter.h"
-#include "../hkv_hashtable/assign_scores_kernel/assign_scores_kernel.h"
-#include "../hkv_hashtable/find_or_insert_ptr_kernel/find_or_insert_ptr_kernel_v2.h"
-#include "../hkv_hashtable/find_or_insert_ptr_kernel/find_or_insert_ptr_kernel.h"
-#include "../hkv_hashtable/insert_or_assign_kernel/insert_or_assign_kernel.h"
-#include "../hkv_hashtable/insert_and_evict_kernel/insert_and_evict_kernel.h"
+#include "aclrtlaunch_allocate_bucket_others_kernel.h"
+#include "aclrtlaunch_allocate_bucket_vectors_kernel.h"
+#include "aclrtlaunch_clear_kernel.h"
+#include "aclrtlaunch_create_atomic_keys_kernel.h"
+#include "aclrtlaunch_create_atomic_scores_kernel.h"
+#include "aclrtlaunch_find_and_update_kernel.h"
+#include "aclrtlaunch_find_and_update_kernel_with_filter.h"
+#include "aclrtlaunch_find_or_insert_ptr_kernel.h"
+#include "aclrtlaunch_find_or_insert_ptr_kernel_v2.h"
+#include "aclrtlaunch_find_ptr_kernel.h"
+#include "aclrtlaunch_find_ptr_with_digest_kernel.h"
+#include "aclrtlaunch_get_bucket_others_address_kernel.h"
+#include "aclrtlaunch_host_nano_kernel.h"
+#include "aclrtlaunch_insert_or_assign_kernel.h"
+#include "aclrtlaunch_insert_or_assign_kernel_with_thread_1024.h"
+#ifndef USE_DUMP_KERNEL_ASC
+#include "aclrtlaunch_dump_kernel.h"
+#endif
 #include "aclnn_helper.h"
 #include "aclnnop/aclnn_reduce_sum.h"
 #include "bucket_memory_pool_manager.h"
@@ -1773,7 +1778,11 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
 
-    std::cout << "[Unsupport erase yet]\n";
+    ACLRT_LAUNCH_KERNEL(remove_kernel)(
+        block_dim_, stream, table_->buckets, table_->buckets_size,
+        table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
+        const_cast<key_type*>(keys), n, value_size_, table_->max_bucket_shift,
+        table_->capacity_divisor_magic, table_->capacity_divisor_shift);
 
     NpuCheckError();
     return;
