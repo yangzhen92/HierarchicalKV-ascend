@@ -36,6 +36,7 @@
 #include "aclrtlaunch_clear_kernel.h"
 #include "aclrtlaunch_create_atomic_keys_kernel.h"
 #include "aclrtlaunch_create_atomic_scores_kernel.h"
+#include "aclrtlaunch_remove_kernel.h"
 #include "aclrtlaunch_find_and_update_kernel.h"
 #include "aclrtlaunch_find_and_update_kernel_with_filter.h"
 #include "aclrtlaunch_find_or_insert_ptr_kernel.h"
@@ -1783,7 +1784,11 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
 
-    std::cout << "[Unsupport erase yet]\n";
+    ACLRT_LAUNCH_KERNEL(remove_kernel)(
+        block_dim_, stream, table_->buckets, table_->buckets_size,
+        table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
+        const_cast<key_type*>(keys), n, value_size_, table_->max_bucket_shift,
+        table_->capacity_divisor_magic, table_->capacity_divisor_shift);
 
     NpuCheckError();
     return;
