@@ -26,6 +26,7 @@ file(GLOB KERNEL_FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/find_ptr_kernel/find_ptr_kernel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/find_ptr_kernel/find_ptr_with_digest_kernel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/find_kernel/find_with_digest_kernel.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/contains_kernel/contains_kernel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/utils_kernel/read_from_ptr_kernel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/utils_kernel/host_nano_kernel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/insert_or_assign_kernel/insert_or_assign_kernel.cpp

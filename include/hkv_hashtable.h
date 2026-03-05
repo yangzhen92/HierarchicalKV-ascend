@@ -1779,7 +1779,12 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
 
-    std::cout << "[Unsupport contains yet]\n";
+    ACLRT_LAUNCH_KERNEL(contains_kernel)(
+        block_dim_, stream, table_->buckets, table_->capacity,
+        table_->buckets_num, options_.max_bucket_size,
+        const_cast<key_type*>(keys), founds, n,
+        table_->max_bucket_shift, table_->capacity_divisor_magic,
+        table_->capacity_divisor_shift);
     NpuCheckError();
   }
 
