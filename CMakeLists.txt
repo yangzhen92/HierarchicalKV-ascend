@@ -36,6 +36,7 @@ file(GLOB KERNEL_FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/assign_scores_kernel/assign_scores_kernel_with_filter.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/assign_scores_kernel/assign_scores_kernel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/insert_and_evict_kernel/insert_and_evict_kernel.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/remove_kernel/remove_kernel.cpp
 )
 
 if("${RUN_MODE}" STREQUAL "cpu")
