@@ -22,6 +22,7 @@
 #include <kernel_operator.h>
 #include "../../../include/types.h"
 #include "../../../include/utils.h"
+#include "../../utils_kernel/v35/utils_kernel.h"
 
 namespace npu {
 namespace hkv {
@@ -44,7 +45,6 @@ LAUNCH_BOUND(THREAD_NUM) inline void find_with_digest_kernel_vf(
     return;
   }
   using BUCKET = Bucket<K, V, S>;
-  constexpr uint32_t STRIDE = sizeof(VecD_Comp) / sizeof(D);
 
   __gm__ Bucket<K, V, S>* __restrict__ buckets =
       reinterpret_cast<__gm__ Bucket<K, V, S>*>(buckets_gm);
@@ -80,55 +80,10 @@ LAUNCH_BOUND(THREAD_NUM) inline void find_with_digest_kernel_vf(
         bucket_values_uintptr = reinterpret_cast<uint64_t>(bucket->vectors);
 
         // 3、遍历桶查找key
-        VecD_Comp empty_digests_val = empty_digests<K>();
-        for (uint32_t offset = 0; offset < bucket_capacity + STRIDE;
-             offset += STRIDE) {
-          uint32_t pos_cur = align_to<STRIDE>(key_pos);
-          pos_cur = (pos_cur + offset) & (bucket_capacity - 1);
+        OccupyResult result = find_without_lock<K, V, S>(
+            bucket, key, key_pos, target_digests, target_pos, bucket_capacity);
+        found = (result == OccupyResult::DUPLICATE);
 
-          __gm__ D* digests_ptr =
-              BUCKET::digests(bucket->keys_, bucket_capacity, pos_cur);
-          VecD_Comp probe_digests =
-              ldg_l2nc_l1c(reinterpret_cast<__gm__ VecD_Comp*>(digests_ptr));
-          uint32_t possible_pos = 0;
-          uint32_t cmp_result = vcmpeq4(probe_digests, target_digests);
-          cmp_result &= 0x01010101;
-          do {
-            if (cmp_result == 0) {
-              break;
-            }
-            uint32_t index =
-                (AscendC::Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
-            cmp_result &= (cmp_result - 1);
-            possible_pos = pos_cur + index;
-            const K current_key = ldg_l2nc_l1c(bucket->keys_ + possible_pos);
-            if (current_key == key) {
-              found = true;
-              target_pos = possible_pos;
-              goto WRITE_BACK;
-            }
-          } while (true);
-          cmp_result = vcmpeq4(probe_digests, empty_digests_val);
-          cmp_result &= 0x01010101;
-          do {
-            if (cmp_result == 0) {
-              break;
-            }
-            uint32_t index =
-                (AscendC::Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
-            cmp_result &= (cmp_result - 1);
-            possible_pos = pos_cur + index;
-            if (offset == 0 && possible_pos < key_pos) {
-              continue;
-            }
-            const K current_key = ldg_l2nc_l1c(bucket->keys_ + possible_pos);
-            if (current_key == static_cast<K>(EMPTY_KEY)) {
-              goto WRITE_BACK;
-            }
-          } while (true);
-        }
-
-WRITE_BACK:
         // 4、设置输出元信息
         if (found) {
           if (scores != nullptr) {
