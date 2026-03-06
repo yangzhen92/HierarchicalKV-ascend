@@ -26,6 +26,7 @@ file(GLOB KERNEL_FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/find_ptr_kernel/find_ptr_kernel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/find_ptr_kernel/find_ptr_with_digest_kernel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/find_kernel/find_with_digest_kernel.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/find_kernel/find_miss_with_digest_kernel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/contains_kernel/contains_kernel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/utils_kernel/read_from_ptr_kernel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/hkv_hashtable/utils_kernel/host_nano_kernel.cpp
@@ -72,6 +73,7 @@ install(TARGETS kernel_lib
 
 add_executable(hkv_demo ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
 add_executable(hkv_benchmark ${CMAKE_CURRENT_SOURCE_DIR}/benchmark/hkv_hashtable_benchmark.cpp)
+add_executable(hkv_benchmark_find_miss ${CMAKE_CURRENT_SOURCE_DIR}/benchmark/benchmark_find_miss.cpp)
 
 add_library(hkv_includes INTERFACE)
 target_include_directories(hkv_includes INTERFACE
@@ -86,6 +88,11 @@ target_compile_options(hkv_demo PRIVATE
   -DUSE_DUMP_KERNEL_ASC
 )
 target_compile_options(hkv_benchmark PRIVATE
+  $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},cpu>:-g>>
+  -O2 -Wall -Werror -DSOC_VERSION="${SOC_VERSION}"
+  -DUSE_DUMP_KERNEL_ASC
+)
+target_compile_options(hkv_benchmark_find_miss PRIVATE
   $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},cpu>:-g>>
   -O2 -Wall -Werror -DSOC_VERSION="${SOC_VERSION}"
   -DUSE_DUMP_KERNEL_ASC
@@ -129,6 +136,21 @@ target_link_libraries(hkv_benchmark PRIVATE
   nnopbase
   kernel_lib
 )
+target_link_libraries(hkv_benchmark_find_miss PRIVATE
+  $<BUILD_INTERFACE:$<$<OR:$<STREQUAL:${RUN_MODE},npu>,$<STREQUAL:${RUN_MODE},sim>>:host_intf_pub>>
+  $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},cpu>:ascendcl>>
+  ascendc_kernels_${RUN_MODE}
+  graph_base
+  tiling_api
+  register
+  platform
+  ascendalog
+  dl
+  hkv_includes
+  opapi
+  nnopbase
+  kernel_lib
+)
 
 if(ENABLE_TEST STREQUAL 1)
   enable_testing()
@@ -147,6 +169,11 @@ install(TARGETS hkv_demo
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(TARGETS hkv_benchmark
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(TARGETS hkv_benchmark_find_miss
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
