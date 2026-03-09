@@ -224,15 +224,15 @@ void test_insert_and_assign_basic() {
 TEST(test_insert_or_assign, test_insert_and_assign) {
   test_insert_and_assign_basic<uint64_t, float, uint64_t>();
   test_insert_and_assign_basic<uint64_t, double, uint64_t>();
-  test_insert_and_assign_basic<int64_t, uint16_t, uint64_t>();
-  test_insert_and_assign_basic<int64_t, uint8_t, uint64_t>();
+  test_insert_and_assign_basic<uint64_t, uint16_t, uint64_t>();
+  test_insert_and_assign_basic<uint64_t, uint8_t, uint64_t>();
 }
 
 TEST(test_insert_or_assign, test_n_greater_than_thread_all) {
   // 1. 初始化
   init_env();
 
-  using K = int64_t;
+  using K = uint64_t;
   using V = float;
   using S = uint64_t;
 
@@ -304,7 +304,7 @@ TEST(test_insert_or_assign, test_n_greater_than_thread_all) {
 TEST(test_insert_or_assign, test_loader_factor_to_1) {
   // 1. 初始化
   init_env();
-  using K = int64_t;
+  using K = uint64_t;
   using V = float;
   using S = uint64_t;
 
@@ -364,7 +364,7 @@ TEST(test_insert_or_assign, test_loader_factor_to_1) {
 TEST(test_insert_or_assign, test_evict) {
   // 1. 初始化
   init_env();
-  using K = int64_t;
+  using K = uint64_t;
   using V = float;
   using S = uint64_t;
 
@@ -402,7 +402,7 @@ TEST(test_insert_or_assign, test_evict) {
 TEST(test_insert_or_assign, test_dim) {
   // 1. 初始化
   init_env();
-  using K = int64_t;
+  using K = uint64_t;
   using V = float;
   using S = uint64_t;
 
@@ -441,7 +441,7 @@ TEST(test_insert_or_assign, test_dim) {
 TEST(test_insert_or_assign, test_little_demo_benchmark) {
   // 1. 初始化
   init_env();
-  using K = int64_t;
+  using K = uint64_t;
   using V = float;
   using S = uint64_t;
 
@@ -462,7 +462,7 @@ TEST(test_insert_or_assign, test_little_demo_benchmark) {
   float target_load_factor = 0.5f;
   K start = 0;
 #ifdef SIM_MODE
-  unordered_map<float, vector<int64_t>> add_num_map{
+  unordered_map<float, vector<uint64_t>> add_num_map{
       {0.5, {640}},
       {0.75, {640, 320}},
       {1.0, {640, 640, 90}},
@@ -486,12 +486,12 @@ TEST(test_insert_or_assign, test_little_demo_benchmark) {
   const float epsilon = 0.001f;
   cout << "target_load_factor : " << target_load_factor << endl;
   while (target_load_factor - real_load_factor > epsilon) {
-    auto key_num_append = static_cast<int64_t>(
+    auto key_num_append = static_cast<uint64_t>(
         (target_load_factor - real_load_factor) * capacity);
     if (key_num_append <= 0) {
       break;
     }
-    key_num_append = min(static_cast<int64_t>(key_num), key_num_append);
+    key_num_append = min(static_cast<uint64_t>(key_num), key_num_append);
     cout << "key_num_append : " << key_num_append << endl;
     create_continuous_keys<K, S, V, dim>(
         host_keys.data(), nullptr, host_values.data(), key_num_append, start);
