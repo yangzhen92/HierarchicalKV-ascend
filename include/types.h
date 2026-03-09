@@ -208,7 +208,7 @@ using Mutex = Lock<>;
 
 template <class K, class V, class S>
 struct Table {
-  __gm__ Bucket<K, V, S>* /buckets;
+  __gm__ Bucket<K, V, S>* buckets;
   __gm__ Mutex* locks;                   // mutex for write buckets
   __gm__ int* buckets_size;              // size of each buckets.
   __gm__ V** slices;                     // Handles of the HBM/ HMEM slices.
