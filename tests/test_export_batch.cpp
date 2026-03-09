@@ -252,7 +252,7 @@ void run_export_test(const ExportTestConfig& config) {
 TEST(test_export_batch, test_export_basic) {
   ExportTestConfig config = {1024, false, false, 0, false};
   RUN_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
-  RUN_EXPORT_TEST(uint64_t, double, uint64_t, 16, config);
+  RUN_EXPORT_TEST(int64_t, double, uint64_t, 16, config);
 }
 
 TEST(test_export_batch, test_export_overload) {
@@ -271,5 +271,5 @@ TEST(test_export_batch, test_export_offset) {
   ExportTestConfig config = {1024, false, false, 1000, false};
   RUN_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
   config.offset = 5000;
-  RUN_EXPORT_TEST(uint64_t, double, uint64_t, 16, config);
+  RUN_EXPORT_TEST(int64_t, double, uint64_t, 16, config);
 }
