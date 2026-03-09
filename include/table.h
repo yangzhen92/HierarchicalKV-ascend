@@ -307,7 +307,7 @@ void create_table(Table<K, V, S>** table, BaseAllocator* allocator,
                   const size_t tile_size = 32, const bool primary = true,
                   IBucketAddressProvider* provider = nullptr) {
   allocator->alloc(MemoryType::Host, (void**)table, sizeof(Table<K, V, S>));
-  (void)std::memset((void*)*table, 0, sizeof(Table<K, V, S>));
+  (void)std::memset(reinterpret_cast<void*>(*table), 0, sizeof(Table<K, V, S>));
   (*table)->dim = dim;
   (*table)->bucket_max_size = bucket_max_size;
   (*table)->max_size = std::max(init_size, max_size);

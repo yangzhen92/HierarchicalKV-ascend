@@ -308,7 +308,7 @@ void read_from_ptr(V** __restrict src, V* __restrict dst, const size_t dim,
   const size_t N = n * dim;
   const size_t grid_size = (N - 1) / block_size + 1;
   HKV_EXPECT_TRUE((grid_size <= 65535), "Pointer is already assigned.");
-  npu::hkv::read_from_ptr_kernel<V><<<grid_size, 0, stream>>>((void*)src, dst, dim, N);
+  npu::hkv::read_from_ptr_kernel<V><<<grid_size, 0, stream>>>(reinterpret_cast<void*>(src), dst, dim, N);
 }
 
 inline void init_env() {
