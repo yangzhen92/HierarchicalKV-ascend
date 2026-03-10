@@ -255,7 +255,7 @@
              if (current_key != static_cast<K>(LOCKED_KEY) &&
                  current_key != static_cast<K>(EMPTY_KEY)) {
                K try_key = Simt::AtomicCas(current_key_ptr, current_key,
-                                              static_cast<K>(LOCKED_KEY));
+                                           static_cast<K>(LOCKED_KEY));
                // 4.4 抢占成功
                if (try_key == current_key) {
                  // 4.4.1 确认分数是不是变更小
@@ -328,4 +328,3 @@
  }  // namespace npu
  
  #endif  // ASCENDC_FIND_OR_INSERT_PTR_KERNEL_V2_H_
- 

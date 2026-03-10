@@ -85,7 +85,7 @@
        K current_key = *current_key_ptr;
        // 3.1 找到key
        if (current_key == key) {
-         K try_key = Simt::AtomicCas(current_key_ptr, current_key, LOCKED_KEY);
+         K try_key = Simt::AtomicCas(current_key_ptr, current_key, static_cast<K>(LOCKED_KEY));
          // 抢占成功
          if (try_key == current_key) {
            target_pos = current_pos;
@@ -96,7 +96,7 @@
          }
          // 3.2 找到空位
        } else if (current_key == EMPTY_KEY) {
-         K try_key = Simt::AtomicCas(current_key_ptr, EMPTY_KEY, LOCKED_KEY);
+         K try_key = Simt::AtomicCas(current_key_ptr, EMPTY_KEY, static_cast<K>(LOCKED_KEY));
          // 抢占成功
          if (try_key == EMPTY_KEY) {
            target_pos = current_pos;
@@ -140,7 +140,7 @@
        K current_key = __ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
                L1CacheType::NON_CACHEABLE>(current_key_ptr);
        if (current_key != LOCKED_KEY && current_key != EMPTY_KEY) {
-         K try_key = Simt::AtomicCas(current_key_ptr, current_key, LOCKED_KEY);
+         K try_key = Simt::AtomicCas(current_key_ptr, current_key, static_cast<K>(LOCKED_KEY));
          // 抢占成功
          if (try_key == current_key) {
            if (min_score >= __ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
@@ -421,7 +421,7 @@
              if (current_key != static_cast<K>(LOCKED_KEY) &&
                  current_key != static_cast<K>(EMPTY_KEY)) {
                K try_key = Simt::AtomicCas(current_key_ptr, current_key,
-                                              static_cast<K>(LOCKED_KEY));
+                                           static_cast<K>(LOCKED_KEY));
                // 4.4 抢占成功
                if (try_key == current_key) {
                  // 4.4.1 确认分数是不是变更小
@@ -605,4 +605,3 @@
  }  // namespace npu
  
  #endif  // ASCENDC_INSERT_AND_EVICT_KERNEL_H_
- 

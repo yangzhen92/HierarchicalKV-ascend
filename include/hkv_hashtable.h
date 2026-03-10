@@ -1085,7 +1085,7 @@ class HashTable : public HashTableBase<K, V, S> {
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     if (value_move_opt_.is_large_size) {
       insert_or_assign_kernel_with_thread_1024<K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
-        reinterpret_cast<void*>(table_->buckets), table_->buckets_size,
+        static_cast<void*>(table_->buckets), table_->buckets_size,
         table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
         const_cast<key_type*>(keys), const_cast<value_type*>(values),
         const_cast<score_type*>(scores), n, global_epoch_, value_move_opt_.size,
@@ -1093,7 +1093,7 @@ class HashTable : public HashTableBase<K, V, S> {
         table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
     } else {
       insert_or_assign_kernel<K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
-        reinterpret_cast<void*>(table_->buckets), table_->buckets_size,
+        static_cast<void*>(table_->buckets), table_->buckets_size,
         table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
         const_cast<key_type*>(keys), const_cast<value_type*>(values),
         const_cast<score_type*>(scores), n, global_epoch_, value_move_opt_.size,
@@ -1183,8 +1183,8 @@ class HashTable : public HashTableBase<K, V, S> {
     insert_and_evict_kernel<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
       table_->buckets, table_->buckets_size,
       table_->capacity, options_.max_bucket_size, value_move_opt_.dim,
-      const_cast<key_type*>(keys), reinterpret_cast<void*>(const_cast<value_type*>(values)),
-      const_cast<score_type*>(scores), evicted_keys, reinterpret_cast<void*>(evicted_values),
+      const_cast<key_type*>(keys), static_cast<void*>(const_cast<value_type*>(values)),
+      const_cast<score_type*>(scores), evicted_keys, static_cast<void*>(evicted_values),
       evicted_scores, d_evicted_counter, n, global_epoch_, value_move_opt_.size,
       table_->max_bucket_shift, table_->capacity_divisor_magic,
       table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
@@ -1397,7 +1397,7 @@ class HashTable : public HashTableBase<K, V, S> {
     find_or_insert_ptr_kernel_v2<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(table_->buckets,
       table_->buckets_size,
       table_->buckets_num, options_.max_bucket_size, value_move_opt_.dim,
-      keys, reinterpret_cast<void*>(values), scores, locked_key_ptrs, n, founds, global_epoch_,
+      keys, static_cast<void*>(values), scores, locked_key_ptrs, n, founds, global_epoch_,
       value_move_opt_.size, table_->max_bucket_shift,
       table_->capacity_divisor_magic, table_->capacity_divisor_shift,
       n_align_warp, table_->capacity);
@@ -1532,9 +1532,9 @@ class HashTable : public HashTableBase<K, V, S> {
     constexpr uint32_t MinBucketCapacityFilter = sizeof(VecD_Load) / sizeof(D);
     if (unique_key && options_.max_bucket_size >= MinBucketCapacityFilter) {
       assign_scores_kernel_with_filter<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
-        reinterpret_cast<void*>(table_->buckets), table_->capacity, options_.max_bucket_size,
-        options_.dim, reinterpret_cast<void*>(const_cast<key_type*>(keys)),
-        reinterpret_cast<void*>(const_cast<score_type*>(scores)), n, global_epoch_,
+        static_cast<void*>(table_->buckets), table_->capacity, options_.max_bucket_size,
+        options_.dim, static_cast<void*>(const_cast<key_type*>(keys)),
+        static_cast<void*>(const_cast<score_type*>(scores)), n, global_epoch_,
         table_->max_bucket_shift, table_->capacity_divisor_magic, table_->capacity_divisor_shift);
     } else {
       throw std::runtime_error(
@@ -1840,8 +1840,8 @@ class HashTable : public HashTableBase<K, V, S> {
    * object.
    */
   void clear(aclrtStream stream = 0) {
-    clear_kernel<K, V, S><<<block_dim_, 0, stream>>>(reinterpret_cast<void*>(table_->buckets),
-      reinterpret_cast<void*>(table_->buckets_size), options_.max_bucket_size, table_->capacity);
+    clear_kernel<K, V, S><<<block_dim_, 0, stream>>>(static_cast<void*>(table_->buckets),
+      static_cast<void*>(table_->buckets_size), options_.max_bucket_size, table_->capacity);
     NpuCheckError();
   }
 
@@ -1881,9 +1881,9 @@ class HashTable : public HashTableBase<K, V, S> {
     }
     n = std::min(table_->capacity - offset, n);
     dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
-      reinterpret_cast<void*>(d_table_), reinterpret_cast<void*>(table_->buckets), reinterpret_cast<void*>(keys),
-      reinterpret_cast<void*>(values), reinterpret_cast<void*>(scores),
-      offset, n, reinterpret_cast<void*>(d_counter), value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
+      static_cast<void*>(d_table_), static_cast<void*>(table_->buckets), static_cast<void*>(keys),
+      static_cast<void*>(values), static_cast<void*>(scores),
+      offset, n, static_cast<void*>(d_counter), value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
     NpuCheckError();
   }
 
@@ -2248,9 +2248,9 @@ class HashTable : public HashTableBase<K, V, S> {
 
       // Launch dump_kernel to export data to device memory
       dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
-        reinterpret_cast<void*>(d_table_), reinterpret_cast<void*>(table_->buckets), reinterpret_cast<void*>(d_keys),
-        reinterpret_cast<void*>(d_values), reinterpret_cast<void*>(d_scores), i, batch_size,
-        reinterpret_cast<void*>(d_count), value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
+        static_cast<void*>(d_table_), static_cast<void*>(table_->buckets), static_cast<void*>(d_keys),
+        static_cast<void*>(d_values), static_cast<void*>(d_scores), i, batch_size,
+        static_cast<void*>(d_count), value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
       NpuCheckError();
       // Copy counter from device to host
       size_type count;
