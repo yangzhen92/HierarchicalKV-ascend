@@ -112,7 +112,7 @@
          possible_pos = pos_cur + index;
  
          __gm__ K* current_key_ptr = BUCKET::keys(bucket_keys_ptr, possible_pos);
-         K try_key = AscendC::Simt::AtomicCas(current_key_ptr, key, LOCKED_KEY);
+         K try_key = AscendC::Simt::AtomicCas(current_key_ptr, key, static_cast<K>(LOCKED_KEY));
          if (try_key == key) {
            occupy_result = OccupyResult::DUPLICATE;
            key_pos = possible_pos;
@@ -185,4 +185,3 @@
  }  // namespace npu
  
  #endif  // ASCENDC_FIND_AND_UPDATE_KERNEL_WITH_FILTER_H_
- 

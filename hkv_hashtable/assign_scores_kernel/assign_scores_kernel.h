@@ -84,7 +84,7 @@
          }
          if (current_key == key) {
            K try_key =
-               Simt::AtomicCas(current_key_ptr, current_key, LOCKED_KEY);
+               Simt::AtomicCas(current_key_ptr, current_key, static_cast<K>(LOCKED_KEY));
            // 抢占成功
            if (try_key == current_key) {
              ScoreFunctor::update_without_missed(
@@ -119,4 +119,3 @@
  }  // namespace npu
  
  #endif  // ASCENDC_ASSIGN_SCORES_KERNEL_H_
- 

@@ -111,7 +111,7 @@
  
          __gm__ K* current_key_ptr = BUCKET::keys(bucket_keys_ptr, possible_pos);
          K try_key =
-             AscendC::Simt::AtomicCas(current_key_ptr, key, LOCKED_KEY);
+             AscendC::Simt::AtomicCas(current_key_ptr, key, static_cast<K>(LOCKED_KEY));
          if (try_key == key) {
            key_pos = possible_pos;
            ScoreFunctor::update_without_missed(bucket_keys_ptr, bucket_capacity,
@@ -164,4 +164,3 @@
  }  // namespace npu
  
  #endif  // ASCENDC_ASSIGN_SCORES_KERNEL_WITH_FILTER_H_
- 

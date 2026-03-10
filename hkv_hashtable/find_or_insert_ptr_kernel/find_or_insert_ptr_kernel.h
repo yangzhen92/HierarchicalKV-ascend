@@ -113,7 +113,7 @@
          // 3.2 找到空位，尝试插入
          K expected = EMPTY_KEY;
          K try_key = Simt::AtomicCas(reinterpret_cast<__gm__ K*>(current_key_ptr),
-                                        expected, LOCKED_KEY);
+                                     expected, static_cast<K>(LOCKED_KEY));
          if (try_key == expected) {
            target_pos = current_pos;
            *current_key_ptr = key;
@@ -144,7 +144,7 @@
          __gm__ K* current_key_ptr = bucket_keys_ptr + min_pos;
          K current_key = *current_key_ptr;
          if (current_key != LOCKED_KEY) {
-           K try_key = Simt::AtomicCas(current_key_ptr, current_key, LOCKED_KEY);
+           K try_key = Simt::AtomicCas(current_key_ptr, current_key, static_cast<K>(LOCKED_KEY));
            // 抢占成功
            if (try_key == current_key) {
              if (min_score >= bucket_scores_ptr[min_pos]) {
