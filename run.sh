@@ -112,7 +112,7 @@ echo "_ASCEND_INSTALL_PATH [$_ASCEND_INSTALL_PATH]"
 export ASCEND_TOOLKIT_HOME=${_ASCEND_INSTALL_PATH}
 export ASCEND_HOME_PATH=${_ASCEND_INSTALL_PATH}
 echo "[INFO]: Current compile soc version is ${SOC_VERSION}"
-source ${_ASCEND_INSTALL_PATH}/bin/setenv.bash
+# source ${_ASCEND_INSTALL_PATH}/bin/setenv.bash
 if [ "${RUN_MODE}" = "sim" ]; then
     # in case of running op in simulator, use stub .so instead
     export LD_LIBRARY_PATH=${_ASCEND_INSTALL_PATH}/tools/simulator/${SOC_VERSION}/lib:$LD_LIBRARY_PATH
