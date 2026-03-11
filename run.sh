@@ -16,6 +16,7 @@ ENABLE_TEST=1
 RUN_MODE="npu"
 BUILD_TYPE="Release"
 
+
 show_help() {
     cat << EOF
 Usage: ${0##*} [OPTIONS] [ARGUMENTS]
