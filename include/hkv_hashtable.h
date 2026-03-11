@@ -44,6 +44,7 @@
 #include "../hkv_hashtable/find_or_insert_ptr_kernel/find_or_insert_ptr_kernel.h"
 #include "../hkv_hashtable/insert_or_assign_kernel/insert_or_assign_kernel.h"
 #include "../hkv_hashtable/insert_and_evict_kernel/insert_and_evict_kernel.h"
+#include "../hkv_hashtable/assign_values_kernel/assign_values_kernel.h"
 #include "aclnn_helper.h"
 #include "aclnnop/aclnn_reduce_sum.h"
 #include "bucket_memory_pool_manager.h"
@@ -1575,9 +1576,18 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
-
-    std::cout << "[Unsupport assign_values yet]\n";
-
+    if (is_fast_mode()) {
+      uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+      assign_values_kernel<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
+        static_cast<void*>(table_->buckets),
+        table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
+        static_cast<void*>(const_cast<key_type*>(keys)), static_cast<void*>(const_cast<value_type*>(values)),
+        n, global_epoch_, value_move_opt_.size,
+        table_->max_bucket_shift, table_->capacity_divisor_magic,
+        table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
+    } else {
+      throw std::runtime_error("Only allow assign_values in pure HBM mode.");
+    }
     NpuCheckError();
   }
 
