@@ -19,8 +19,8 @@
  * \brief find_or_insert_ptr_kernel
  */
 
- #ifndef ASCENDC_DUMP_KERNEL_H_
- #define ASCENDC_DUMP_KERNEL_H_
+ #ifndef ASCENDC_DUMP_KERNEL_IF_V2_H_
+ #define ASCENDC_DUMP_KERNEL_IF_V2_H_
  
  #include <kernel_operator.h>
  #include <cstdint>
@@ -154,8 +154,8 @@
  
    DISPATCH_VALUE_SIZE(
          value_size,
-         (Simt::VF_CALL<dump_kernel_vf<K, V, S, DTYPE>>(
-         Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, table, buckets,
+         (Simt::VF_CALL<dump_kernel_if_v2_vf<K, V, S, DTYPE, PredFunctor>>(
+         Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, pred, table, buckets,
                keys, vals, scores, offset, search_length, total_thread_num,
                dump_counter, shared_kvs_tensor.GetPhyAddr(),
                ub_shared_block_acc_mem, ub_shared_global_acc_mem, group_size, dim,
