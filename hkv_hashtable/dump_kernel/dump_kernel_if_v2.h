@@ -77,9 +77,9 @@
      const K key{bucket_keys_ptr[key_idx]};
  
      if (!IS_RESERVED_KEY<K>(key)) {
-       const __gm__ V* value_ptrs = reinterpret_cast<__gm__ V*>(bucket_values_ptr[key_idx * dim_in]);
+       const __gm__ V* value_ptrs = reinterpret_cast<__gm__ V*>(&bucket_values_ptr[key_idx * dim_in]);
        const S score = bucket_scores_ptr[key_idx];
-       bool match = pred.template operator()<group_size>(key, value_ptrs, score);
+       bool match = pred.template operator()<32>(key, value_ptrs, score);
        if (match) {
         size_t local_index{atomicAdd(block_acc, 1u)};
         block_tuples[local_index].key = key;
