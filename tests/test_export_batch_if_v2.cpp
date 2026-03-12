@@ -45,7 +45,7 @@ struct ExportIfPredFunctorV2 {
       : pattern(pattern), threshold(threshold) {}
   template <int GroupSize>
   __forceinline__ __device__ bool operator()(
-      const K& key, const V* value, const S& score) {
+      const K& key, const __gm__ V* value, const S& score) {
     /* evaluate key, score and value. */
     return score < threshold;
   }
