@@ -30,7 +30,7 @@ using namespace AscendC;
 template <typename K = uint64_t, typename V = float, typename S = uint64_t,
           typename VecV = int64_t>
 __simt_vf__ __aicore__
-LAUNCH_BOUND(THREAD_NUM_512) inline void assign_values_kernel_with_digest_vf2(
+LAUNCH_BOUND(THREAD_NUM_512) inline void assign_values_kernel_with_digest_vf(
     __gm__ void* buckets_addr_gm, uint64_t capacity, uint32_t bucket_max_size,
     uint32_t dim, __gm__ void* keys_addr_gm, __gm__ void* values_addr_gm,
     uint64_t n, uint32_t thread_all, uint64_t global_epoch,
@@ -174,7 +174,7 @@ __global__ __vector__ void assign_values_kernel(
 
   DISPATCH_VALUE_SIZE(
     value_size,
-    (Simt::VF_CALL<assign_values_kernel_with_digest_vf2<K, V, S, DTYPE>>(
+    (Simt::VF_CALL<assign_values_kernel_with_digest_vf<K, V, S, DTYPE>>(
         Simt::Dim3{static_cast<uint32_t>(thread_num)}, buckets, capacity,
         bucket_max_size, dim, keys, values, n, thread_all, global_epoch,
         GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
