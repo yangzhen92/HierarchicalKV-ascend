@@ -32,6 +32,7 @@
 #include <string>
 #include <type_traits>
 #include "../hkv_hashtable/dump_kernel/dump_kernel.h"
+#include "../hkv_hashtable/dump_kernel/dump_kernel_if_v2.h"
 #include "../hkv_hashtable/rehash_kernel/rehash_kernel.h"
 #include "../hkv_hashtable/clear_kernel/clear_kernel.h"
 #include "../hkv_hashtable/find_and_update_kernel/find_and_update_kernel_with_filter.h"
@@ -2000,6 +2001,17 @@ class HashTable : public HashTableBase<K, V, S> {
                           score_type* scores = nullptr,  // (n)
                           aclrtStream stream = 0) const {
     std::cout << "[Unsupport export_batch_if_v2 yet]\n";
+
+    NPU_CHECK(aclrtMemset(d_counter, sizeof(size_type), 0, sizeof(size_type)));
+    if (offset >= table_->capacity) {
+      return;
+    }
+    n = std::min(table_->capacity - offset, n);
+    dump_kernel_if_v2<K, V, S, PredFunctor><<<block_dim_, 64 * 1024, stream>>>(
+      pred, static_cast<void*>(d_table_), static_cast<void*>(table_->buckets), static_cast<void*>(keys),
+      static_cast<void*>(values), static_cast<void*>(scores),
+      offset, n, static_cast<void*>(d_counter), value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
+    NpuCheckError();
 
     NpuCheckError();
   }
