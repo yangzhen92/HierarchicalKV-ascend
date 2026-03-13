@@ -6,8 +6,8 @@ CURRENT_DIR=$(
 
 INSTALL_PREFIX="${CURRENT_DIR}/out"
 
-SHORT=h,r:,v:,i:,b:,p:,d:,c,t:
-LONG=help,run-mode:,soc-version:,install-path:,build-type:,install-prefix:,device:,compile-only,enable-test:
+SHORT=h,r:,v:,i:,b:,p:,d:,c,t:,g:
+LONG=help,run-mode:,soc-version:,install-path:,build-type:,install-prefix:,device:,compile-only,enable-test:,run-disabled:
 OPTS=$(getopt -a --options $SHORT --longoptions $LONG -- "$@")
 eval set -- "$OPTS"
 SOC_VERSION="Ascend950PR_9579"
@@ -15,6 +15,7 @@ COMPILE_ONLY=0
 ENABLE_TEST=1
 RUN_MODE="npu"
 BUILD_TYPE="Release"
+RUN_DISABLED=1
 
 show_help() {
     cat << EOF
@@ -31,6 +32,7 @@ OPTIONS（可选参数）：
     -d, --device DEVICE_ID    指定芯片卡号DEVICE_ID，设置环境变量HKV_TEST_DEVICE，默认值为0。testcase、benchmark以及demo将指定芯片上执行。
     -c, --compile-only        仅编译安装HKV工程，不执行用例。
     -t, --enable-test SHIFT   指定测试开关SHIFT，支持参数为[0 / 1]，0表示不执行testcase，1表示执行testcase。
+    -g, --run-disabled SHIFT  指定是否执行gtest中DISABLED_用例，支持参数为[0 / 1]， 0表示不执行DISABLED_用例，1表示执行DISABLED_用例，默认值为1。
 EOF
     exit 0
 }
@@ -72,6 +74,14 @@ while :; do
         ENABLE_TEST="$2"
         if ! [[ "$ENABLE_TEST" =~ ^[01]$ ]]; then
             echo "[ERROR]: ENABLE_TEST must be 0 or 1"
+            exit 1
+        fi
+        shift 2
+        ;;
+    -g | --run-disabled)
+        RUN_DISABLED="$2"
+        if ! [[ "$RUN_DISABLED" =~ ^[01]$ ]]; then
+            echo "[ERROR]: RUN_DISABLED must be 0 or 1"
             exit 1
         fi
         shift 2
@@ -141,7 +151,12 @@ export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:${INSTALL_PREFIX}/lib64:${_ASCEND_I
 echo "======================ctest======================"
 if [ $ENABLE_TEST -eq 1 ]; then
     export LD_LIBRARY_PATH=$(pwd)/build/lib:$LD_LIBRARY_PATH
-    pushd build && ctest -V
+    pushd build
+    if [ "$RUN_DISABLED" -eq 1 ]; then
+        GTEST_ALSO_RUN_DISABLED_TESTS=1 ctest -V
+    else
+        ctest -V
+    fi
     popd
 fi
 
