@@ -555,7 +555,7 @@ void print_title_a() {
        //<< "| export_batch "
        << "|-------------:"
        //<< "| assign "
-       << "|--------:"
+       << "|-------:"
        //<< "| assign_scores "
        << "|--------------:"
        //<< "| assign_values "
@@ -666,7 +666,7 @@ void test_main(std::vector<API_Select>& apis, const size_t dim,
           break;
         }
         case API_Select::assign: {
-          std::cout << rep(6);
+          std::cout << rep(1);
           break;
         }
         case API_Select::assign_scores: {
