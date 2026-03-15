@@ -45,7 +45,6 @@ enum class API_Select {
   find_and_update = 10,
   assign_scores = 11,
   assign_values = 12,
-  assign = 13,
 };
 
 enum class Hit_Mode {
