@@ -22,13 +22,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <algorithm>
+#include <gtest/gtest.h>
 #include <iomanip>
 #include <iostream>
 #include <random>
 #include <string>
 #include <thread>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include "hkv_hashtable.h"
 #include "../hkv_hashtable/utils_kernel/utils_kernel.h"
 
 #define UNEQUAL_EXPR(expr1, expr2)                             \
@@ -44,6 +47,9 @@
   }
 
 namespace test_util {
+
+constexpr size_t DEFAULT_DIM = 8;
+constexpr size_t DEFAULT_CAPACITY = 128UL * 1024;
 
 template <class K, class S>
 void create_random_keys(K* h_keys, S* h_scores, int KEY_NUM,
@@ -329,5 +335,39 @@ inline uint32_t round_up8(const uint32_t x) {
     return (x / round_size + 1) * round_size;
   }
   return x;
+}
+
+template <typename K, typename V, typename S, int Strategy = npu::hkv::EvictStrategy::kLru>
+std::unique_ptr<npu::hkv::HashTable<K, V, S, Strategy>> get_table(size_t dim, size_t capacity,
+                                                        size_t num_of_buckets_per_alloc) {
+  using Table = npu::hkv::HashTable<K, V, S, Strategy>;
+  auto table = std::make_unique<Table>();
+
+  size_t total_mem = 0;
+  size_t free_mem = 0;
+  constexpr size_t hbm_for_values = 4UL << 30;
+  EXPECT_EQ(aclrtGetMemInfo(ACL_HBM_MEM, &free_mem, &total_mem),
+            ACL_ERROR_NONE);
+  EXPECT_GT(free_mem, hbm_for_values)
+      << "free HBM is not enough free:" << free_mem
+      << "need:" << hbm_for_values;
+
+  npu::hkv::HashTableOptions options{
+      .init_capacity = capacity,
+      .max_capacity = capacity,
+      .max_hbm_for_vectors = hbm_for_values,
+      .dim = dim,
+      .io_by_cpu = false,
+      .num_of_buckets_per_alloc = num_of_buckets_per_alloc,
+  };
+
+  table->init(options);
+
+  return table;
+}
+
+template <typename K, typename V, typename S>
+std::unique_ptr<npu::hkv::HashTable<K, V, S>> get_default_table() {
+  return get_table<K, V, S>(DEFAULT_DIM, DEFAULT_CAPACITY, 1);
 }
 }  // namespace test_util
