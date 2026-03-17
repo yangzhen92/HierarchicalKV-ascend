@@ -44,7 +44,7 @@ void run_large_scale_export_test(const ExportTestConfig& config) {
 
   size_t total_mem = 0;
   size_t free_mem = 0;
-  constexpr size_t hbm_for_values = 1UL << 30;
+  constexpr size_t hbm_for_values = 16UL << 30;
   ASSERT_EQ(aclrtGetMemInfo(ACL_HBM_MEM, &free_mem, &total_mem),
             ACL_ERROR_NONE);
   ASSERT_GT(free_mem, hbm_for_values)
