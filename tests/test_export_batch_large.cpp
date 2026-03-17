@@ -233,26 +233,26 @@ void run_large_scale_export_test(const ExportTestConfig& config) {
 // 大数据量测试用例 - 使用key/value比值验证
 TEST(test_export_batch, test_large_scale_export_basic) {
   // 测试100K数据量的导出
-  ExportTestConfig config = {100000, false, false, 0, false};
+  ExportTestConfig config = {1 * 1024 * 1024, false, false, 0, false};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
   RUN_LARGE_SCALE_EXPORT_TEST(int64_t, double, uint64_t, 16, config);
 }
 
 TEST(test_export_batch, test_large_scale_export_with_scores) {
   // 测试带分数的大数据量导出
-  ExportTestConfig config = {50000, true, false, 0, true};
+  ExportTestConfig config = {5 * 1024 * 1024, true, false, 0, true};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch, test_large_scale_export_overload) {
   // 测试大数据量的重载版本
-  ExportTestConfig config = {75000, true, false, 0, true};
+  ExportTestConfig config = {1 * 1024 * 1024, true, false, 0, true};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch, test_large_scale_export_offset) {
   // 测试大数据量带偏移的导出
-  ExportTestConfig config = {50000, false, false, 10000, false};
+  ExportTestConfig config = {1 * 1024 * 1024, false, false, 10000, false};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
@@ -264,6 +264,6 @@ TEST(test_export_batch, test_large_scale_export_empty) {
 
 TEST(test_export_batch, test_large_scale_export_max_capacity) {
   // 测试接近最大容量的数据量
-  ExportTestConfig config = {128000, false, false, 0, false};
+  ExportTestConfig config = {128 * 1024 * 1024, false, false, 0, false};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
