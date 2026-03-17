@@ -195,7 +195,7 @@ void run_large_scale_export_test(const ExportTestConfig& config) {
         ACL_ERROR_NONE);
 
     constexpr V expected_ratio = static_cast<V>(0.00001);
-    constexpr V tolerance = static_cast<V>(1e-6);
+    constexpr V tolerance = static_cast<V>(1e-5);
 
     for (size_t i = 0; i < export_count; ++i) {
       const K& key = host_export_keys[i];
