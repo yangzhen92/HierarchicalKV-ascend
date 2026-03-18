@@ -114,12 +114,9 @@
          uint64_t value_sync_ptr = asc_shfl(tuple.value, i, group_size);
          auto value_sync = reinterpret_cast<__gm__ VecV*>(value_sync_ptr);
          for (uint32_t k = cg_rank_id; k < dim_in; k += group_size) {
-           d_val[val_start * dim_in + k] =
-               __ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-                     L1CacheType::NON_CACHEABLE>(value_sync + k);
-           //  __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-           //      L1CacheType::NON_CACHEABLE>(
-           //    d_val + val_start * dim_in + k, value_sync[k]);
+            __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+                L1CacheType::NON_CACHEABLE>(
+              d_val + val_start * dim_in + k, value_sync[k]);
          }
        }
      }

@@ -193,62 +193,46 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
     ASSERT_EQ(aclrtFree(device_export_count), ACL_ERROR_NONE);
   }
 
-  // // 7. 验证结果
-  // if (config.test_empty_table) {
-  //   // 空表测试：导出数量应为0
-  //   ASSERT_EQ(export_count, 0);
-  // } else if (config.offset == 0) {
-  //   // 无偏移测试：导出数量应等于插入数量
-  //   ASSERT_EQ(export_count, config.key_num);
-  // } else {
-  //   // 偏移测试：导出数量可能小于插入数量，但不能大于插入数量
-  //   ASSERT_LE(export_count, config.key_num);
-  //   ASSERT_GE(export_count, 0);
-  // }
+ if (config.test_empty_table) {
+    ASSERT_EQ(export_count, 0);
+//   } else if (config.offset == 0) {
+//     ASSERT_EQ(export_count, config.key_num);
+  } else {
+    ASSERT_LE(export_count, config.key_num);
+    ASSERT_GE(export_count, 0);
+  }
 
-  // if (export_count > 0 && !config.test_empty_table) {
-  //   // 复制导出结果到主机
-  //   vector<K> host_export_keys(export_count);
-  //   vector<V> host_export_values(export_count * DIM);
+  if (export_count > 0 && !config.test_empty_table) {
+    vector<K> host_export_keys(export_count);
+    vector<V> host_export_values(export_count * DIM);
 
-  //   ASSERT_EQ(aclrtMemcpy(host_export_keys.data(), export_count * sizeof(K),
-  //                         device_export_keys, export_count * sizeof(K),
-  //                         ACL_MEMCPY_DEVICE_TO_HOST),
-  //             ACL_ERROR_NONE);
-  //   ASSERT_EQ(
-  //       aclrtMemcpy(host_export_values.data(), export_count * DIM * sizeof(V),
-  //                   device_export_values, export_count * DIM * sizeof(V),
-  //                   ACL_MEMCPY_DEVICE_TO_HOST),
-  //       ACL_ERROR_NONE);
+    ASSERT_EQ(aclrtMemcpy(host_export_keys.data(), export_count * sizeof(K),
+                          device_export_keys, export_count * sizeof(K),
+                          ACL_MEMCPY_DEVICE_TO_HOST),
+              ACL_ERROR_NONE);
+    ASSERT_EQ(
+        aclrtMemcpy(host_export_values.data(), export_count * DIM * sizeof(V),
+                    device_export_values, export_count * DIM * sizeof(V),
+                    ACL_MEMCPY_DEVICE_TO_HOST),
+        ACL_ERROR_NONE);
 
-  //   // 构建验证map
-  //   vector<K> host_keys(config.key_num);
-  //   vector<V> host_values(config.key_num * DIM);
-  //   create_continuous_keys<K, S, V, DIM>(host_keys.data(), nullptr,
-  //                                        host_values.data(), config.key_num);
+    constexpr V expected_ratio = static_cast<V>(0.00001);
+    constexpr V tolerance = static_cast<V>(1e-5);
 
-  //   unordered_map<K, vector<V>> reference_map;
-  //   reference_map.reserve(config.key_num);
-  //   for (size_t i = 0; i < config.key_num; ++i) {
-  //     vector<V> vec(DIM);
-  //     copy(host_values.begin() + i * DIM, host_values.begin() + (i + 1) * DIM,
-  //          vec.begin());
-  //     reference_map[host_keys[i]] = move(vec);
-  //   }
+    for (size_t i = 0; i < export_count; ++i) {
+      const K& key = host_export_keys[i];
+      V expected_value = static_cast<V>(key) * expected_ratio;
 
-  //   // 验证每个导出的键值对都存在于参考map中且值正确
-  //   for (size_t i = 0; i < export_count; ++i) {
-  //     const K& key = host_export_keys[i];
-  //     auto it = reference_map.find(key);
-  //     ASSERT_NE(it, reference_map.end())
-  //         << "Exported key " << key << " not found in reference map";
-
-  //     vector<V> exported_vec(DIM);
-  //     copy(host_export_values.begin() + i * DIM,
-  //          host_export_values.begin() + (i + 1) * DIM, exported_vec.begin());
-  //     ASSERT_EQ(exported_vec, it->second) << "Values mismatch for key " << key;
-  //   }
-  // }
+      for (size_t j = 0; j < DIM; ++j) {
+        V actual_value = host_export_values[i * DIM + j];
+        V diff = std::abs(actual_value - expected_value);
+        ASSERT_LE(diff, tolerance)
+            << "Value mismatch for key " << key << ", dimension " << j
+            << ": expected " << expected_value << ", got " << actual_value
+            << " (diff: " << diff << ")";
+      }
+    }
+  }
 
   // 8. 清理资源
   if (device_keys != nullptr) {

@@ -75,17 +75,14 @@
  
      const int key_idx{static_cast<int>((tid + offset) % bucket_max_size)};
      const K key{bucket_keys_ptr[key_idx]};
- 
-     if (!IS_RESERVED_KEY<K>(key)) {
-       const __gm__ V* value_ptrs = reinterpret_cast<__gm__ V*>(&bucket_values_ptr[key_idx * dim_in]);
-       const S score = bucket_scores_ptr[key_idx];
-       bool match = pred.template operator()<32>(key, value_ptrs, score);
-       if (match) {
-        size_t local_index{atomicAdd(block_acc, 1u)};
-        block_tuples[local_index].key = key;
-        block_tuples[local_index].value = reinterpret_cast<uint64_t>(value_ptrs);
-        block_tuples[local_index].score = score;
-       }
+     const __gm__ V* value_ptrs = reinterpret_cast<__gm__ V*>(&bucket_values_ptr[key_idx * dim_in]);
+     const S score = bucket_scores_ptr[key_idx];
+     bool match = pred.template operator()<32>(key, value_ptrs, score);
+     if (match) {
+       size_t local_index{atomicAdd(block_acc, 1u)};
+       block_tuples[local_index].key = key;
+       block_tuples[local_index].value = reinterpret_cast<uint64_t>(value_ptrs);
+       block_tuples[local_index].score = score;
      }
      AscendC::Simt::ThreadBarrier();
  
