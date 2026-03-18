@@ -1876,7 +1876,7 @@ class HashTable : public HashTableBase<K, V, S> {
                     value_type* values,            // (n, DIM)
                     score_type* scores = nullptr,  // (n)
                     aclrtStream stream = 0) const {
-    NPU_CHECK(aclrtMemset(d_counter, sizeof(size_type), 0, sizeof(size_type)));
+    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0, sizeof(size_type), stream));
     if (offset >= table_->capacity) {
       return;
     }
@@ -1896,7 +1896,7 @@ class HashTable : public HashTableBase<K, V, S> {
     auto dev_ws{dev_mem_pool_->get_workspace<1>(sizeof(size_type), stream)};
     auto d_counter{dev_ws.get<size_type*>(0)};
 
-    NPU_CHECK(aclrtMemset(d_counter, sizeof(size_type), 0, sizeof(size_type)));
+    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0, sizeof(size_type), stream));
     export_batch(n, offset, d_counter, keys, values, scores, stream);
 
     // 同步stream以确保内核函数执行完成
@@ -2002,7 +2002,7 @@ class HashTable : public HashTableBase<K, V, S> {
                           aclrtStream stream = 0) const {
     std::cout << "[Unsupport export_batch_if_v2 yet]\n";
 
-    NPU_CHECK(aclrtMemset(d_counter, sizeof(size_type), 0, sizeof(size_type)));
+    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0, sizeof(size_type), stream));
     if (offset >= table_->capacity) {
       return;
     }
