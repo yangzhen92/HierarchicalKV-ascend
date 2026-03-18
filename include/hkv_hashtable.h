@@ -45,6 +45,7 @@
 #include "../hkv_hashtable/insert_or_assign_kernel/insert_or_assign_kernel.h"
 #include "../hkv_hashtable/insert_and_evict_kernel/insert_and_evict_kernel.h"
 #include "../hkv_hashtable/traverse_kernel/traverse_kernel.h"
+#include "../hkv_hashtable/remove_kernel/remove_kernel.h"
 #include "aclnn_helper.h"
 #include "aclnnop/aclnn_reduce_sum.h"
 #include "bucket_memory_pool_manager.h"
@@ -1775,7 +1776,11 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
 
-    std::cout << "[Unsupport erase yet]\n";
+    remove_kernel<K, V, S><<<block_dim_, 0, stream>>>(
+        table_->buckets, table_->buckets_size, table_->capacity,
+        table_->bucket_max_size, value_move_opt_.dim, const_cast<key_type*>(keys), n, value_size_,
+        table_->max_bucket_shift, table_->capacity_divisor_magic,
+        table_->capacity_divisor_shift);
 
     NpuCheckError();
     return;
