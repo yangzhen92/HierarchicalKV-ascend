@@ -173,41 +173,6 @@ __forceinline__ __device__ void copy_vector(__gm__ const V* src, __gm__ V* dst,
   }
 }
 
-template <typename K, typename S, int32_t TILE_SIZE>
-__forceinline__ __device__ OccupyResult find_and_lock_for_update(
-    __gm__ K* bucket_keys, const uint32_t bucket_max_size, const K& key,
-    uint32_t& key_pos, const uint32_t lane_id) {
-  const uint32_t start_pos = key_pos;
-
-  for (uint32_t tile_offset = 0; tile_offset < bucket_max_size;
-       tile_offset += TILE_SIZE) {
-    uint32_t current_pos =
-        (start_pos + tile_offset + lane_id) % bucket_max_size;
-
-    K expected_key;
-    uint32_t vote;
-    do {
-      expected_key = Simt::AtomicCas(bucket_keys + current_pos, key,
-                                     static_cast<K>(LOCKED_KEY));
-      bool locked = (expected_key == key);
-
-      vote = Simt::WarpBallotSync(locked);
-      if (vote) {
-        int32_t src_lane = Simt::Ffs(static_cast<int32_t>(vote)) - 1;
-        key_pos = __shfl(current_pos, src_lane, TILE_SIZE);
-        return OccupyResult::DUPLICATE;
-      }
-
-      vote = Simt::WarpBallotSync(expected_key == static_cast<K>(EMPTY_KEY));
-      if (vote) {
-        return OccupyResult::REFUSED;
-      }
-      vote = Simt::WarpBallotSync(expected_key == static_cast<K>(LOCKED_KEY));
-    } while (vote != 0);
-  }
-  return OccupyResult::REFUSED;
-}
-
 template <typename K = uint64_t, typename V = float, typename S = uint64_t,
           int32_t TILE_SIZE = 32>
 __simt_vf__ __aicore__

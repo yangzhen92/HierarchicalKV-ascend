@@ -144,6 +144,56 @@ LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_scores_kernel_with_filter_vf(
   }
 }
 
+template <typename K = uint64_t, typename V = float, typename S = uint64_t,
+          int Strategy = -1, int32_t TILE_SIZE = 32>
+__simt_vf__ __aicore__
+LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_scores_kernel_with_io_vf(
+    __gm__ void* buckets_gm, uint64_t capacity, uint32_t bucket_max_size,
+    uint32_t dim, __gm__ void* keys_gm, __gm__ void* scores_gm, uint64_t n,
+    uint64_t global_epoch, const uint64_t total_thread_num,
+    uint64_t system_cycle, uint32_t block_id, uint32_t max_bucket_shift,
+    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift) {
+  using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
+  __gm__ Bucket<K, V, S>* __restrict__ buckets =
+      reinterpret_cast<__gm__ Bucket<K, V, S>*>(buckets_gm);
+  __gm__ K* __restrict__ keys = reinterpret_cast<__gm__ K*>(keys_gm);
+  __gm__ S* __restrict__ scores = reinterpret_cast<__gm__ S*>(scores_gm);
+  auto lane_id = threadIdx.x % TILE_SIZE;
+  const uint64_t N = n * TILE_SIZE;
+
+  for (uint64_t t = block_id * blockDim.x + threadIdx.x; t < N;
+       t += total_thread_num) {
+    uint64_t key_idx = t / TILE_SIZE;
+    K key = keys[key_idx];
+    if (IS_RESERVED_KEY<K>(key)) continue;
+    const K hashed_key = Murmur3HashDevice(key);
+    uint64_t global_idx = get_global_idx(hashed_key, capacity_divisor_magic,
+                                         capacity_divisor_shift, capacity);
+    uint32_t key_pos = global_idx & (bucket_max_size - 1);
+    uint64_t bkt_idx = global_idx >> max_bucket_shift;
+
+    __gm__ Bucket<K, V, S>* bucket = buckets + bkt_idx;
+    __gm__ K* bucket_keys = bucket->keys_;
+
+    OccupyResult occupy_result{OccupyResult::INITIAL};
+    occupy_result = find_and_lock_for_update<K, S, TILE_SIZE>(
+        bucket_keys, bucket_max_size, key, key_pos, lane_id);
+
+    if (occupy_result == OccupyResult::REFUSED) continue;
+    if (occupy_result == OccupyResult::DUPLICATE) {
+      if (lane_id == 0) {
+        ScoreFunctor::update_without_missed(bucket_keys, bucket_max_size,
+                                            key_pos, scores, key_idx,
+                                            global_epoch, system_cycle);
+      }
+      __threadfence();
+    }
+    if (lane_id == 0) {
+      (void)Simt::AtomicExch(bucket_keys + key_pos, key);
+    }
+  }
+}
+
 template <class K, class V, class S, int Strategy = -1>
 __global__ __vector__ void assign_scores_kernel_with_filter(
     __gm__ void* buckets, uint64_t capacity, uint32_t bucket_capacity,
@@ -154,10 +204,26 @@ __global__ __vector__ void assign_scores_kernel_with_filter(
   const uint64_t total_thread_num = THREAD_NUM_1024 * GetBlockNum();
 
   Simt::VF_CALL<assign_scores_kernel_with_filter_vf<K, V, S, Strategy>>(
-    Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_1024)}, buckets, capacity,
-    bucket_capacity, dim, keys, scores, n, global_epoch, total_thread_num,
-    system_cycle, GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
-    capacity_divisor_shift);
+      Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_1024)}, buckets, capacity,
+      bucket_capacity, dim, keys, scores, n, global_epoch, total_thread_num,
+      system_cycle, GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
+      capacity_divisor_shift);
+}
+
+template <class K, class V, class S, int Strategy = -1>
+__global__ __vector__ void assign_scores_kernel_with_io(
+    __gm__ void* buckets, uint64_t capacity, uint32_t bucket_capacity,
+    uint32_t dim, __gm__ void* keys, __gm__ void* scores, uint64_t n,
+    uint64_t global_epoch, uint32_t max_bucket_shift,
+    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift) {
+  uint64_t system_cycle = static_cast<uint64_t>(AscendC::GetSystemCycle());
+  const uint64_t total_thread_num = THREAD_NUM_1024 * GetBlockNum();
+
+  Simt::VF_CALL<assign_scores_kernel_with_io_vf<K, V, S, Strategy>>(
+      Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_1024)}, buckets, capacity,
+      bucket_capacity, dim, keys, scores, n, global_epoch, total_thread_num,
+      system_cycle, GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
+      capacity_divisor_shift);
 }
 }  // namespace hkv
 }  // namespace npu
