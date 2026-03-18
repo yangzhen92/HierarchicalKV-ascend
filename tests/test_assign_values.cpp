@@ -17,6 +17,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <random>
 #include <unordered_map>
@@ -1065,4 +1066,210 @@ TEST_F(AssignValuesTest, unique_key_param) {
   free_device_mem(device_scores);
   free_device_mem(device_values_ptr);
   free_device_mem(device_found);
+}
+
+// 测试15：unique_key=false 重复 key 更新
+TEST_F(AssignValuesTest, unique_key_false_duplicate_keys) {
+  constexpr size_t dim = 8;
+  constexpr size_t unique_key_num = 128;
+  constexpr size_t assign_key_num = 256;
+
+  HashTableOptions options{
+      .init_capacity = init_capacity,
+      .max_capacity = init_capacity,
+      .max_hbm_for_vectors = hbm_for_values,
+      .dim = dim,
+      .io_by_cpu = false,
+  };
+  HashTable<K, V, S, EvictStrategy::kLfu> table;
+  table.init(options);
+
+  vector<K> unique_keys(unique_key_num, 0);
+  vector<V> insert_values(unique_key_num * dim, 0);
+  vector<S> insert_scores(unique_key_num, 0);
+  create_continuous_keys<K, S, V, dim>(unique_keys.data(), insert_scores.data(),
+                                       insert_values.data(), unique_key_num);
+
+  K* device_unique_keys = alloc_device_mem<K>(unique_key_num);
+  V* device_insert_values = alloc_device_mem<V>(unique_key_num * dim);
+  S* device_insert_scores = alloc_device_mem<S>(unique_key_num);
+
+  copy_to_device(device_unique_keys, unique_keys.data(), unique_key_num);
+  copy_to_device(device_insert_values, insert_values.data(),
+                 unique_key_num * dim);
+  copy_to_device(device_insert_scores, insert_scores.data(), unique_key_num);
+
+  table.insert_or_assign(unique_key_num, device_unique_keys,
+                         device_insert_values, device_insert_scores, stream_);
+  ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
+  EXPECT_EQ(table.size(), unique_key_num);
+
+  // 构造带重复 key 的 assign 数组：assign_keys[i] = unique_keys[i % unique_key_num]
+  vector<K> assign_keys(assign_key_num, 0);
+  vector<V> assign_values(assign_key_num * dim, 0);
+  for (size_t i = 0; i < assign_key_num; i++) {
+    assign_keys[i] = unique_keys[i % unique_key_num];
+    for (size_t j = 0; j < dim; j++) {
+      assign_values[i * dim + j] = 1000.0f + static_cast<V>(i) + j * 0.1f;
+    }
+  }
+
+  K* device_assign_keys = alloc_device_mem<K>(assign_key_num);
+  V* device_assign_values = alloc_device_mem<V>(assign_key_num * dim);
+
+  copy_to_device(device_assign_keys, assign_keys.data(), assign_key_num);
+  copy_to_device(device_assign_values, assign_values.data(),
+                 assign_key_num * dim);
+
+  table.assign_values(assign_key_num, device_assign_keys, device_assign_values,
+                     stream_, false);
+  ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
+  EXPECT_EQ(table.size(), unique_key_num);
+
+  // 验证：对每个唯一 key 做 find，均应找到；value 应为本次 assign 中该 key 某一次写入
+  V** device_values_ptr = alloc_device_mem<V*>(unique_key_num);
+  bool* device_found = alloc_device_mem<bool>(unique_key_num);
+  V* device_values_buffer = alloc_device_mem<V>(unique_key_num * dim);
+
+  table.find(unique_key_num, device_unique_keys, device_values_ptr,
+             device_found, nullptr, stream_);
+  ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
+
+  read_from_ptr(device_values_ptr, device_values_buffer, dim, unique_key_num,
+                stream_);
+  ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
+
+  auto host_found = std::unique_ptr<bool[]>(new bool[unique_key_num]());
+  copy_to_host(host_found.get(), device_found, unique_key_num);
+  vector<V> real_values(unique_key_num * dim, 0);
+  copy_to_host(real_values.data(), device_values_buffer,
+               unique_key_num * dim);
+
+  size_t found_count = 0;
+  for (size_t i = 0; i < unique_key_num; i++) {
+    EXPECT_TRUE(host_found[i]) << "Unique key at index " << i << " should be found";
+    if (host_found[i]) {
+      found_count++;
+      // 该 key 在 assign 中出现的下标为 i, i+unique_key_num，对应 value 为 assign_values[i] 或 assign_values[i+unique_key_num]
+      bool match_first = true;
+      bool match_second = true;
+      for (size_t j = 0; j < dim; j++) {
+        V expected_first = assign_values[i * dim + j];
+        V expected_second = assign_values[(i + unique_key_num) * dim + j];
+        if (std::abs(real_values[i * dim + j] - expected_first) > 1e-5f) {
+          match_first = false;
+        }
+        if (std::abs(real_values[i * dim + j] - expected_second) > 1e-5f) {
+          match_second = false;
+        }
+      }
+      EXPECT_TRUE(match_first || match_second)
+          << "Value for key at index " << i
+          << " should match one of the assigned values";
+    }
+  }
+  EXPECT_EQ(found_count, unique_key_num);
+
+  free_device_mem(device_unique_keys);
+  free_device_mem(device_insert_values);
+  free_device_mem(device_insert_scores);
+  free_device_mem(device_assign_keys);
+  free_device_mem(device_assign_values);
+  free_device_mem(device_values_ptr);
+  free_device_mem(device_found);
+  free_device_mem(device_values_buffer);
+}
+
+// 测试16：unique_key=false 单 key 多次出现
+TEST_F(AssignValuesTest, unique_key_false_single_key_repeated) {
+  constexpr size_t dim = 8;
+  constexpr size_t repeat_count = 64;
+
+  HashTableOptions options{
+      .init_capacity = init_capacity,
+      .max_capacity = init_capacity,
+      .max_hbm_for_vectors = hbm_for_values,
+      .dim = dim,
+      .io_by_cpu = false,
+  };
+  HashTable<K, V, S, EvictStrategy::kLfu> table;
+  table.init(options);
+
+  K host_key = 99999;
+  S host_score = 1;
+  vector<V> insert_values(dim, 1.0f);
+
+  K* device_key = alloc_device_mem<K>(1);
+  V* device_insert_values = alloc_device_mem<V>(dim);
+  S* device_score = alloc_device_mem<S>(1);
+
+  copy_to_device(device_key, &host_key, 1);
+  copy_to_device(device_insert_values, insert_values.data(), dim);
+  copy_to_device(device_score, &host_score, 1);
+
+  table.insert_or_assign(1, device_key, device_insert_values, device_score,
+                         stream_);
+  ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
+  EXPECT_EQ(table.size(), 1);
+
+  // 同一 key 重复 repeat_count 次，每次 value 不同
+  vector<K> assign_keys(repeat_count, host_key);
+  vector<V> assign_values(repeat_count * dim, 0);
+  for (size_t i = 0; i < repeat_count; i++) {
+    for (size_t j = 0; j < dim; j++) {
+      assign_values[i * dim + j] = 2000.0f + static_cast<V>(i) + j * 0.01f;
+    }
+  }
+
+  K* device_assign_keys = alloc_device_mem<K>(repeat_count);
+  V* device_assign_values = alloc_device_mem<V>(repeat_count * dim);
+
+  copy_to_device(device_assign_keys, assign_keys.data(), repeat_count);
+  copy_to_device(device_assign_values, assign_values.data(),
+                 repeat_count * dim);
+
+  table.assign_values(repeat_count, device_assign_keys, device_assign_values,
+                      stream_, false);
+  ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
+  EXPECT_EQ(table.size(), 1);
+
+  // 验证该 key 仍存在，且 value 为某一次写入
+  V** device_values_ptr = alloc_device_mem<V*>(1);
+  bool* device_found = alloc_device_mem<bool>(1);
+  V* device_values_buffer = alloc_device_mem<V>(dim);
+
+  table.find(1, device_key, device_values_ptr, device_found, nullptr, stream_);
+  ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
+
+  read_from_ptr(device_values_ptr, device_values_buffer, dim, 1, stream_);
+  ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
+
+  bool host_found = false;
+  copy_to_host(&host_found, device_found, 1);
+  EXPECT_TRUE(host_found);
+
+  vector<V> real_values(dim, 0);
+  copy_to_host(real_values.data(), device_values_buffer, dim);
+
+  bool match_any = false;
+  for (size_t i = 0; i < repeat_count && !match_any; i++) {
+    bool match = true;
+    for (size_t j = 0; j < dim; j++) {
+      if (std::abs(real_values[j] - assign_values[i * dim + j]) > 1e-5f) {
+        match = false;
+        break;
+      }
+    }
+    match_any = match;
+  }
+  EXPECT_TRUE(match_any) << "Stored value should match one of the assigned values";
+
+  free_device_mem(device_key);
+  free_device_mem(device_insert_values);
+  free_device_mem(device_score);
+  free_device_mem(device_assign_keys);
+  free_device_mem(device_assign_values);
+  free_device_mem(device_values_ptr);
+  free_device_mem(device_found);
+  free_device_mem(device_values_buffer);
 }

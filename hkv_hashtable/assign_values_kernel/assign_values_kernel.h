@@ -33,10 +33,10 @@ __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void assign_values_kernel_with_digest_vf(
     __gm__ void* buckets_addr_gm, uint64_t capacity, uint32_t bucket_max_size,
     uint32_t dim, __gm__ void* keys_addr_gm, __gm__ void* values_addr_gm,
-    uint64_t n, uint32_t thread_all, uint64_t global_epoch,
-    uint32_t block_index, uint32_t max_bucket_shift,
-    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
-    uint64_t n_align_warp, int32_t group_size) {
+    uint64_t n, uint32_t thread_all, uint32_t block_index,
+    uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
+    uint64_t capacity_divisor_shift, uint64_t n_align_warp,
+    int32_t group_size) {
   using BUCKET = Bucket<K, V, S>;
   K key{static_cast<K>(EMPTY_KEY)};
   S score{static_cast<S>(EMPTY_SCORE)};
@@ -162,23 +162,131 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_values_kernel_with_digest_vf(
   }
 }
 
-template <class K, class V, class S, int Strategy = -1>
+template <typename V, int32_t TILE_SIZE>
+__forceinline__ __device__ void copy_vector(__gm__ const V* src, __gm__ V* dst,
+                                            const uint32_t dim,
+                                            const uint32_t lane_id) {
+  for (uint32_t i = lane_id; i < dim; i += TILE_SIZE) {
+    V val = src[i];
+    __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV, L1CacheType::NON_CACHEABLE>(
+        dst + i, val);
+  }
+}
+
+template <typename K, typename S, int32_t TILE_SIZE>
+__forceinline__ __device__ OccupyResult find_and_lock_for_update(
+    __gm__ K* bucket_keys, const uint32_t bucket_max_size, const K& key,
+    uint32_t& key_pos, const uint32_t lane_id) {
+  const uint32_t start_pos = key_pos;
+
+  for (uint32_t tile_offset = 0; tile_offset < bucket_max_size;
+       tile_offset += TILE_SIZE) {
+    uint32_t current_pos =
+        (start_pos + tile_offset + lane_id) % bucket_max_size;
+
+    K expected_key;
+    uint32_t vote;
+    do {
+      expected_key = Simt::AtomicCas(bucket_keys + current_pos, key,
+                                     static_cast<K>(LOCKED_KEY));
+      bool locked = (expected_key == key);
+
+      vote = Simt::WarpBallotSync(locked);
+      if (vote) {
+        int32_t src_lane = Simt::Ffs(static_cast<int32_t>(vote)) - 1;
+        key_pos = __shfl(current_pos, src_lane, TILE_SIZE);
+        return OccupyResult::DUPLICATE;
+      }
+
+      vote = Simt::WarpBallotSync(expected_key == static_cast<K>(EMPTY_KEY));
+      if (vote) {
+        return OccupyResult::REFUSED;
+      }
+      vote = Simt::WarpBallotSync(expected_key == static_cast<K>(LOCKED_KEY));
+    } while (vote != 0);
+  }
+  return OccupyResult::REFUSED;
+}
+
+template <typename K = uint64_t, typename V = float, typename S = uint64_t,
+          int32_t TILE_SIZE = 32>
+__simt_vf__ __aicore__
+LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_values_kernel_with_io_vf(
+    __gm__ void* buckets_addr_gm, uint64_t capacity, uint32_t bucket_max_size,
+    uint32_t dim, __gm__ void* keys_addr_gm, __gm__ void* values_addr_gm,
+    uint64_t n, uint32_t thread_all, uint32_t block_index,
+    uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
+    uint64_t capacity_divisor_shift) {
+  __gm__ Bucket<K, V, S>* __restrict__ buckets =
+      reinterpret_cast<__gm__ Bucket<K, V, S>*>(buckets_addr_gm);
+  __gm__ K* __restrict__ keys = reinterpret_cast<__gm__ K*>(keys_addr_gm);
+  __gm__ V* __restrict__ values = reinterpret_cast<__gm__ V*>(values_addr_gm);
+
+  auto lane_id = threadIdx.x % TILE_SIZE;
+  const uint64_t N = n * TILE_SIZE;
+
+  for (uint64_t t = block_index * blockDim.x + threadIdx.x; t < N;
+       t += thread_all) {
+    uint64_t key_idx = t / TILE_SIZE;
+    K key = keys[key_idx];
+    if (IS_RESERVED_KEY<K>(key)) continue;
+    const K hashed_key = Murmur3HashDevice(key);
+    uint64_t global_idx = get_global_idx(hashed_key, capacity_divisor_magic,
+                                         capacity_divisor_shift, capacity);
+    uint32_t key_pos = global_idx & (bucket_max_size - 1);
+    uint64_t bkt_idx = global_idx >> max_bucket_shift;
+
+    __gm__ Bucket<K, V, S>* bucket = buckets + bkt_idx;
+    __gm__ K* bucket_keys = bucket->keys_;
+    __gm__ V* bucket_vectors = bucket->vectors;
+
+    OccupyResult occupy_result{OccupyResult::INITIAL};
+    occupy_result = find_and_lock_for_update<K, S, TILE_SIZE>(
+        bucket_keys, bucket_max_size, key, key_pos, lane_id);
+
+    if (occupy_result == OccupyResult::REFUSED) continue;
+    if (occupy_result == OccupyResult::DUPLICATE) {
+      copy_vector<V, TILE_SIZE>(values + key_idx * dim,
+                                bucket_vectors + key_pos * dim, dim, lane_id);
+      __threadfence();
+    }
+    if (lane_id == 0) {
+      (void)Simt::AtomicExch(bucket_keys + key_pos, key);
+    }
+  }
+}
+
+template <class K, class V, class S>
 __global__ __vector__ void assign_values_kernel(
     __gm__ void* buckets, uint64_t capacity, uint32_t bucket_max_size,
     uint32_t dim, __gm__ void* keys, __gm__ void* values, uint64_t n,
-    uint64_t global_epoch, uint32_t value_size, uint32_t max_bucket_shift,
+    uint32_t value_size, uint32_t max_bucket_shift,
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
     uint64_t n_align_warp, int32_t group_size) {
   constexpr uint32_t thread_num = 512;
   const uint32_t thread_all = thread_num * GetBlockNum();
 
   DISPATCH_VALUE_SIZE(
-    value_size,
-    (Simt::VF_CALL<assign_values_kernel_with_digest_vf<K, V, S, DTYPE>>(
-        Simt::Dim3{static_cast<uint32_t>(thread_num)}, buckets, capacity,
-        bucket_max_size, dim, keys, values, n, thread_all, global_epoch,
-        GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
-        capacity_divisor_shift, n_align_warp, group_size)));
+      value_size,
+      (Simt::VF_CALL<assign_values_kernel_with_digest_vf<K, V, S, DTYPE>>(
+          Simt::Dim3{static_cast<uint32_t>(thread_num)}, buckets, capacity,
+          bucket_max_size, dim, keys, values, n, thread_all, GetBlockIdx(),
+          max_bucket_shift, capacity_divisor_magic, capacity_divisor_shift,
+          n_align_warp, group_size)));
+}
+
+template <class K, class V, class S>
+__global__ __vector__ void assign_values_kernel_with_io(
+    __gm__ void* buckets, uint64_t capacity, uint32_t bucket_max_size,
+    uint32_t dim, __gm__ void* keys, __gm__ void* values, uint64_t n,
+    uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
+    uint64_t capacity_divisor_shift) {
+  constexpr uint32_t thread_num = 1024;
+  const uint32_t thread_all = thread_num * GetBlockNum();
+  Simt::VF_CALL<assign_values_kernel_with_io_vf<K, V, S>>(
+      Simt::Dim3{static_cast<uint32_t>(thread_num)}, buckets, capacity,
+      bucket_max_size, dim, keys, values, n, thread_all, GetBlockIdx(),
+      max_bucket_shift, capacity_divisor_magic, capacity_divisor_shift);
 }
 }  // namespace hkv
 }  // namespace npu
