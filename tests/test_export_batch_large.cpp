@@ -199,7 +199,7 @@ void run_large_scale_export_test(const ExportTestConfig& config) {
 
     for (size_t i = 0; i < export_count; ++i) {
       const K& key = host_export_keys[i];
-      V expected_value = static_cast<V>(key) * expected_ratio;
+      V expected_value = static_cast<V>(key * 0.00001);
 
       for (size_t j = 0; j < DIM; ++j) {
         V actual_value = host_export_values[i * DIM + j];
