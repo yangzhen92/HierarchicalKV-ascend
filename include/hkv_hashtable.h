@@ -1904,7 +1904,7 @@ class HashTable : public HashTableBase<K, V, S> {
     NPU_CHECK(aclrtSynchronizeStream(stream));
 
     size_type counter = 0;
-    NPU_CHECK(aclrtMemcpy(&counter, sizeof(size_type), d_counter,
+    NPU_CHECK(aclrtMemcpyAsync(&counter, sizeof(size_type), d_counter,
                           sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST, stream));
     return counter;
   }
