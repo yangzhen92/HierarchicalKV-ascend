@@ -23,6 +23,7 @@
 #include "acl/acl.h"
 #include "hkv_hashtable.h"
 #include "test_util.h"
+#include "../include/types.h"
 
 using namespace std;
 using namespace npu::hkv;
@@ -47,7 +48,7 @@ struct ExportIfPredFunctorV2 {
   __forceinline__ __device__ bool operator()(
       const K& key, const __gm__ V* value, const S& score) {
     /* evaluate key, score and value. */
-    return score < threshold;
+    return ((!IS_RESERVED_KEY<K>(key)) && (score < threshold));
   }
 };
 

@@ -1881,10 +1881,11 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
     n = std::min(table_->capacity - offset, n);
+    size_type n_align = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
       static_cast<void*>(d_table_), static_cast<void*>(table_->buckets), static_cast<void*>(keys),
       static_cast<void*>(values), static_cast<void*>(scores),
-      offset, n, static_cast<void*>(d_counter), value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
+      offset, n, n_align, static_cast<void*>(d_counter), value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
     NpuCheckError();
   }
 
@@ -2007,10 +2008,11 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
     n = std::min(table_->capacity - offset, n);
+    size_type n_align = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     dump_kernel_if_v2<K, V, S, PredFunctor><<<block_dim_, 64 * 1024, stream>>>(
       pred, static_cast<void*>(d_table_), static_cast<void*>(table_->buckets), static_cast<void*>(keys),
       static_cast<void*>(values), static_cast<void*>(scores),
-      offset, n, static_cast<void*>(d_counter), value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
+      offset, n, n_align, static_cast<void*>(d_counter), value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
     NpuCheckError();
 
     NpuCheckError();
@@ -2257,11 +2259,12 @@ class HashTable : public HashTableBase<K, V, S> {
 
       // Calculate the batch size for this iteration
       const size_type batch_size = std::min(total_size - i, n);
+      const size_type batch_size_align = ((batch_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
 
       // Launch dump_kernel to export data to device memory
       dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
         static_cast<void*>(d_table_), static_cast<void*>(table_->buckets), static_cast<void*>(d_keys),
-        static_cast<void*>(d_values), static_cast<void*>(d_scores), i, batch_size,
+        static_cast<void*>(d_values), static_cast<void*>(d_scores), i, batch_size, batch_size_align,
         static_cast<void*>(d_count), value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
       NpuCheckError();
       // Copy counter from device to host
