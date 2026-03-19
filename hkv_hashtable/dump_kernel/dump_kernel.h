@@ -130,7 +130,6 @@
      }
    }
  }
- }
  
  template <class K, class V, class S>
  __global__ __vector__ void dump_kernel(
