@@ -101,7 +101,7 @@ void run_large_scale_export_test(const ExportTestConfig& config) {
     // 少量多次插入数据
     aclrtStream stream = nullptr;
     ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
-    const size_t batch_size = 10000; // 每批插入10000个
+    const size_t batch_size = 128 * 1024; // 每批插入128k个
     for (size_t i = 0; i < config.key_num; i += batch_size) {
       size_t current_batch_size = std::min(batch_size, config.key_num - i);
       table.insert_or_assign(current_batch_size, device_keys + i, device_values + i * DIM, nullptr,
