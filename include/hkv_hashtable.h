@@ -1877,7 +1877,7 @@ class HashTable : public HashTableBase<K, V, S> {
                     value_type* values,            // (n, DIM)
                     score_type* scores = nullptr,  // (n)
                     aclrtStream stream = 0) const {
-    NPU_CHECK(aclrtMemset(d_counter, sizeof(size_type), 0, sizeof(size_type)));
+    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0, sizeof(size_type), stream));
     if (offset >= table_->capacity) {
       return;
     }
@@ -1897,7 +1897,7 @@ class HashTable : public HashTableBase<K, V, S> {
     auto dev_ws{dev_mem_pool_->get_workspace<1>(sizeof(size_type), stream)};
     auto d_counter{dev_ws.get<size_type*>(0)};
 
-    NPU_CHECK(aclrtMemset(d_counter, sizeof(size_type), 0, sizeof(size_type)));
+    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0, sizeof(size_type), stream));
     export_batch(n, offset, d_counter, keys, values, scores, stream);
 
     // 同步stream以确保内核函数执行完成
@@ -1905,7 +1905,7 @@ class HashTable : public HashTableBase<K, V, S> {
 
     size_type counter = 0;
     NPU_CHECK(aclrtMemcpy(&counter, sizeof(size_type), d_counter,
-                          sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST));
+                          sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST, stream));
     return counter;
   }
 
@@ -2252,7 +2252,7 @@ class HashTable : public HashTableBase<K, V, S> {
     size_type total_count{0};
     for (size_type i{0}; i < total_size; i += n) {
       // Reset the counter
-      NPU_CHECK(aclrtMemset(d_count, sizeof(size_type), 0, sizeof(size_type)));
+      NPU_CHECK(aclrtMemsetAsync(d_count, sizeof(size_type), 0, sizeof(size_type), stream));
 
       // Calculate the batch size for this iteration
       const size_type batch_size = std::min(total_size - i, n);
