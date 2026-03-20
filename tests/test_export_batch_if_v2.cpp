@@ -261,17 +261,17 @@ TEST(test_export_batch_if_v2, test_export_batch_if_v2_basic) {
   RUN_EXPORT_BATCH_IF_V2_TEST(int64_t, double, uint64_t, 16, config);
 }
 
-TEST(test_export_batch, test_export_overload) {
+TEST(test_export_batch_if_v2, test_export_batch_if_v2_overload) {
   ExportTestConfig config = {1024, true, false, 0, true};
   RUN_EXPORT_BATCH_IF_V2_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
-TEST(test_export_batch, test_export_empty) {
+TEST(test_export_batch_if_v2, test_export_batch_if_v2_empty) {
   ExportTestConfig config = {0, false, true, 0, false};
   RUN_EXPORT_BATCH_IF_V2_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
-TEST(test_export_batch, test_export_offset) {
+TEST(test_export_batch_if_v2, test_export_batch_if_v2_offset) {
   // 测试不同偏移量下的导出功能
   // 注意：当offset > 0时，不能保证导出数量等于key_num
   ExportTestConfig config = {1024, false, false, 1000, false};
