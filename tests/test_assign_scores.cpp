@@ -1236,7 +1236,7 @@ TEST_F(AssignScoresTest, non_unique_key_false_duplicate_keys_same_score) {
   table.find(unique_num, d_ins_k, d_vptr, d_found, d_out_s, stream_);
   ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
 
-  auto h_found = std::unique_ptr<bool[]>(new bool[unique_num]());
+  auto h_found = std::make_unique<bool[]>(unique_num);
   copy_to_host(h_found.get(), d_found, unique_num);
   vector<S> out_s(unique_num);
   copy_to_host(out_s.data(), d_out_s, unique_num);
@@ -1312,7 +1312,7 @@ TEST_F(AssignScoresTest, non_unique_key_false_lru_duplicates) {
   table.find(unique_num, d_k, d_vptr, d_found, d_s1, stream_);
   ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
 
-  auto h_found = std::unique_ptr<bool[]>(new bool[unique_num]());
+  auto h_found = std::make_unique<bool[]>(unique_num);
   copy_to_host(h_found.get(), d_found, unique_num);
   vector<S> updated_ts(unique_num);
   copy_to_host(updated_ts.data(), d_s1, unique_num);
