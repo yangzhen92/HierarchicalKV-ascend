@@ -21,7 +21,7 @@
 #include <cmath>
 #include <cstdint>
 #include "utils.h"
-#include "type.h"
+#include "types.h"
 
 namespace benchmark {
 
