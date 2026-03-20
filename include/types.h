@@ -22,6 +22,8 @@
 #include <cstdio>
 #include <limits>
 #include <string>
+#include <simt_api/device_atomic_functions.h>
+#include <simt_api/device_warp_functions.h>
 #include "cuda2npu.h"
 #include "utils.h"
 namespace npu {
@@ -470,22 +472,22 @@ __forceinline__ __device__ OccupyResult find_and_lock_for_update(
     K expected_key;
     uint32_t vote;
     do {
-      expected_key = Simt::AtomicCas(bucket_keys + current_pos, key,
+      expected_key = asc_atomic_cas(bucket_keys + current_pos, key,
                                      static_cast<K>(LOCKED_KEY));
       bool locked = (expected_key == key);
 
-      vote = Simt::WarpBallotSync(locked);
+      vote = asc_ballot(locked);
       if (vote) {
-        int32_t src_lane = Simt::Ffs(static_cast<int32_t>(vote)) - 1;
-        key_pos = __shfl(current_pos, src_lane, TILE_SIZE);
+        int32_t src_lane = __ffs(static_cast<int32_t>(vote)) - 1;
+        key_pos = asc_shfl(current_pos, src_lane, TILE_SIZE);
         return OccupyResult::DUPLICATE;
       }
 
-      vote = Simt::WarpBallotSync(expected_key == static_cast<K>(EMPTY_KEY));
+      vote = asc_ballot(expected_key == static_cast<K>(EMPTY_KEY));
       if (vote) {
         return OccupyResult::REFUSED;
       }
-      vote = Simt::WarpBallotSync(expected_key == static_cast<K>(LOCKED_KEY));
+      vote = asc_ballot(expected_key == static_cast<K>(LOCKED_KEY));
     } while (vote != 0);
   }
   return OccupyResult::REFUSED;

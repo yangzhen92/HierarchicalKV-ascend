@@ -23,6 +23,7 @@
 #define ASCENDC_ASSIGN_SCORES_KERNEL_WITH_FILTER_H_
 
 #include <kernel_operator.h>
+#include <simt_api/common_functions.h>
 #include <cstdint>
 #include "../../include/score_functor.h"
 #include "../../include/types.h"
@@ -103,12 +104,12 @@ LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_scores_kernel_with_filter_vf(
         // NPU uses little endian,
         // and the lowest byte in register stores in the lowest address.
         uint32_t index =
-            (AscendC::Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+            (__ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
         cmp_result &= (cmp_result - 1);
         possible_pos = pos_cur + index;
 
         __gm__ K* current_key_ptr = BUCKET::keys(bucket_keys_ptr, possible_pos);
-        K try_key = AscendC::Simt::AtomicCas(current_key_ptr, key,
+        K try_key = asc_atomic_cas(current_key_ptr, key,
                                              static_cast<K>(LOCKED_KEY));
         if (try_key == key) {
           key_pos = possible_pos;
@@ -116,7 +117,7 @@ LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_scores_kernel_with_filter_vf(
                                               key_pos, scores, kv_idx,
                                               global_epoch, system_cycle);
           done = true;
-          (void)AscendC::Simt::AtomicExch(current_key_ptr, key);
+          (void)asc_atomic_exch(current_key_ptr, key);
         }
       }
       if (!done) {
@@ -124,7 +125,7 @@ LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_scores_kernel_with_filter_vf(
         cmp_result &= 0x01010101;
         while (cmp_result != 0 && !done) {
           uint32_t index =
-              (AscendC::Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+              (__ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
           cmp_result &= (cmp_result - 1);
           possible_pos = pos_cur + index;
           // 如果offset为0，并且possible_pos小于key_pos，则跳过
@@ -168,7 +169,9 @@ LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_scores_kernel_with_io_vf(
        t += total_thread_num) {
     uint64_t key_idx = t / TILE_SIZE;
     K key = keys[key_idx];
-    if (IS_RESERVED_KEY<K>(key)) continue;
+    if (IS_RESERVED_KEY<K>(key)) {
+      continue;
+    }
     const K hashed_key = Murmur3HashDevice(key);
     uint64_t global_idx = get_global_idx(hashed_key, capacity_divisor_magic,
                                          capacity_divisor_shift, capacity);
@@ -189,10 +192,10 @@ LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_scores_kernel_with_io_vf(
                                             key_pos, scores, key_idx,
                                             global_epoch, system_cycle);
       }
-      __threadfence();
+      asc_threadfence();
     }
     if (lane_id == 0) {
-      (void)Simt::AtomicExch(bucket_keys + key_pos, key);
+      (void)asc_atomic_exch(bucket_keys + key_pos, key);
     }
   }
 }
@@ -206,8 +209,8 @@ __global__ __vector__ void assign_scores_kernel_with_filter(
   uint64_t system_cycle = static_cast<uint64_t>(AscendC::GetSystemCycle());
   const uint64_t total_thread_num = THREAD_NUM_1024 * GetBlockNum();
 
-  Simt::VF_CALL<assign_scores_kernel_with_filter_vf<K, V, S, Strategy>>(
-      Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_1024)}, buckets, capacity,
+  asc_vf_call<assign_scores_kernel_with_filter_vf<K, V, S, Strategy>>(
+      dim3{static_cast<uint32_t>(THREAD_NUM_1024)}, buckets, capacity,
       bucket_max_size, dim, keys, scores, n, global_epoch, total_thread_num,
       system_cycle, GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
       capacity_divisor_shift);
@@ -222,8 +225,8 @@ __global__ __vector__ void assign_scores_kernel_with_io(
   uint64_t system_cycle = static_cast<uint64_t>(AscendC::GetSystemCycle());
   const uint64_t total_thread_num = THREAD_NUM_1024 * GetBlockNum();
 
-  Simt::VF_CALL<assign_scores_kernel_with_io_vf<K, V, S, Strategy>>(
-      Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_1024)}, buckets, capacity,
+  asc_vf_call<assign_scores_kernel_with_io_vf<K, V, S, Strategy>>(
+      dim3{static_cast<uint32_t>(THREAD_NUM_1024)}, buckets, capacity,
       bucket_max_size, dim, keys, scores, n, global_epoch, total_thread_num,
       system_cycle, GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
       capacity_divisor_shift);
