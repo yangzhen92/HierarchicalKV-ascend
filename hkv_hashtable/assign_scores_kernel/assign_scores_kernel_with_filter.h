@@ -54,9 +54,6 @@ LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_scores_kernel_with_filter_vf(
   if (!keys) {
     return;
   }
-  if (!scores) {
-    return;
-  }
 
   K key{static_cast<K>(EMPTY_KEY)};
 
@@ -156,9 +153,6 @@ LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_scores_kernel_with_io_vf(
     return;
   }
   if (!keys) {
-    return;
-  }
-  if (!scores) {
     return;
   }
   using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
