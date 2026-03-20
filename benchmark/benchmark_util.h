@@ -187,7 +187,7 @@ struct ExportIfPredFunctorV2 {
   __forceinline__ __device__ bool operator()(
       const K& key, const __gm__ V* value, const S& score) {
     /* evaluate key, score and value. */
-    return ((!IS_RESERVED_KEY<K>(key)) && (score < threshold));
+    return ((!npu::hkv::IS_RESERVED_KEY<K>(key)) && (score < threshold));
   }
 };
 
