@@ -2008,7 +2008,7 @@ class HashTable : public HashTableBase<K, V, S> {
                           value_type* values,            // (n, DIM)
                           score_type* scores = nullptr,  // (n)
                           aclrtStream stream = 0) const {
-    std::cout << "[Unsupport export_batch_if_v2 yet]\n";
+    // std::cout << "[Unsupport export_batch_if_v2 yet]\n";
 
     NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0, sizeof(size_type), stream));
     if (offset >= table_->capacity) {
