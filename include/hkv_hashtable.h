@@ -47,6 +47,7 @@
 #include "../hkv_hashtable/traverse_kernel/traverse_kernel.h"
 #include "../hkv_hashtable/remove_kernel/remove_kernel.h"
 #include "../hkv_hashtable/assign_values_kernel/assign_values_kernel.h"
+#include "../hkv_hashtable/assign_kernel/assign_kernel.h"
 #include "aclnn_helper.h"
 #include "aclnnop/aclnn_reduce_sum.h"
 #include "bucket_memory_pool_manager.h"
