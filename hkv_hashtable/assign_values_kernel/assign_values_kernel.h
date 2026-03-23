@@ -29,7 +29,7 @@ namespace npu {
 namespace hkv {
 using namespace AscendC;
 template <typename K = uint64_t, typename V = float, typename S = uint64_t,
-          typename VecV = int64_t>
+          typename VecV = int32_t>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void assign_values_kernel_with_digest_vf(
     __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
@@ -164,6 +164,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_values_kernel_with_digest_vf(
         }
       }
     }
+    asc_threadfence();
     if ((occupy_result == OccupyResult::DUPLICATE)) {
       (void)asc_atomic_exch(bucket_keys_ptr + key_pos, key);
     }
