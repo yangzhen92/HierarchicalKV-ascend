@@ -587,7 +587,7 @@ void print_title_a() {
 void print_title_b() {
   cout << endl
        << "|    \u03BB "
-       << "| export_batch_if_v2 "
+       << "| export"
        << "| export_batch_if "
        << "|  contains "
        << "| find_and_update ";
@@ -595,8 +595,8 @@ void print_title_b() {
 
   //<< "| load_factor "
   cout << "|-----:"
-       //<< "| export_batch_if_v2 "
-       << "|----------------:"
+       //<< "| export"
+       << "|-------------:"
        //<< "| export_batch_if "
        << "|----------------:"
        //<< "|  contains "
@@ -692,14 +692,6 @@ void test_main(std::vector<API_Select>& apis, const size_t dim,
           std::cout << rep(11);
           break;
         }
-        case API_Select::export_batch_if_v2: {
-          std::cout << rep(10);
-          break;
-        }
-        case API_Select::export_batch_if: {
-          std::cout << rep(10);
-          break;
-        }
         default: {
           std::cout << "[Unsupport API]";
         }
@@ -754,51 +746,34 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
         API_Select::assign_scores,
         API_Select::insert_and_evict,
       };
-      std::vector<API_Select> apis_b{
-        API_Select::export_batch_if_v2,
-      };
       cout << "### On pure HBM mode: " << endl;
       print_configuration(8, 128 * 1024 * 1024UL, 4);
       print_title_a();
       test_main(apis_a, 8, 128 * 1024 * 1024UL, key_num_per_op, 4);
-      print_title_b();
-      test_main(apis_b, 8, 128 * 1024 * 1024UL, key_num_per_op, 4);
 
       print_configuration(32, 128 * 1024 * 1024UL, 16);
       print_title_a();
       test_main(apis_a, 32, 128 * 1024 * 1024UL, key_num_per_op, 16);
-      print_title_b();
-      test_main(apis_b, 32, 128 * 1024 * 1024UL, key_num_per_op, 16);
 
       print_configuration(64, 64 * 1024 * 1024UL, 16);
       print_title_a();
       test_main(apis_a, 64, 64 * 1024 * 1024UL, key_num_per_op, 16);
-      print_title_b();
-      test_main(apis_b, 64, 64 * 1024 * 1024UL, key_num_per_op, 16);
 
       print_configuration(128, 32 * 1024 * 1024UL, 16);
       print_title_a();
       test_main(apis_a, 128, 32 * 1024 * 1024UL, key_num_per_op, 16);
-      print_title_b();
-      test_main(apis_b, 128, 32 * 1024 * 1024UL, key_num_per_op, 16);
 
       print_configuration(256, 16 * 1024 * 1024UL, 16);
       print_title_a();
       test_main(apis_a, 256, 16 * 1024 * 1024UL, key_num_per_op, 16);
-      print_title_b();
-      test_main(apis_b, 256, 16 * 1024 * 1024UL, key_num_per_op, 16);
 
       print_configuration(512, 8 * 1024 * 1024UL, 16);
       print_title_a();
       test_main(apis_a, 512, 8 * 1024 * 1024UL, key_num_per_op, 16);
-      print_title_b();
-      test_main(apis_b, 512, 8 * 1024 * 1024UL, key_num_per_op, 16);
 
       print_configuration(1024, 4 * 1024 * 1024UL, 16);
       print_title_a();
       test_main(apis_a, 1024, 4 * 1024 * 1024UL, key_num_per_op, 16);
-      print_title_b();
-      test_main(apis_b, 1024, 4 * 1024 * 1024UL, key_num_per_op, 16);
 
       cout << endl;
     }

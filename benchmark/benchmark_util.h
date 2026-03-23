@@ -21,7 +21,6 @@
 #include <cmath>
 #include <cstdint>
 #include "utils.h"
-#include "types.h"
 
 namespace benchmark {
 
@@ -45,7 +44,6 @@ enum class API_Select {
   contains = 9,
   find_and_update = 10,
   assign_scores = 11,
-  export_batch_if_v2 = 12,
 };
 
 enum class Hit_Mode {
@@ -174,20 +172,6 @@ struct ExportIfPredFunctor {
                                              const K& pattern,
                                              const S& threshold) {
     return score > threshold;
-  }
-};
-
-template <class K, class V, class S>
-struct ExportIfPredFunctorV2 {
-  K pattern;
-  S threshold;
-  ExportIfPredFunctorV2(K pattern, S threshold)
-      : pattern(pattern), threshold(threshold) {}
-  template <int GroupSize>
-  __forceinline__ __device__ bool operator()(
-      const K& key, const __gm__ V* value, const S& score) {
-    /* evaluate key, score and value. */
-    return ((!npu::hkv::IS_RESERVED_KEY<K>(key)) && (score >= threshold));
   }
 };
 

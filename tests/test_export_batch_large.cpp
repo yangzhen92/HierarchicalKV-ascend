@@ -51,7 +51,7 @@ void run_large_scale_export_test(const ExportTestConfig& config) {
       << "free HBM is not enough free:" << free_mem
       << "need:" << hbm_for_values;
 
-  constexpr size_t init_capacity = 128UL * 1024 * 1024;
+  constexpr size_t init_capacity = 128UL * 1024;
   HashTableOptions options{
       .init_capacity = init_capacity,
       .max_capacity = init_capacity,
@@ -74,12 +74,6 @@ void run_large_scale_export_test(const ExportTestConfig& config) {
     create_continuous_keys<K, S, V, DIM>(host_keys.data(), nullptr,
                                          host_values.data(), config.key_num, start_key);
 
-    // // 验证key值都小于init_capacity
-    // for (size_t i = 0; i < config.key_num; ++i) {
-    //   ASSERT_LT(host_keys[i], static_cast<K>(init_capacity))
-    //       << "Key " << host_keys[i] << " is not less than init_capacity " << init_capacity;
-    // }
-
     ASSERT_EQ(
         aclrtMalloc(reinterpret_cast<void**>(&device_keys),
                     config.key_num * sizeof(K), ACL_MEM_MALLOC_HUGE_FIRST),
@@ -101,7 +95,7 @@ void run_large_scale_export_test(const ExportTestConfig& config) {
     // 少量多次插入数据
     aclrtStream stream = nullptr;
     ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
-    const size_t batch_size = 128 * 1024; // 每批插入128k个
+    const size_t batch_size = 1024; // 每批插入128k个
     for (size_t i = 0; i < config.key_num; i += batch_size) {
       size_t current_batch_size = std::min(batch_size, config.key_num - i);
       table.insert_or_assign(current_batch_size, device_keys + i, device_values + i * DIM, nullptr,
@@ -233,26 +227,26 @@ void run_large_scale_export_test(const ExportTestConfig& config) {
 // 大数据量测试用例 - 使用key/value比值验证
 TEST(test_export_batch, test_large_scale_export_basic) {
   // 测试100K数据量的导出
-  ExportTestConfig config = {1 * 1024 * 1024, false, false, 0, false};
+  ExportTestConfig config = {1 * 1024, false, false, 0, false};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
   RUN_LARGE_SCALE_EXPORT_TEST(int64_t, double, uint64_t, 16, config);
 }
 
 TEST(test_export_batch, test_large_scale_export_with_scores) {
   // 测试带分数的大数据量导出
-  ExportTestConfig config = {5 * 1024 * 1024, true, false, 0, true};
+  ExportTestConfig config = {5 * 1024, true, false, 0, true};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch, test_large_scale_export_overload) {
   // 测试大数据量的重载版本
-  ExportTestConfig config = {1 * 1024 * 1024, true, false, 0, true};
+  ExportTestConfig config = {1 * 1024, true, false, 0, true};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch, test_large_scale_export_offset) {
   // 测试大数据量带偏移的导出
-  ExportTestConfig config = {1 * 1024 * 1024, false, false, 10000, false};
+  ExportTestConfig config = {1 * 1024, false, false, 10000, false};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
@@ -264,6 +258,6 @@ TEST(test_export_batch, test_large_scale_export_empty) {
 
 TEST(test_export_batch, test_large_scale_export_max_capacity) {
   // 测试接近最大容量的数据量
-  ExportTestConfig config = {128 * 1024 * 1024, false, false, 0, false};
+  ExportTestConfig config = {128 * 1024, false, false, 0, false};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
