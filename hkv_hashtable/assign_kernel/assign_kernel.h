@@ -32,8 +32,8 @@ template <typename K = uint64_t, typename V = float, typename S = uint64_t,
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void assign_kernel_with_digest_vf(
     __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
-    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys,
-    __gm__ void* values_addr_gm, __gm__ S* scores, uint64_t n,
+    uint32_t bucket_max_size, uint32_t dim, const __gm__ K* keys,
+    const __gm__ void* values_addr_gm, const__gm__ S* scores, uint64_t n,
     uint32_t thread_all, uint64_t global_epoch, uint64_t system_cycle,
     uint32_t block_index, uint32_t max_bucket_shift,
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
@@ -51,8 +51,8 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_kernel_with_digest_vf(
   using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
   K key{static_cast<K>(EMPTY_KEY)};
   S score{static_cast<S>(EMPTY_SCORE)};
-  __gm__ VecV* __restrict__ values =
-      reinterpret_cast<__gm__ VecV*>(values_addr_gm);
+  const __gm__ VecV* __restrict__ values =
+      reinterpret_cast<const __gm__ VecV*>(values_addr_gm);
   __gm__ K* bucket_keys_ptr = buckets->keys_;
   OccupyResult occupy_result{OccupyResult::INITIAL};
 
@@ -100,7 +100,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_kernel_with_digest_vf(
         // and if they are equal, set the corresponding byte in the result to
         // 0xff.
         uint32_t cmp_result = vcmpeq4(probe_digests, target_digests);
-        cmp_result &= 0x01010101;
+        cmp_result &= BYTE_MASK;
         while (cmp_result != 0 && !done) {
           // NPU uses little endian,
           // and the lowest byte in register stores in the lowest address.
@@ -124,7 +124,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_kernel_with_digest_vf(
         }
         if (!done) {
           cmp_result = vcmpeq4(probe_digests, empty_digests_);
-          cmp_result &= 0x01010101;
+          cmp_result &= BYTE_MASK;
           while (cmp_result != 0 && !done) {
             const uint32_t index =
                 (__ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
@@ -150,7 +150,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_kernel_with_digest_vf(
     auto cg_rank_id = threadIdx.x % group_size;
     for (int32_t i = 0; i < group_size; i++) {
       auto res_sync = asc_shfl(occupy_result, i, group_size);
-      if ((res_sync == OccupyResult::DUPLICATE)) {
+      if (res_sync == OccupyResult::DUPLICATE) {
         auto kv_idx_sync = asc_shfl(kv_idx, i, group_size);
         auto value_start = kv_idx_sync * dim;
         auto key_pos_sync = asc_shfl(key_pos, i, group_size);
@@ -167,7 +167,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_kernel_with_digest_vf(
       }
     }
     asc_threadfence();
-    if ((occupy_result == OccupyResult::DUPLICATE)) {
+    if (occupy_result == OccupyResult::DUPLICATE) {
       (void)asc_atomic_exch(bucket_keys_ptr + key_pos, key);
     }
   }
@@ -178,9 +178,10 @@ template <typename K = uint64_t, typename V = float, typename S = uint64_t,
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void assign_kernel_with_io_vf(
     __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
-    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ V* values,
-    __gm__ S* scores, uint64_t n, uint32_t thread_all, uint64_t global_epoch,
-    uint64_t system_cycle, uint32_t block_index, uint32_t max_bucket_shift,
+    uint32_t bucket_max_size, uint32_t dim, const __gm__ K* keys,
+    const __gm__ V* values, const __gm__ S* scores, uint64_t n,
+    uint32_t thread_all, uint64_t global_epoch, uint64_t system_cycle,
+    uint32_t block_index, uint32_t max_bucket_shift,
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift) {
   if (!buckets) {
     return;
@@ -234,11 +235,11 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_kernel_with_io_vf(
 template <class K, class V, class S, int Strategy = -1>
 __global__ __vector__ void assign_kernel(
     __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
-    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ void* values,
-    __gm__ S* scores, uint64_t n, uint64_t global_epoch, uint32_t value_size,
-    uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
-    uint64_t capacity_divisor_shift, uint64_t n_align_warp,
-    int32_t group_size) {
+    uint32_t bucket_max_size, uint32_t dim, const __gm__ K* keys,
+    const __gm__ void* values, const __gm__ S* scores, uint64_t n,
+    uint64_t global_epoch, uint32_t value_size, uint32_t max_bucket_shift,
+    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
+    uint64_t n_align_warp, int32_t group_size) {
   const uint32_t thread_all = THREAD_NUM_512 * GetBlockNum();
   uint64_t system_cycle = static_cast<uint64_t>(AscendC::GetSystemCycle());
   DISPATCH_VALUE_SIZE(
@@ -254,10 +255,10 @@ __global__ __vector__ void assign_kernel(
 template <class K, class V, class S, int Strategy = -1>
 __global__ __vector__ void assign_kernel_with_io(
     __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
-    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ V* values,
-    __gm__ S* scores, uint64_t n, uint64_t global_epoch,
-    uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
-    uint64_t capacity_divisor_shift) {
+    uint32_t bucket_max_size, uint32_t dim, const __gm__ K* keys,
+    const __gm__ V* values, const __gm__ S* scores, uint64_t n,
+    uint64_t global_epoch, uint32_t max_bucket_shift,
+    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift) {
   const uint32_t thread_all = THREAD_NUM_512 * GetBlockNum();
   uint64_t system_cycle = static_cast<uint64_t>(AscendC::GetSystemCycle());
   asc_vf_call<assign_kernel_with_io_vf<K, V, S, Strategy>>(

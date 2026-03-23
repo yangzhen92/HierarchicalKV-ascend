@@ -1505,15 +1505,13 @@ class HashTable : public HashTableBase<K, V, S> {
         uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
         assign_kernel<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
           table_->buckets, table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
-          const_cast<key_type*>(keys), static_cast<void*>(const_cast<value_type*>(values)),
-          const_cast<score_type*>(scores), n, global_epoch_, value_move_opt_.size,
+          keys, static_cast<const void*>(values), scores, n, global_epoch_, value_move_opt_.size,
           table_->max_bucket_shift, table_->capacity_divisor_magic,
           table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
       } else {
         assign_kernel_with_io<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
           table_->buckets, table_->capacity, table_->bucket_max_size, static_cast<uint32_t>(options_.dim),
-          const_cast<key_type*>(keys), const_cast<value_type*>(values), const_cast<score_type*>(scores),
-          n, global_epoch_, table_->max_bucket_shift, table_->capacity_divisor_magic,
+          keys, values, scores, n, global_epoch_, table_->max_bucket_shift, table_->capacity_divisor_magic,
           table_->capacity_divisor_shift);
       }
     } else {
