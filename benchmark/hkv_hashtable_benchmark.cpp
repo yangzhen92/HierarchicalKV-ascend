@@ -321,21 +321,6 @@ float test_one_api(std::shared_ptr<Table>& table, const API_Select api,
         NPU_CHECK(aclrtSynchronizeStream(stream));
         break;
       }
-      case API_Select::export_batch_if_v2: {
-        size_t* d_dump_counter = nullptr;
-        NPU_CHECK(aclrtMalloc((void**)&d_dump_counter, sizeof(size_t),
-                              ACL_MEM_MALLOC_HUGE_FIRST));
-        NPU_CHECK(
-            aclrtMemset(d_dump_counter, sizeof(size_t), 0, sizeof(size_t)));
-        K pattern = 0;
-        ExportIfPredFunctorV2<K, V, S> pred(pattern, threshold);
-        table->template export_batch_if_v2<ExportIfPredFunctorV2<K, V, S>>(
-            pred, key_num_per_op_warmup, 0, d_dump_counter,
-            d_keys, d_vectors, d_scores, stream);
-        NPU_CHECK(aclrtSynchronizeStream(stream));
-        NPU_CHECK(aclrtFree(d_dump_counter));
-        break;
-      }
       default: {
         std::cout << "[Unsupport API]\n";
       }
@@ -501,28 +486,6 @@ float test_one_api(std::shared_ptr<Table>& table, const API_Select api,
       table->assign_scores(key_num_per_op, d_keys, d_scores, stream);
       NPU_CHECK(aclrtSynchronizeStream(stream));
       timer.end();
-      break;
-    }
-    case API_Select::export_batch_if_v2: {
-      size_t* d_dump_counter;
-
-      // Try to export close to but less than `key_num_per_op` data.
-      // It's normal to happen `illegal memory access` error occasionally.
-      float safe_ratio = 0.995;
-
-      NPU_CHECK(aclrtMalloc((void**)&d_dump_counter, sizeof(size_t),
-                            ACL_MEM_MALLOC_HUGE_FIRST));
-      NPU_CHECK(aclrtMemset(d_dump_counter, sizeof(size_t), 0, sizeof(size_t)));
-      K pattern = 0;
-      ExportIfPredFunctorV2<K, V, S> pred(pattern, threshold);
-      timer.start();
-      table->template export_batch_if_v2<ExportIfPredFunctorV2<K, V, S>>(
-          pred, key_num_per_op / target_load_factor * safe_ratio,
-          0, d_dump_counter, d_keys, d_vectors, d_scores,
-          stream);
-      NPU_CHECK(aclrtSynchronizeStream(stream));
-      timer.end();
-      NPU_CHECK(aclrtFree(d_dump_counter));
       break;
     }
     default: {
