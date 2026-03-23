@@ -148,7 +148,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_values_kernel_with_digest_vf(
     auto cg_rank_id = threadIdx.x % group_size;
     for (int32_t i = 0; i < group_size; i++) {
       auto res_sync = asc_shfl(occupy_result, i, group_size);
-      if ((res_sync == OccupyResult::DUPLICATE)) {
+      if (res_sync == OccupyResult::DUPLICATE) {
         auto kv_idx_sync = asc_shfl(kv_idx, i, group_size);
         auto value_start = kv_idx_sync * dim;
         auto key_pos_sync = asc_shfl(key_pos, i, group_size);
@@ -165,7 +165,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_values_kernel_with_digest_vf(
       }
     }
     asc_threadfence();
-    if ((occupy_result == OccupyResult::DUPLICATE)) {
+    if (occupy_result == OccupyResult::DUPLICATE) {
       (void)asc_atomic_exch(bucket_keys_ptr + key_pos, key);
     }
   }
