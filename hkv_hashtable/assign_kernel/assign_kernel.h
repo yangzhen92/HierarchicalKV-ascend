@@ -33,7 +33,7 @@ __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void assign_kernel_with_digest_vf(
     __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
     uint32_t bucket_max_size, uint32_t dim, const __gm__ K* keys,
-    const __gm__ void* values_addr_gm, const__gm__ S* scores, uint64_t n,
+    const __gm__ void* values_addr_gm, const __gm__ S* scores, uint64_t n,
     uint32_t thread_all, uint64_t global_epoch, uint64_t system_cycle,
     uint32_t block_index, uint32_t max_bucket_shift,
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
