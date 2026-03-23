@@ -32,7 +32,6 @@ using namespace test_util;
 // 通用测试配置结构体
 struct ExportTestConfig {
   size_t key_num;         // 键数量
-  bool test_overload;     // 是否测试重载版本
   bool test_empty_table;  // 是否测试空表
   size_t offset;          // 导出偏移量
   bool use_scores;        // 是否使用分数
@@ -157,47 +156,31 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
 
   // 6. 执行导出操作
   size_t export_count = 0;
+  size_t* device_export_count = nullptr;
+  ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&device_export_count),
+                        sizeof(size_t), ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
+  ASSERT_EQ(
+      aclrtMemset(device_export_count, sizeof(size_t), 0, sizeof(size_t)),
+      ACL_ERROR_NONE);
+  
+  K pattern = 0;
+  S threshold = 40;
+  ExportIfPredFunctorV2<K, V, S> pred(pattern, threshold);
+  table.template export_batch_if_v2<ExportIfPredFunctorV2<K, V, S>>(
+      pred, scan_len, config.offset, device_export_count,
+      device_export_keys, device_export_values,
+      config.use_scores ? device_export_scores : nullptr, stream);
 
-  if (config.test_overload) {
-    // 测试重载版本
-    export_count = table.export_batch(
-        scan_len, config.offset, device_export_keys, device_export_values,
-        config.use_scores ? device_export_scores : nullptr, stream);
-    ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
-  } else {
-    // 测试普通版本
-    size_t* device_export_count = nullptr;
-    ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&device_export_count),
-                          sizeof(size_t), ACL_MEM_MALLOC_HUGE_FIRST),
-              ACL_ERROR_NONE);
-    ASSERT_EQ(
-        aclrtMemset(device_export_count, sizeof(size_t), 0, sizeof(size_t)),
-        ACL_ERROR_NONE);
-    
-    K pattern = 0;
-    S threshold = 40;
-    ExportIfPredFunctorV2<K, V, S> pred(pattern, threshold);
-    table.template export_batch_if_v2<ExportIfPredFunctorV2<K, V, S>>(
-        pred, scan_len, config.offset, device_export_count,
-        device_export_keys, device_export_values,
-        config.use_scores ? device_export_scores : nullptr, stream);
-    // table.export_batch(scan_len, config.offset, device_export_count,
-    //                    device_export_keys, device_export_values,
-    //                    config.use_scores ? device_export_scores : nullptr,
-    //                    stream);
+  ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemcpy(&export_count, sizeof(size_t), device_export_count,
+                        sizeof(size_t), ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
 
-    ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
-    ASSERT_EQ(aclrtMemcpy(&export_count, sizeof(size_t), device_export_count,
-                          sizeof(size_t), ACL_MEMCPY_DEVICE_TO_HOST),
-              ACL_ERROR_NONE);
-
-    ASSERT_EQ(aclrtFree(device_export_count), ACL_ERROR_NONE);
-  }
+  ASSERT_EQ(aclrtFree(device_export_count), ACL_ERROR_NONE);
 
  if (config.test_empty_table) {
     ASSERT_EQ(export_count, 0);
-//   } else if (config.offset == 0) {
-//     ASSERT_EQ(export_count, config.key_num);
   } else {
     ASSERT_LE(export_count, config.key_num);
     ASSERT_GE(export_count, 0);
@@ -256,25 +239,20 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
 
 // 测试用例定义
 TEST(test_export_batch_if_v2, test_export_batch_if_v2_basic) {
-  ExportTestConfig config = {1024, false, false, 0, false};
+  ExportTestConfig config = {1024, false, 0, false};
   RUN_EXPORT_BATCH_IF_V2_TEST(uint64_t, float, uint64_t, 8, config);
   RUN_EXPORT_BATCH_IF_V2_TEST(int64_t, double, uint64_t, 16, config);
 }
 
-TEST(test_export_batch_if_v2, test_export_batch_if_v2_overload) {
-  ExportTestConfig config = {1024, true, false, 0, true};
-  RUN_EXPORT_BATCH_IF_V2_TEST(uint64_t, float, uint64_t, 8, config);
-}
-
 TEST(test_export_batch_if_v2, test_export_batch_if_v2_empty) {
-  ExportTestConfig config = {0, false, true, 0, false};
+  ExportTestConfig config = {0, true, 0, false};
   RUN_EXPORT_BATCH_IF_V2_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch_if_v2, test_export_batch_if_v2_offset) {
   // 测试不同偏移量下的导出功能
   // 注意：当offset > 0时，不能保证导出数量等于key_num
-  ExportTestConfig config = {1024, false, false, 1000, false};
+  ExportTestConfig config = {1024, false, 1000, false};
   RUN_EXPORT_BATCH_IF_V2_TEST(uint64_t, float, uint64_t, 8, config);
   config.offset = 5000;
   RUN_EXPORT_BATCH_IF_V2_TEST(int64_t, double, uint64_t, 16, config);
