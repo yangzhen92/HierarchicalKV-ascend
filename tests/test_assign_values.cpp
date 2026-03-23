@@ -36,7 +36,7 @@ using S = uint64_t;
 
 // 测试夹具类，用于复用测试初始化和清理逻辑
 class AssignValuesTest : public ::testing::Test {
- protected:
+protected:
   static constexpr size_t hbm_for_values = 1UL << 30;
   static constexpr size_t init_capacity = 128UL * 1024;
 
@@ -553,7 +553,9 @@ TEST_F(AssignValuesTest, large_scale) {
 
   size_t found_num = 0;
   for (size_t i = 0; i < key_num; i++) {
-    if (host_found[i]) found_num++;
+    if (host_found[i]) {
+      found_num++;
+    }
   }
   EXPECT_EQ(found_num, key_num);
 

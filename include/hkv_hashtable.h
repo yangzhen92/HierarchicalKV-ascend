@@ -1597,7 +1597,7 @@ class HashTable : public HashTableBase<K, V, S> {
         n, table_->max_bucket_shift, table_->capacity_divisor_magic, table_->capacity_divisor_shift);
       }
     } else {
-      throw std::runtime_error("Only allow assign_values in pure HBM mode.");
+      throw std::runtime_error("[assign_values] Only supported in pure HBM mode.");
     }
     NpuCheckError();
   }
