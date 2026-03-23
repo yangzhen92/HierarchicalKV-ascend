@@ -550,7 +550,7 @@ void print_title_a() {
 void print_title_b() {
   cout << endl
        << "|    \u03BB "
-       << "| export"
+       << "| export_batch "
        << "| export_batch_if "
        << "|  contains "
        << "| find_and_update ";
@@ -558,7 +558,7 @@ void print_title_b() {
 
   //<< "| load_factor "
   cout << "|-----:"
-       //<< "| export"
+       //<< "| export_batch "
        << "|-------------:"
        //<< "| export_batch_if "
        << "|----------------:"

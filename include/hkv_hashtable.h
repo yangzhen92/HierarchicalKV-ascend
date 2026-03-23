@@ -2008,6 +2008,8 @@ class HashTable : public HashTableBase<K, V, S> {
                           score_type* scores = nullptr,  // (n)
                           aclrtStream stream = 0) const {
     std::cout << "[Unsupport export_batch_if_v2 yet]\n";
+
+    NpuCheckError();
   }
 
   /**
