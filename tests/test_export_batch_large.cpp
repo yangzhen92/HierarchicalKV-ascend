@@ -1,5 +1,5 @@
 /* *
- * Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ void run_large_scale_export_test(const ExportTestConfig& config) {
 
   size_t total_mem = 0;
   size_t free_mem = 0;
-  constexpr size_t hbm_for_values = 1UL << 30;
+  constexpr size_t hbm_for_values = 16UL << 30;
   ASSERT_EQ(aclrtGetMemInfo(ACL_HBM_MEM, &free_mem, &total_mem),
             ACL_ERROR_NONE);
   ASSERT_GT(free_mem, hbm_for_values)
@@ -73,12 +73,6 @@ void run_large_scale_export_test(const ExportTestConfig& config) {
     K start_key = 1;
     create_continuous_keys<K, S, V, DIM>(host_keys.data(), nullptr,
                                          host_values.data(), config.key_num, start_key);
-
-    // // 验证key值都小于init_capacity
-    // for (size_t i = 0; i < config.key_num; ++i) {
-    //   ASSERT_LT(host_keys[i], static_cast<K>(init_capacity))
-    //       << "Key " << host_keys[i] << " is not less than init_capacity " << init_capacity;
-    // }
 
     ASSERT_EQ(
         aclrtMalloc(reinterpret_cast<void**>(&device_keys),
