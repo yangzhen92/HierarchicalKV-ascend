@@ -415,7 +415,7 @@ TEST_F(AssignTest, partial_keys_exist) {
                 stream_);
   ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
 
-  auto host_found = std::unique_ptr<bool[]>(new bool[insert_key_num]());
+  auto host_found = std::make_unique<bool[]>(insert_key_num);
   copy_to_host(host_found.get(), device_found, insert_key_num);
   vector<V> real_values(insert_key_num * dim, 0);
   vector<S> real_scores(insert_key_num, 0);
@@ -508,7 +508,7 @@ TEST_F(AssignTest, large_scale) {
              stream_);
   ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
 
-  auto host_found = std::unique_ptr<bool[]>(new bool[key_num]());
+  auto host_found = std::make_unique<bool[]>(key_num);
   copy_to_host(host_found.get(), device_found, key_num);
 
   size_t found_num = 0;
@@ -591,7 +591,7 @@ TEST_F(AssignTest, large_dim) {
   read_from_ptr(device_values_ptr, device_values_buffer, dim, key_num, stream_);
   ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
 
-  auto host_found = std::unique_ptr<bool[]>(new bool[key_num]());
+  auto host_found = std::make_unique<bool[]>(key_num);
   copy_to_host(host_found.get(), device_found, key_num);
   vector<V> real_values(key_num * dim, 0);
   vector<S> real_scores(key_num, 0);
@@ -679,7 +679,7 @@ TEST_F(AssignTest, multiple_updates) {
                stream_);
     ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
 
-    auto host_found = std::unique_ptr<bool[]>(new bool[key_num]());
+    auto host_found = std::make_unique<bool[]>(key_num);
     copy_to_host(host_found.get(), device_found, key_num);
 
     size_t found_num = 0;
@@ -759,7 +759,7 @@ TEST_F(AssignTest, shuffled_keys_update) {
              stream_);
   ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
 
-  auto host_found = std::unique_ptr<bool[]>(new bool[key_num]());
+  auto host_found = std::make_unique<bool[]>(key_num);
   copy_to_host(host_found.get(), device_found, key_num);
 
   size_t found_num = 0;
@@ -839,7 +839,7 @@ TEST_F(AssignTest, unique_key_false_distinct_keys_updates_correctly) {
   vector<S> real_scores(key_num, 0);
   copy_to_host(real_values.data(), device_values_buffer, key_num * dim);
   copy_to_host(real_scores.data(), device_out_scores, key_num);
-  auto host_found = std::unique_ptr<bool[]>(new bool[key_num]());
+  auto host_found = std::make_unique<bool[]>(key_num);
   copy_to_host(host_found.get(), device_found, key_num);
 
   size_t found_num = 0;
@@ -1004,7 +1004,7 @@ TEST_F(AssignTest, unique_key_false_lru_scores_nullptr) {
 
   vector<V> real(key_num * dim);
   copy_to_host(real.data(), device_buf, key_num * dim);
-  auto host_found = std::unique_ptr<bool[]>(new bool[key_num]());
+  auto host_found = std::make_unique<bool[]>(key_num);
   copy_to_host(host_found.get(), device_found, key_num);
 
   for (size_t i = 0; i < key_num; i++) {
