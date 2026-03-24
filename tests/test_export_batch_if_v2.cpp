@@ -29,12 +29,7 @@ using namespace std;
 using namespace npu::hkv;
 using namespace test_util;
 
-typedef enum {
-  V1 = 0,
-  V2 = 1,
-  V3 = 2,
-  V4 = 3,
-} FunctorVersion;
+enum class FunctorVersion { V1, V2, V3, V4 };
 
 // 通用测试配置结构体
 struct ExportTestConfig {
@@ -174,7 +169,7 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
   
   K pattern = 0;
   S threshold = 40;
-  if (config.functor_version == V2) {
+  if (config.functor_version == FunctorVersion::V2) {
     ExportIfPredFunctorV2<K, V, S> pred(pattern, threshold);
     table.template export_batch_if_v2<ExportIfPredFunctorV2<K, V, S>>(
         pred, scan_len, config.offset, device_export_count,
@@ -249,20 +244,20 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
 
 // 测试用例定义
 TEST(test_export_batch_if_v2, test_export_batch_if_v2_basic) {
-  ExportTestConfig config = {1024, false, 0, false, V2};
+  ExportTestConfig config = {1024, false, 0, false, FunctorVersion::V2};
   RUN_EXPORT_BATCH_IF_V2_TEST(uint64_t, float, uint64_t, 8, config);
   RUN_EXPORT_BATCH_IF_V2_TEST(int64_t, double, uint64_t, 16, config);
 }
 
 TEST(test_export_batch_if_v2, test_export_batch_if_v2_empty) {
-  ExportTestConfig config = {0, true, 0, false, V2};
+  ExportTestConfig config = {0, true, 0, false, FunctorVersion::V2};
   RUN_EXPORT_BATCH_IF_V2_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch_if_v2, test_export_batch_if_v2_offset) {
   // 测试不同偏移量下的导出功能
   // 注意：当offset > 0时，不能保证导出数量等于key_num
-  ExportTestConfig config = {1024, false, 1000, false, V2};
+  ExportTestConfig config = {1024, false, 1000, false, FunctorVersion::V2};
   RUN_EXPORT_BATCH_IF_V2_TEST(uint64_t, float, uint64_t, 8, config);
   config.offset = 5000;
   RUN_EXPORT_BATCH_IF_V2_TEST(int64_t, double, uint64_t, 16, config);
