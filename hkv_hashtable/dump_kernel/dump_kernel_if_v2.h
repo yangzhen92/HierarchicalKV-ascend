@@ -59,7 +59,7 @@
      if (threadIdx.x == 0) {
        block_acc[0] = 0;
      }
-     asc_syncthreads():
+     asc_syncthreads();
      uint32_t choose_flag = 0;
      size_t local_index = 0;
      if (tid < search_length) {
@@ -80,13 +80,13 @@
         block_tuples[local_index].value = reinterpret_cast<uint64_t>(value_ptrs);
         block_tuples[local_index].score = score;
       }
-      asc_syncthreads():
+      asc_syncthreads();
   
       if (threadIdx.x == 0) {
         global_acc[0] =
             atomicAdd(dump_counter, static_cast<size_t>(block_acc[0]));
       }
-      asc_syncthreads():
+      asc_syncthreads();
   
       if (block_acc[0] == 0) {
         continue;
