@@ -41,8 +41,7 @@
      const uint64_t total_thread_num, __gm__ size_t* d_dump_counter,
      uint64_t ub_shared_kvs_mem, __ubuf__ uint32_t* block_acc,
      __ubuf__ uint32_t* global_acc, int32_t group_size, uint32_t dim_in, uint32_t blockIdx) {
-   if ((!table) || (!buckets) || (!d_key) || (!d_val) ||
-       (!d_score) || (!d_dump_counter)) {
+   if ((!table) || (!buckets) || (!d_key) || (!d_val) || (!d_dump_counter)) {
      return;
    }
  
