@@ -2011,8 +2011,7 @@ class HashTable : public HashTableBase<K, V, S> {
    *
    * @tparam PredFunctor A functor type with a template signature `<K, V, S>`.
    * It should define an operator with the signature:
-   * `__device__ bool operator()(const K&, const V*, const S&,
-   * cg::thread_block_tile<GroupSize>&)`.
+   * `__device__ bool operator()(const K&, const V*, const S&)`.
    *
    * @param pred A functor of type `PredFunctor` that defines the predicate for
    * filtering tuples.
@@ -2048,11 +2047,9 @@ class HashTable : public HashTableBase<K, V, S> {
     n = std::min(table_->capacity - offset, n);
     size_type n_align = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     dump_kernel_if_v2<K, V, S, PredFunctor><<<block_dim_, 64 * 1024, stream>>>(
-      pred, static_cast<void*>(d_table_), static_cast<void*>(table_->buckets), static_cast<void*>(keys),
-      static_cast<void*>(values), static_cast<void*>(scores),
-      offset, n, n_align, static_cast<void*>(d_counter), value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
-    NpuCheckError();
-
+        pred, d_table_, table_->buckets, keys, values, scores, offset, n,
+        n_align, d_counter, value_move_opt_.size, value_move_opt_.cg_size,
+        value_move_opt_.dim);
     NpuCheckError();
   }
 

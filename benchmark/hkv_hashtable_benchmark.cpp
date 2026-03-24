@@ -522,7 +522,7 @@ float test_one_api(std::shared_ptr<Table>& table, const API_Select api,
       // It's normal to happen `illegal memory access` error occasionally.
       float safe_ratio = 0.995;
 
-      NPU_CHECK(aclrtMalloc((void**)&d_dump_counter, sizeof(size_t),
+      NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_dump_counter), sizeof(size_t),
                             ACL_MEM_MALLOC_HUGE_FIRST));
       NPU_CHECK(aclrtMemset(d_dump_counter, sizeof(size_t), 0, sizeof(size_t)));
       K pattern = 0;
@@ -611,7 +611,7 @@ void print_title_b() {
   //<< "| load_factor "
   cout << "|-----:"
        //<< "| export_batch_if_v2 "
-       << "|----------------:"
+       << "|-------------------:"
        //<< "| export_batch_if "
        << "|----------------:"
        //<< "|  contains "
@@ -712,7 +712,7 @@ void test_main(std::vector<API_Select>& apis, const size_t dim,
           break;
         }
         case API_Select::export_batch_if_v2: {
-          std::cout << rep(10);
+          std::cout << rep(13);
           break;
         }
         case API_Select::export_batch_if: {
