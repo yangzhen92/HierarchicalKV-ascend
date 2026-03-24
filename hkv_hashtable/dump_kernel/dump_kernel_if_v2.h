@@ -123,11 +123,13 @@
    }
  }
 
- template <class K, class V, class S, class VecV, class PredFunctor, int32_t group_size>
+ template <class K, class V, class S, class VecV, class PredFunctor>
  __global__ __vector__ void dump_kernel_if_v2(
-     PredFunctor pred, __gm__ void* table, __gm__ void* buckets, __gm__ void* keys, __gm__ void* vals, __gm__ void* scores,
-     const size_t offset, const size_t search_length, const size_t search_length_align, __gm__ void* dump_counter,
-     uint32_t value_size, uint32_t dim) {
+     PredFunctor pred, __gm__ void* table, __gm__ void* buckets,
+     __gm__ void* keys, __gm__ void* vals, __gm__ void* scores,
+     const size_t offset, const size_t search_length,
+     const size_t search_length_align, __gm__ void* dump_counter,
+     uint32_t value_size, int32_t group_size, uint32_t dim) {
    const uint64_t total_thread_num = THREAD_NUM_2048 * GetBlockNum();
  
    AscendC::TPipe pipe;
