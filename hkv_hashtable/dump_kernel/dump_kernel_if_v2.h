@@ -84,7 +84,7 @@
   
       if (threadIdx.x == 0) {
         global_acc[0] =
-            atomicAdd(d_dump_counter, static_cast<size_t>(block_acc[0]));
+            atomicAdd(dump_counter, static_cast<size_t>(block_acc[0]));
       }
       AscendC::Simt::ThreadBarrier();
   
