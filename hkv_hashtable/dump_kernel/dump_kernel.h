@@ -128,7 +128,7 @@
      __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
      __gm__ K* keys, __gm__ V* vals, __gm__ S* scores, const size_t offset,
      const size_t search_length, const size_t search_length_align,
-     __gm__ size_t* d_dump_counter, uint32_t value_size, int32_t group_size,
+     __gm__ size_t* dump_counter, uint32_t value_size, int32_t group_size,
      uint32_t dim) {
    const uint64_t total_thread_num = THREAD_NUM_2048 * GetBlockNum();
  
