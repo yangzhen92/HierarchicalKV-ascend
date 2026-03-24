@@ -328,7 +328,7 @@ float test_one_api(std::shared_ptr<Table>& table, const API_Select api,
       }
       case API_Select::export_batch_if_v2: {
         size_t* d_dump_counter = nullptr;
-        NPU_CHECK(aclrtMalloc((void**)&d_dump_counter, sizeof(size_t),
+        NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_dump_counter), sizeof(size_t),
                               ACL_MEM_MALLOC_HUGE_FIRST));
         NPU_CHECK(
             aclrtMemset(d_dump_counter, sizeof(size_t), 0, sizeof(size_t)));
