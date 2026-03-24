@@ -42,7 +42,7 @@
      __gm__ S* d_score, const size_t offset, const size_t search_length,
      const size_t search_length_align, const uint64_t total_thread_num,
      __gm__ size_t* dump_counter, uint64_t ub_shared_kvs_mem,
-     __ubuf__ uint32_t* block_acc, __ubuf__ uint32_t* global_acc,
+     __ubuf__ uint32_t* block_acc, __ubuf__ size_t* global_acc,
      uint32_t dim_in, uint32_t blockIdx) {
    if ((!table) || (!buckets) || (!d_key) || (!d_val) || (!dump_counter)) {
      return;
@@ -147,11 +147,11 @@
            shared_block_acc_tensor.GetPhyAddr());
  
    AscendC::TBuf<AscendC::TPosition::VECCALC> global_acc;
-   pipe.InitBuffer(global_acc, sizeof(uint32_t));
-   AscendC::LocalTensor<uint32_t> shared_global_acc_tensor =
-       global_acc.Get<uint32_t>();
-   __ubuf__ uint32_t* ub_shared_global_acc_mem =
-       reinterpret_cast<__ubuf__ uint32_t*>(
+   pipe.InitBuffer(global_acc, sizeof(size_t));
+   AscendC::LocalTensor<size_t> shared_global_acc_tensor =
+       global_acc.Get<size_t>();
+   __ubuf__ size_t* ub_shared_global_acc_mem =
+       reinterpret_cast<__ubuf__ size_t*>(
            shared_global_acc_tensor.GetPhyAddr());
 
    DISPATCH_VALUE_SIZE(
