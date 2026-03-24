@@ -67,12 +67,12 @@
        block_acc[0] = 0;
      }
      AscendC::Simt::ThreadBarrier();
-
+ 
      __gm__ Bucket<K, V, S>* bucket = buckets + (tid + offset) / bucket_max_size;
      __gm__ K* bucket_keys_ptr = bucket->keys_;
      __gm__ VecV* bucket_values_ptr = reinterpret_cast<__gm__ VecV*>(bucket->vectors);
      __gm__ S* bucket_scores_ptr = bucket->scores_;
-
+ 
      const int key_idx{static_cast<int>((tid + offset) % bucket_max_size)};
      const K key{bucket_keys_ptr[key_idx]};
  
@@ -83,12 +83,13 @@
        block_tuples[local_index].score = bucket_scores_ptr[key_idx];
      }
      AscendC::Simt::ThreadBarrier();
+ 
      if (threadIdx.x == 0) {
        global_acc[0] =
            atomicAdd(d_dump_counter, static_cast<size_t>(block_acc[0]));
      }
      AscendC::Simt::ThreadBarrier();
-
+ 
      if (block_acc[0] == 0) {
        continue;
      }
