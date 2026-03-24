@@ -2269,10 +2269,6 @@ class HashTable : public HashTableBase<K, V, S> {
         d_table_, table_->buckets, d_keys,
         d_values, d_scores, i, batch_size, batch_size_align,
         d_count, value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
-      // dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
-      //   static_cast<void*>(d_table_), static_cast<void*>(table_->buckets), static_cast<void*>(d_keys),
-      //   static_cast<void*>(d_values), static_cast<void*>(d_scores), i, batch_size, batch_size_align,
-      //   static_cast<void*>(d_count), value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
       NpuCheckError();
       // Copy counter from device to host
       size_type count;
