@@ -39,6 +39,8 @@
 #include "../hkv_hashtable/find_and_update_kernel/find_and_update_kernel.h"
 #include "../hkv_hashtable/find_ptr_kernel/find_ptr_with_digest_kernel.h"
 #include "../hkv_hashtable/find_ptr_kernel/find_ptr_kernel.h"
+#include "../hkv_hashtable/find_kernel/find_with_digest_kernel.h"
+#include "../hkv_hashtable/contains_kernel/contains_kernel.h"
 #include "../hkv_hashtable/assign_scores_kernel/assign_scores_kernel_with_filter.h"
 #include "../hkv_hashtable/assign_scores_kernel/assign_scores_kernel.h"
 #include "../hkv_hashtable/find_or_insert_ptr_kernel/find_or_insert_ptr_kernel_v2.h"
@@ -48,6 +50,7 @@
 #include "../hkv_hashtable/traverse_kernel/traverse_kernel.h"
 #include "../hkv_hashtable/remove_kernel/remove_kernel.h"
 #include "../hkv_hashtable/assign_values_kernel/assign_values_kernel.h"
+#include "../hkv_hashtable/assign_kernel/assign_kernel.h"
 #include "aclnn_helper.h"
 #include "aclnnop/aclnn_reduce_sum.h"
 #include "bucket_memory_pool_manager.h"
@@ -1489,18 +1492,34 @@ class HashTable : public HashTableBase<K, V, S> {
    * @param unique_key If all keys in the same batch are unique.
    */
   void assign(const size_type n,
-              const key_type* keys,                // (n)
-              const value_type* values,            // (n, DIM)
-              const score_type* scores = nullptr,  // (n)
-              aclrtStream stream = 0, bool unique_key = true) {
+    const key_type* keys,                // (n)
+    const value_type* values,            // (n, DIM)
+    const score_type* scores = nullptr,  // (n)
+    aclrtStream stream = 0, bool unique_key = true) {
     if (n == 0) {
       return;
     }
 
     check_evict_strategy(scores);
 
-    std::cout << "[Unsupport assign yet]\n";
-
+    if (is_fast_mode()) {
+      constexpr uint32_t MinBucketCapacityFilter = sizeof(VecD_Load) / sizeof(D);
+      if (unique_key && options_.max_bucket_size >= MinBucketCapacityFilter) {
+        uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+        assign_kernel<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
+          table_->buckets, table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
+          keys, static_cast<const void*>(values), scores, n, global_epoch_, value_move_opt_.size,
+          table_->max_bucket_shift, table_->capacity_divisor_magic,
+          table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
+      } else {
+        assign_kernel_with_io<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
+          table_->buckets, table_->capacity, table_->bucket_max_size, static_cast<uint32_t>(options_.dim),
+          keys, values, scores, n, global_epoch_, table_->max_bucket_shift, table_->capacity_divisor_magic,
+          table_->capacity_divisor_shift);
+      }
+    } else {
+      throw std::runtime_error("[assign] Only supported in pure HBM mode.");
+    }
     NpuCheckError();
   }
 
@@ -1630,9 +1649,22 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
 
-    std::cout << "[Unsupport find yet]\n";
+    uint64_t n_align_warp =
+        ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+    if (is_fast_mode()) {
+      find_with_digest_kernel<K, V, S><<<block_dim_, 0, stream>>>(
+          table_->buckets, table_->capacity, table_->buckets_num,
+          static_cast<uint32_t>(table_->bucket_max_size), value_move_opt_.dim,
+          const_cast<key_type*>(keys), values, scores, founds, n,
+          global_epoch_, value_move_opt_.size, table_->max_bucket_shift,
+          table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+          n_align_warp, value_move_opt_.cg_size);
+      NpuCheckError();
+    } else {
+      std::cout << "[Unsupport find yet]\n";
 
-    NpuCheckError();
+      NpuCheckError();
+    }
   }
 
   /**
@@ -1778,7 +1810,11 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
 
-    std::cout << "[Unsupport contains yet]\n";
+    contains_kernel<K, V, S><<<block_dim_, 0, stream>>>(
+      table_->buckets, table_->capacity,
+      static_cast<uint32_t>(table_->bucket_max_size),
+      const_cast<key_type*>(keys), founds, n, table_->max_bucket_shift,
+      table_->capacity_divisor_magic, table_->capacity_divisor_shift);
     NpuCheckError();
   }
 
@@ -1862,8 +1898,7 @@ class HashTable : public HashTableBase<K, V, S> {
   /**
    * @brief Erase the key-value-score tuples which match @tparam PredFunctor.
    * @param pred A functor with template <K, V, S> defined an operator with
-   * signature:  __device__ (bool*)(const K&, const V*, const S&, const
-   * cg::thread_block_tile<GroupSize>&).
+   * signature:  __device__ (bool*)(const K&, const V*, const S&, int32_t).
    *  @param stream The CANN stream that is used to execute the operation.
    *
    * @return The number of elements removed.
@@ -1871,9 +1906,29 @@ class HashTable : public HashTableBase<K, V, S> {
 
   template <typename PredFunctor>
   size_type erase_if_v2(PredFunctor& pred, aclrtStream stream = 0) {
-    std::cout << "[Unsupport erase_if_v2 yet]\n";
+    auto dev_ws{dev_mem_pool_->get_workspace<1>(sizeof(size_type), stream)};
+    auto d_counter{dev_ws.get<size_type*>(0)};
+
+    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0,
+                               sizeof(size_type), stream));
+
+    int32_t cg_size = GetCGSize(options_.dim, table_->capacity);
+    DISPATCH_GROUP_SIZE(
+        cg_size, (remove_if_v2_kernel<K, V, S, PredFunctor, GROUP_SIZE>
+                  <<<block_dim_, 0, stream>>>(
+                      table_->buckets, table_->buckets_size, table_->capacity,
+                      table_->bucket_max_size, options_.dim,
+                      table_->max_bucket_shift, table_->capacity_divisor_magic,
+                      table_->capacity_divisor_shift, pred, d_counter)));
+
+    size_type count = 0;
+    NPU_CHECK(aclrtMemcpyAsync(&count, sizeof(size_type), d_counter,
+                               sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST,
+                               stream));
+    NPU_CHECK(aclrtSynchronizeStream(stream));
+
     NpuCheckError();
-    return 0;
+    return count;
   }
 
   /**
@@ -2060,7 +2115,7 @@ class HashTable : public HashTableBase<K, V, S> {
    *
    * @tparam ExecutionFunc A functor type with a template signature `<K, V, S>`.
    * It should define an operator with the signature:
-   * `__device__ void operator()(const K&, V*, S*, int)`.
+   * `__device__ void operator()(const K&, V*, S*, int32_t)`.
    *
    * @param first The first element to which the function object will be
    * applied.
@@ -2068,7 +2123,7 @@ class HashTable : public HashTableBase<K, V, S> {
    * be applied.
    * @param f A functor of type `ExecutionFunc` that defines the predicate for
    * filtering tuples. signature:  __device__ (bool*)(const K&, const V*, const
-   * S&, const cg::tiled_partition<GroupSize>&).
+   * S&, int32_t).
    * @param stream The CANN stream that is used to execute the operation.
    *
    * @return void

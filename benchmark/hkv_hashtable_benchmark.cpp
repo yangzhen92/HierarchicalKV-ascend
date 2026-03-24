@@ -569,19 +569,24 @@ void print_title_a() {
   cout << endl
        << "|    \u03BB "
        << "| insert_or_assign "
+       << "|   find "
        << "| find_or_insert* "
        << "| find_and_update "
        << "|   find* "
        << "| export_batch "
+       << "| assign "
        << "| assign_scores "
        << "| assign_values "
-       << "| insert_and_evict ";
+       << "| insert_and_evict "
+       << "|  contains ";
   cout << "|\n";
 
   //<< "| load_factor "
   cout << "|-----:"
        //<< "| insert_or_assign "
        << "|-----------------:"
+       //<< "|   find "
+ 	     << "|-------:"
        //<< "| find_or_insert* "
        << "|----------------:"
        //  << "| find_and_update "
@@ -590,12 +595,16 @@ void print_title_a() {
        << "|--------:"
        //<< "| export_batch "
        << "|-------------:"
+       //<< "| assign "
+       << "|-------:"
        //<< "| assign_scores "
        << "|--------------:"
        //<< "| assign_values "
        << "|--------------:"
        //<< "| insert_and_evict "
-       << "|-----------------:";
+       << "|-----------------:"
+       //<< "|  contains "
+       << "|----------:";
   cout << "|\n";
 }
 
@@ -683,6 +692,10 @@ void test_main(std::vector<API_Select>& apis, const size_t dim,
           std::cout << rep(11);
           break;
         }
+        case API_Select::find: {
+          std::cout << rep(1);
+          break;
+        }
         case API_Select::find_or_insert_ptr: {
           std::cout << rep(10);
           break;
@@ -697,6 +710,10 @@ void test_main(std::vector<API_Select>& apis, const size_t dim,
         }
         case API_Select::export_batch: {
           std::cout << rep(7);
+          break;
+        }
+        case API_Select::assign: {
+          std::cout << rep(1);
           break;
         }
         case API_Select::assign_scores: {
@@ -717,6 +734,9 @@ void test_main(std::vector<API_Select>& apis, const size_t dim,
         }
         case API_Select::export_batch_if: {
           std::cout << rep(10);
+        }
+        case API_Select::contains: {
+          std::cout << rep(4);
           break;
         }
         default: {
@@ -766,13 +786,16 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
     {
       std::vector<API_Select> apis_a{
         API_Select::insert_or_assign,
+        API_Select::find,
         API_Select::find_or_insert_ptr,
         API_Select::find_and_update,
         API_Select::find_ptr,
         API_Select::export_batch,
+        API_Select::assign,
         API_Select::assign_scores,
         API_Select::assign_values,
         API_Select::insert_and_evict,
+        API_Select::contains,
       };
       std::vector<API_Select> apis_b{
         API_Select::export_batch_if_v2,
