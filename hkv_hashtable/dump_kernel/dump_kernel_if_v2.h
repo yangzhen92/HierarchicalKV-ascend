@@ -129,7 +129,7 @@
      __gm__ Bucket<K, V, S>* buckets, __gm__ K* keys, __gm__ V* vals,
      __gm__ S* scores, const size_t offset, const size_t search_length,
      const size_t search_length_align, __gm__ size_t* dump_counter,
-     uint32_t value_size, int32_t GROUP_SIZE, uint32_t dim) {
+     uint32_t value_size, uint32_t dim) {
    const uint64_t total_thread_num = THREAD_NUM_2048 * GetBlockNum();
  
    AscendC::TPipe pipe;
@@ -156,11 +156,11 @@
  
    DISPATCH_VALUE_SIZE(
          value_size,
-         (asc_vf_call<dump_kernel_if_v2_vf<K, V, S, DTYPE, PredFunctor, >>(
+         (asc_vf_call<dump_kernel_if_v2_vf<K, V, S, DTYPE, PredFunctor, GROUP_SIZE>>(
          Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, pred, table, buckets,
                keys, vals, scores, offset, search_length, search_length_align, total_thread_num,
                dump_counter, shared_kvs_tensor.GetPhyAddr(),
-               ub_shared_block_acc_mem, ub_shared_global_acc_mem, dim, GROUP_SIZE,
+               ub_shared_block_acc_mem, ub_shared_global_acc_mem, dim,
                GetBlockIdx())));
  }
  }  // namespace hkv
