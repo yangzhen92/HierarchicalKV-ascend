@@ -68,25 +68,20 @@
      }
      AscendC::Simt::ThreadBarrier();
 
-     __gm__ Bucket<K, V, S>* bucket =
-         buckets + (tid + offset) / bucket_max_size;
+     __gm__ Bucket<K, V, S>* bucket = buckets + (tid + offset) / bucket_max_size;
      __gm__ K* bucket_keys_ptr = bucket->keys_;
-     __gm__ VecV* bucket_values_ptr =
-         reinterpret_cast<__gm__ VecV*>(bucket->vectors);
+     __gm__ VecV* bucket_values_ptr = reinterpret_cast<__gm__ VecV*>(bucket->vectors);
      __gm__ S* bucket_scores_ptr = bucket->scores_;
 
      const int key_idx{static_cast<int>((tid + offset) % bucket_max_size)};
      const K key{bucket_keys_ptr[key_idx]};
-
      if (!IS_RESERVED_KEY<K>(key)) {
        size_t local_index{atomicAdd(block_acc, 1u)};
        block_tuples[local_index].key = key;
-       block_tuples[local_index].value =
-           reinterpret_cast<uint64_t>(&bucket_values_ptr[key_idx * dim_in]);
+       block_tuples[local_index].value = reinterpret_cast<uint64_t>(&bucket_values_ptr[key_idx * dim_in]);
        block_tuples[local_index].score = bucket_scores_ptr[key_idx];
      }
      AscendC::Simt::ThreadBarrier();
-
      if (threadIdx.x == 0) {
        global_acc[0] =
            atomicAdd(d_dump_counter, static_cast<size_t>(block_acc[0]));
@@ -96,29 +91,26 @@
      if (block_acc[0] == 0) {
        continue;
      }
-
      auto cg_rank_id = threadIdx.x % group_size;
      auto cg_rank_id_start = threadIdx.x - cg_rank_id;
      uint64_t tuple_value_ptr = 0;
      __ubuf__ const KVM<K, S>& tuple{block_tuples[threadIdx.x]};
      const size_t j{global_acc[0] + threadIdx.x};
-     if (!IS_RESERVED_KEY<K>(key)) {
+     if (threadIdx.x < block_acc[0]) {
        d_key[j] = tuple.key;
-
        if (d_score != nullptr) {
          d_score[j] = tuple.score;
        }
      }
-
      for (int32_t i = 0; i < group_size; i++) {
-       if ((cg_rank_id_start + i) == block_acc[0]) {
+       if ((cg_rank_id_start + i) < block_acc[0]) {
          // 协程组并行写入向量值
          auto val_start = asc_shfl(j, i, group_size);
          uint64_t value_sync_ptr = asc_shfl(tuple.value, i, group_size);
          auto value_sync = reinterpret_cast<__gm__ VecV*>(value_sync_ptr);
          for (uint32_t k = cg_rank_id; k < dim_in; k += group_size) {
            __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-                 L1CacheType::NON_CACHEABLE>(
+               L1CacheType::NON_CACHEABLE>(
               d_val + val_start * dim_in + k, value_sync[k]);
          }
        }
