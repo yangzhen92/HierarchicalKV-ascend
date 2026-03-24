@@ -34,7 +34,7 @@
  namespace hkv {
  using namespace AscendC;
 
- template <class K, class V, class S, class VecV, class PredFunctor, int32_t group_size>
+ template <class K, class V, class S, class VecV, class PredFunctor>
  __simt_vf__ __aicore__
  LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_kernel_if_v2_vf(
      PredFunctor pred, __gm__ Table<K, V, S>* table,
@@ -43,7 +43,7 @@
      const size_t search_length_align, const uint64_t total_thread_num,
      __gm__ size_t* dump_counter, uint64_t ub_shared_kvs_mem,
      __ubuf__ uint32_t* block_acc, __ubuf__ uint32_t* global_acc,
-     uint32_t dim_in, uint32_t blockIdx) {
+     uint32_t dim_in, int32_t group_size, uint32_t blockIdx) {
    if ((!table) || (!buckets) || (!d_key) || (!d_val) || (!dump_counter)) {
      return;
    }
@@ -59,7 +59,7 @@
      if (threadIdx.x == 0) {
        block_acc[0] = 0;
      }
-     AscendC::Simt::ThreadBarrier();
+     asc_syncthreads():
      uint32_t choose_flag = 0;
      size_t local_index = 0;
      if (tid < search_length) {
@@ -72,7 +72,7 @@
       const K key{bucket_keys_ptr[key_idx]};
       const __gm__ V* value_ptrs = reinterpret_cast<__gm__ V*>(&bucket_values_ptr[key_idx * dim_in]);
       const S score = bucket_scores_ptr[key_idx];
-      bool match = pred.template operator()<group_size>(key, value_ptrs, score);
+      bool match = pred.template operator()<32>(key, value_ptrs, score);
       if (match) {
         choose_flag = 1;
         local_index = atomicAdd(block_acc, 1u);
@@ -80,13 +80,13 @@
         block_tuples[local_index].value = reinterpret_cast<uint64_t>(value_ptrs);
         block_tuples[local_index].score = score;
       }
-      AscendC::Simt::ThreadBarrier();
+      asc_syncthreads():
   
       if (threadIdx.x == 0) {
         global_acc[0] =
             atomicAdd(dump_counter, static_cast<size_t>(block_acc[0]));
       }
-      AscendC::Simt::ThreadBarrier();
+      asc_syncthreads():
   
       if (block_acc[0] == 0) {
         continue;
@@ -156,11 +156,11 @@
  
    DISPATCH_VALUE_SIZE(
          value_size,
-         (Simt::VF_CALL<dump_kernel_if_v2_vf<K, V, S, DTYPE, PredFunctor, group_size>>(
+         (Simt::VF_CALL<dump_kernel_if_v2_vf<K, V, S, DTYPE, PredFunctor>>(
          Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, pred, table, buckets,
                keys, vals, scores, offset, search_length, search_length_align, total_thread_num,
                dump_counter, shared_kvs_tensor.GetPhyAddr(),
-               ub_shared_block_acc_mem, ub_shared_global_acc_mem, dim,
+               ub_shared_block_acc_mem, ub_shared_global_acc_mem, dim, group_size,
                GetBlockIdx())));
  }
  }  // namespace hkv
