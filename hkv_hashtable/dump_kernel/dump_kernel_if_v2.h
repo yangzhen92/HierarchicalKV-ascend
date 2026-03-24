@@ -158,15 +158,15 @@
    __ubuf__ uint32_t* ub_shared_global_acc_mem =
        reinterpret_cast<__ubuf__ uint32_t*>(
            shared_global_acc_tensor.GetPhyAddr());
- 
+
    DISPATCH_VALUE_SIZE(
-         value_size,
-         (Simt::VF_CALL<dump_kernel_if_v2_vf<K, V, S, DTYPE, PredFunctor>>(
-         Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, pred, table, buckets,
-               keys, vals, scores, offset, search_length, search_length_align, total_thread_num,
-               dump_counter, shared_kvs_tensor.GetPhyAddr(),
-               ub_shared_block_acc_mem, ub_shared_global_acc_mem, group_size, dim,
-               GetBlockIdx())));
+       value_size,
+       (asc_vf_call<dump_kernel_if_v2_vf<K, V, S, DTYPE, PredFunctor>>(
+           dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, pred, table, buckets,
+           keys, vals, scores, offset, search_length, search_length_align,
+           total_thread_num, dump_counter, shared_kvs_tensor.GetPhyAddr(),
+           ub_shared_block_acc_mem, ub_shared_global_acc_mem, group_size, dim,
+           GetBlockIdx())));
  }
  }  // namespace hkv
  }  // namespace npu
