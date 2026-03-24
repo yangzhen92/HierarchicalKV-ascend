@@ -2039,17 +2039,18 @@ class HashTable : public HashTableBase<K, V, S> {
                           value_type* values,            // (n, DIM)
                           score_type* scores = nullptr,  // (n)
                           aclrtStream stream = 0) const {
-
     NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0, sizeof(size_type), stream));
     if (offset >= table_->capacity) {
       return;
     }
     n = std::min(table_->capacity - offset, n);
     size_type n_align = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
-    dump_kernel_if_v2<K, V, S, PredFunctor><<<block_dim_, 64 * 1024, stream>>>(
-        pred, d_table_, table_->buckets, keys, values, scores, offset, n,
-        n_align, d_counter, value_move_opt_.size, value_move_opt_.cg_size,
-        value_move_opt_.dim);
+    DISPATCH_GROUP_SIZE(
+        value_move_opt_.cg_size,
+        (dump_kernel_if_v2<K, V, S, PredFunctor, GROUP_SIZE>
+         <<<block_dim_, 64 * 1024, stream>>>(
+             pred, d_table_, table_->buckets, keys, values, scores, offset, n,
+             n_align, d_counter, value_move_opt_.size, value_move_opt_.dim)));
     NpuCheckError();
   }
 
