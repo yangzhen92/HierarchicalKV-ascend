@@ -44,11 +44,10 @@
      __gm__ size_t* dump_counter, uint64_t ub_shared_kvs_mem,
      __ubuf__ uint32_t* block_acc, __ubuf__ uint32_t* global_acc,
      uint32_t dim_in, uint32_t blockIdx) {
-   if ((!table_gm) || (!buckets_gm) || (!key_gm) || (!val_gm) ||
-       (!dump_counter_gm)) {
+   if ((!table) || (!buckets) || (!d_key) || (!d_val) || (!dump_counter)) {
      return;
    }
- 
+
    auto block_tuples =
        reinterpret_cast<__ubuf__ KVM<K, S>*>(ub_shared_kvs_mem);
    __gm__ VecV* __restrict__ d_vecv_val = reinterpret_cast<__gm__ VecV*>(d_val);
