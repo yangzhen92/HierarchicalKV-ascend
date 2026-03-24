@@ -2040,10 +2040,10 @@ class HashTable : public HashTableBase<K, V, S> {
                           score_type* scores = nullptr,  // (n)
                           aclrtStream stream = 0) const {
     NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0, sizeof(size_type), stream));
-    if (offset >= table_->capacity) {
+    n = std::min(table_->capacity - offset, n);
+    if ((offset >= table_->capacity) || (n == 0)) {
       return;
     }
-    n = std::min(table_->capacity - offset, n);
     size_type n_align = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     DISPATCH_GROUP_SIZE(
         value_move_opt_.cg_size,
