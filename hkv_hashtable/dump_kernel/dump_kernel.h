@@ -67,13 +67,15 @@
        block_acc[0] = 0;
      }
      AscendC::Simt::ThreadBarrier();
+
      __gm__ Bucket<K, V, S>* bucket = buckets + (tid + offset) / bucket_max_size;
      __gm__ K* bucket_keys_ptr = bucket->keys_;
      __gm__ VecV* bucket_values_ptr = reinterpret_cast<__gm__ VecV*>(bucket->vectors);
      __gm__ S* bucket_scores_ptr = bucket->scores_;
+
      const int key_idx{static_cast<int>((tid + offset) % bucket_max_size)};
      const K key{bucket_keys_ptr[key_idx]};
-
+ 
      if (!IS_RESERVED_KEY<K>(key)) {
        size_t local_index{atomicAdd(block_acc, 1u)};
        block_tuples[local_index].key = key;
@@ -86,10 +88,11 @@
            atomicAdd(d_dump_counter, static_cast<size_t>(block_acc[0]));
      }
      AscendC::Simt::ThreadBarrier();
+
      if (block_acc[0] == 0) {
        continue;
      }
-
+ 
      auto cg_rank_id = threadIdx.x % group_size;
      auto cg_rank_id_start = threadIdx.x - cg_rank_id;
      uint64_t tuple_value_ptr = 0;
@@ -97,12 +100,12 @@
      const size_t j{global_acc[0] + threadIdx.x};
      if (threadIdx.x < block_acc[0]) {
        d_key[j] = tuple.key;
-       
+ 
        if (d_score != nullptr) {
          d_score[j] = tuple.score;
        }
      }
-
+ 
      for (int32_t i = 0; i < group_size; i++) {
        if ((cg_rank_id_start + i) < block_acc[0]) {
          // 协程组并行写入向量值
