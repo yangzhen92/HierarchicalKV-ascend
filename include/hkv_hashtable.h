@@ -1119,7 +1119,7 @@ class HashTable : public HashTableBase<K, V, S> {
           table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
       }
     } else {
-      static bool sort_flag = false;
+      static bool sort_flag = true;
       if (!sort_flag) {
         size_t size_all = n * sizeof(value_type*) + n * sizeof(key_type*);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
@@ -1145,6 +1145,7 @@ class HashTable : public HashTableBase<K, V, S> {
           table_->max_bucket_shift, table_->capacity_divisor_magic,
           table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size, d_dst_values, d_dst_keys);
       } else {
+        printf("sort flag !\r\n");
         size_t size_all = 2 * n * sizeof(value_type*) + n * sizeof(key_type*) + n * sizeof(int64_t);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
         auto temp_storage{dev_ws.get<uint8_t*>(0)};
@@ -1176,9 +1177,9 @@ class HashTable : public HashTableBase<K, V, S> {
         EXEC_ACLNN_OP(aclnnSort, input, stable, dim, descending, out, out_index);
 
         // 3. io：搬运value，释放lock
-        write_kernel_unlock_sorted<K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
+        write_kernel_unlock_sorted<K, V, S, evict_strategy_><<<block_dim_, 192 * 1024, stream>>>(
           static_cast<void*>(table_->buckets), table_->buckets_size,
-          table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
+          table_->capacity, table_->bucket_max_size, table_->dim,
           const_cast<key_type*>(keys), const_cast<value_type*>(values),
           const_cast<score_type*>(scores), n, global_epoch_, value_move_opt_.size,
           table_->max_bucket_shift, table_->capacity_divisor_magic,
