@@ -131,7 +131,7 @@ void precomputation_for_kernel_div(Table<K, V, S>& table) {
 template <class K, class V, class S>
 void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
                         const size_t start, const size_t end,
-                        const uint32_t block_dim,
+                        const uint32_t block_dim, std::unordered_map<V *, V *>& value_ptr_map,
                         IBucketAddressProvider* provider = nullptr) {
   /* As testing results show us, when the number of buckets is greater than
    * the 4 million the performance will drop significantly, we believe the
@@ -162,6 +162,7 @@ void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
     if (i == (*table)->num_of_memory_slices + num_of_memory_slices - 1) {
       num_of_buckets_in_one_slice = buckets_num - num_of_allocated_buckets;
     }
+    // printf("need: %zu, todo: %zu, \r\n", buckets_num, num_of_buckets_in_one_slice);
     size_t slice_real_size = num_of_buckets_in_one_slice *
                              (*table)->bucket_max_size * sizeof(V) *
                              (*table)->dim;
@@ -173,13 +174,11 @@ void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
                        slice_real_size);
       (*table)->remaining_hbm_for_vectors -= slice_real_size;
     } else {
-      HKV_CHECK(false,
-                "Unsupport using host memory yet, please set "
-                "max_hbm_for_vectors to a sufficiently large value.");
       (*table)->is_pure_hbm = false;
       allocator->alloc(MemoryType::Pinned, (void**)&((*table)->slices[i]),
                        slice_real_size);
     }
+    V *slice_host_to_device_address = nullptr;
     for (size_t j = 0; j < num_of_buckets_in_one_slice; j++) {
       if ((*table)->is_pure_hbm || mixed_hbm) {
         size_t index = start + num_of_allocated_buckets + j;
@@ -187,11 +186,15 @@ void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
           (*table)->slices[i] + j * (*table)->bucket_max_size * (*table)->dim;
         allocate_bucket_vectors_kernel<K, V, S><<<1, 0, 0>>>((*table)->buckets, index, address);
       } else {
-        V* h_ptr =
-            (*table)->slices[i] + j * (*table)->bucket_max_size * (*table)->dim;
-        __gm__ V* address = nullptr;
-        NPU_CHECK(aclrtHostRegister(h_ptr, slice_real_size, ACL_HOST_REGISTER_MAPPED, (void**)&address));
+        if (j == 0) {
+          NPU_CHECK(aclrtHostRegister(static_cast<void*>((*table)->slices[i]), slice_real_size, ACL_HOST_REGISTER_MAPPED, (void**)(&slice_host_to_device_address)));
+          // printf("host ddr: %p, device ddr: %p\r\n", (*table)->slices[i], slice_host_to_device_address);
+        }
+        __gm__ V* address = slice_host_to_device_address + j * (*table)->bucket_max_size * (*table)->dim;
         size_t index = start + num_of_allocated_buckets + j;
+        for (int k = 0; k <= (*table)->bucket_max_size; k++) {
+          value_ptr_map[slice_host_to_device_address + j * (*table)->bucket_max_size * (*table)->dim + k * (*table)->dim] = (*table)->slices[i] + j * (*table)->bucket_max_size * (*table)->dim + k * (*table)->dim;
+        }
         allocate_bucket_vectors_kernel<K, V, S><<<1, 0, 0>>>((*table)->buckets, index, address);
       }
     }
@@ -292,7 +295,7 @@ size_t get_slice_size(Table<K, V, S>** table) {
 */
 template <class K, class V, class S>
 void create_table(Table<K, V, S>** table, BaseAllocator* allocator,
-                  const uint32_t block_dim,
+                  const uint32_t block_dim, std::unordered_map<V *, V *>& value_ptr_map,
                   const size_t dim, const size_t init_size = 134217728,
                   const size_t max_size = std::numeric_limits<size_t>::max(),
                   const size_t max_hbm_for_vectors = 0,
@@ -338,7 +341,7 @@ void create_table(Table<K, V, S>** table, BaseAllocator* allocator,
   NPU_CHECK(aclrtMemset((*table)->buckets, (*table)->buckets_num * sizeof(Bucket<K, V, S>), 0,
                         (*table)->buckets_num * sizeof(Bucket<K, V, S>)));
 
-  initialize_buckets<K, V, S>(table, allocator, 0, (*table)->buckets_num, block_dim,
+  initialize_buckets<K, V, S>(table, allocator, 0, (*table)->buckets_num, block_dim, value_ptr_map,
                               provider);
   NpuCheckError();
 }
@@ -355,6 +358,7 @@ void destroy_table(Table<K, V, S>** table, BaseAllocator* allocator,
     if (is_on_device((*table)->slices[i])) {
       allocator->free(MemoryType::Device, (*table)->slices[i]);
     } else {
+      NPU_CHECK(aclrtHostUnregister((*table)->slices[i]));
       allocator->free(MemoryType::Pinned, (*table)->slices[i]);
     }
   }
@@ -369,7 +373,7 @@ void destroy_table(Table<K, V, S>** table, BaseAllocator* allocator,
 
 template <class K, class V, class S>
 void double_capacity(Table<K, V, S>** table, BaseAllocator* allocator,
-                     const uint32_t block_dim,
+                     const uint32_t block_dim, std::unordered_map<V *, V *>& value_ptr_map,
                      IBucketAddressProvider* provider = nullptr) {
   realloc(&((*table)->buckets_size), (*table)->buckets_num * sizeof(int),
           (*table)->buckets_num * sizeof(int) * 2, allocator);
@@ -378,7 +382,7 @@ void double_capacity(Table<K, V, S>** table, BaseAllocator* allocator,
           (*table)->buckets_num * sizeof(Bucket<K, V, S>) * 2, allocator);
 
   initialize_buckets(table, allocator, (*table)->buckets_num,
-                     (*table)->buckets_num * 2, block_dim,
+                     (*table)->buckets_num * 2, block_dim, value_ptr_map,
                      provider);
 
   (*table)->capacity *= 2;
