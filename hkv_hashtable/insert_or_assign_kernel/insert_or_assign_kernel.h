@@ -934,7 +934,7 @@ __global__ __vector__ void upsert_kernel_lock_key_hybrid(
 
 template <typename K>
 __simt_vf__ __aicore__
-LAUNCH_BOUND(THREAD_NUM_512) inline void write_key_vf(
+LAUNCH_BOUND(THREAD_NUM_2048) inline void write_key_vf(
     uint64_t n, __gm__ K* keys, __gm__ K* __gm__* d_dst_keys, uint32_t thread_all, uint32_t block_index) {
   for (uint64_t i = block_index * blockDim.x + threadIdx.x; i < n;
        i += thread_all) {
@@ -969,6 +969,7 @@ __global__ __vector__ void write_kernel_unlock(
   AscendC::LocalTensor<V> move_local;
   DataCopyExtParams copy_params {1, static_cast<uint32_t>(dim * sizeof(V)), 0, 0 ,0};
   DataCopyPadExtParams<V> pad_params {true, 0, 0, 0};
+  src_values_gm.SetGlobalBuffer(values);
   for (uint64_t i = core_start_idx; i < core_start_idx + core_move_count; i++) {
     __gm__ V* dst_value = d_dst_values[i];
     if (dst_value == nullptr) {
@@ -977,8 +978,7 @@ __global__ __vector__ void write_kernel_unlock(
 
     move_queue.AllocTensor<V>(move_local);
     // 搬进
-    src_values_gm.SetGlobalBuffer(values + i * dim);
-    AscendC::DataCopyPad(move_local, src_values_gm, copy_params, pad_params);
+    AscendC::DataCopyPad(move_local, src_values_gm[i * dim], copy_params, pad_params);
     move_queue.EnQue<V>(move_local);
     move_queue.DeQue<V>(move_local);
 
@@ -989,13 +989,13 @@ __global__ __vector__ void write_kernel_unlock(
     move_queue.FreeTensor(move_local);
   }
 
-  const uint32_t thread_all = THREAD_NUM_512 * GetBlockNum();
+  const uint32_t thread_all = THREAD_NUM_2048 * GetBlockNum();
 
   DISPATCH_VALUE_SIZE(
       value_size,
       (Simt::VF_CALL<
           write_key_vf<K>>(
-          Simt::Dim3{THREAD_NUM_512}, n, keys, d_dst_keys, thread_all, GetBlockIdx())));
+          Simt::Dim3{THREAD_NUM_2048}, n, keys, d_dst_keys, thread_all, GetBlockIdx())));
 }
 
 template <class K, class V, class S, int Strategy = -1>
