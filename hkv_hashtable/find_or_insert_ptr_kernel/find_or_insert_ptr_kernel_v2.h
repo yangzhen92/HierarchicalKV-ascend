@@ -328,8 +328,9 @@
  __global__ void find_ptr_or_insert_vf_v2(
      const Table<K, V, S>* __restrict table, Bucket<K, V, S>* buckets,
      const size_t bucket_max_size, const size_t buckets_num, const size_t dim,
-     const K* __restrict keys, V** __restrict vectors, S* __restrict scores,
-     S cur_score, bool* __restrict found, const S global_epoch, const size_t n,
+     __gm__ const K* __restrict keys, __gm__ V** __restrict vectors,
+     __gm__ S* __restrict scores, __gm__ S cur_score,
+     __gm__ bool* __restrict found, __gm__ const S global_epoch, const size_t n,
      uint32_t blockIdx, uint64_t thread_all, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
      uint64_t n_align_warp, uint64_t capacity) {
