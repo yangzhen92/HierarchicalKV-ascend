@@ -967,6 +967,8 @@ __global__ __vector__ void write_kernel_unlock(
   // TODO: 1. DataCopy要求32B对齐，dim不满足
   //       2. 数据需要Tiling，超大DIM场景，有问题
   AscendC::LocalTensor<V> move_local;
+  DataCopyExtParams copy_params {1, static_cast<uint32_t>(dim * sizeof(V)), 0, 0 ,0};
+  DataCopyPadExtParams<V> pad_params {true, 0, 0, 0};
   for (uint64_t i = core_start_idx; i < core_start_idx + core_move_count; i++) {
     __gm__ V* dst_value = d_dst_values[i];
     if (dst_value == nullptr) {
@@ -976,13 +978,13 @@ __global__ __vector__ void write_kernel_unlock(
     move_queue.AllocTensor<V>(move_local);
     // 搬进
     src_values_gm.SetGlobalBuffer(values + i * dim);
-    AscendC::DataCopy(move_local, src_values_gm, dim);
+    AscendC::DataCopyPad(move_local, src_values_gm, copy_params, pad_params);
     move_queue.EnQue<V>(move_local);
     move_queue.DeQue<V>(move_local);
 
     // 搬出
     dst_values_gm.SetGlobalBuffer(reinterpret_cast<__gm__ V*>(dst_value));
-    AscendC::DataCopy(dst_values_gm, move_local, dim);
+    AscendC::DataCopyPad(dst_values_gm, move_local, copy_params);
 
     move_queue.FreeTensor(move_local);
   }
