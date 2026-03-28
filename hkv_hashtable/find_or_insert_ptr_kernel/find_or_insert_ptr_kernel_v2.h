@@ -325,7 +325,7 @@
  /* find or insert with the end-user specified score.
  */
  template <class K, class V, class S, int Strategy, uint32_t GROUP_SIZE = 4>
- __global__ void find_ptr_or_insert_vf_v2(
+ __global__ __aicore__ void find_ptr_or_insert_vf_v2(
      const Table<K, V, S>* __restrict table, Bucket<K, V, S>* buckets,
      const size_t bucket_max_size, const size_t buckets_num, const size_t dim,
      __gm__ const K* __restrict keys, __gm__ V** __restrict vectors,
