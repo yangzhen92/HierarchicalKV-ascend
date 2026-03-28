@@ -28,6 +28,7 @@
  #include "../../include/types.h"
  #include "../../include/utils.h"
  #include "../../include/score_functor.h"
+ #include "simt_api/asc_simt.h"
  #include "find_and_lock.h"
  
  namespace npu {
