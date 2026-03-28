@@ -442,8 +442,8 @@ __global__ __vector__ void find_or_insert_ptr_kernel_unlock_key_v2(
 
    DISPATCH_VALUE_SIZE(
        value_size,
-       (Simt::VF_CALL<find_ptr_or_insert_vf_v2<K, V, S, Strategy, GROUP_SIZE>>(
-           Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_512)}, table, buckets,
+       (asc_vf_call<find_ptr_or_insert_vf_v2<K, V, S, Strategy, GROUP_SIZE>>(
+           dim3{static_cast<uint32_t>(THREAD_NUM_512)}, table, buckets,
            bucket_max_size, buckets_num, dim, keys, vectors, scores,
            static_cast<S>(cur_score), found, static_cast<S>(global_epoch), n,
            GetBlockIdx(), thread_all, max_bucket_shift, capacity_divisor_magic,
