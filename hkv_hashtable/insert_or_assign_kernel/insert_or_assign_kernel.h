@@ -1001,7 +1001,7 @@ __global__ __vector__ void write_kernel_unlock(
 template <class K, class V, class S, int Strategy = -1>
 __global__ __vector__ void write_kernel_unlock_sorted(
     __gm__ void* buckets, __gm__ int* buckets_size, uint64_t capacity,
-    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ void* values,
+    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ V* values,
     __gm__ void* scores, uint64_t n, uint64_t global_epoch, uint32_t value_size,
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
     uint64_t capacity_divisor_shift, uint64_t n_align_warp, int32_t group_size,
@@ -1017,33 +1017,43 @@ __global__ __vector__ void write_kernel_unlock_sorted(
   uint64_t core_start_idx = GetBlockIdx() * former_num;
 
   AscendC::TPipe pipe;
-  AscendC::TQue<AscendC::TPosition::VECIN, 1> move_queue;
-  pipe.InitBuffer(move_queue, 1, value_size * dim);
-  AscendC::GlobalTensor<uint8_t> src_values_gm;
-  AscendC::GlobalTensor<uint8_t> dst_values_gm;
-
-  AscendC::LocalTensor<uint8_t> move_local =
-      move_queue.AllocTensor<uint8_t>();
-  for (uint64_t offset = core_start_idx;
-       offset < core_start_idx + core_move_count; offset++) {
-    int64_t i = d_dst_values_sorted_index[offset];
-    __gm__ V* dst_value = d_dst_values_sorted[i];
+  AscendC::TQueBind<AscendC::TPosition::VECIN, AscendC::TPosition::VECOUT, 0> move_queue;
+  pipe.InitBuffer(move_queue, 2, dim * sizeof(V));
+  AscendC::GlobalTensor<V> src_values_gm;
+  AscendC::GlobalTensor<V> dst_values_gm;
+  // TODO: 1. DataCopy要求32B对齐，dim不满足
+  //       2. 数据需要Tiling，超大DIM场景，有问题
+  AscendC::LocalTensor<V> move_local;
+  DataCopyExtParams copy_params {1, static_cast<uint32_t>(dim * sizeof(V)), 0, 0 ,0};
+  DataCopyPadExtParams<V> pad_params {true, 0, 0, 0};
+  src_values_gm.SetGlobalBuffer(values);
+  for (uint64_t offset = core_start_idx; offset < core_start_idx + core_move_count; offset++) {
+    int64_t idx = d_dst_values_sorted_index[offset];
+    __gm__ V* dst_value = d_dst_values_sorted[offset];
     if (dst_value == nullptr) {
       continue;
     }
+
+    move_queue.AllocTensor<V>(move_local);
     // 搬进
-    src_values_gm.SetGlobalBuffer(reinterpret_cast<__gm__ uint8_t*>(values) +
-                                  i * value_size * dim);
-    AscendC::DataCopy(move_local, src_values_gm, value_size * dim);
-    move_queue.EnQue<uint8_t>(move_local);
-    move_local = move_queue.DeQue<uint8_t>();
+    AscendC::DataCopyPad(move_local, src_values_gm[idx * dim], copy_params, pad_params);
+    move_queue.EnQue<V>(move_local);
+    move_queue.DeQue<V>(move_local);
+
     // 搬出
-    dst_values_gm.SetGlobalBuffer(reinterpret_cast<__gm__ uint8_t*>(dst_value));
-    AscendC::DataCopy(dst_values_gm, move_local, value_size * dim);
-    // 写key
-    *(d_dst_keys[i]) = keys[i];
+    dst_values_gm.SetGlobalBuffer(reinterpret_cast<__gm__ V*>(dst_value));
+    AscendC::DataCopyPad(dst_values_gm, move_local, copy_params);
+
+    move_queue.FreeTensor(move_local);
   }
-  move_queue.FreeTensor(move_local);
+
+  const uint32_t thread_all = THREAD_NUM_2048 * GetBlockNum();
+
+  DISPATCH_VALUE_SIZE(
+      value_size,
+      (Simt::VF_CALL<
+          write_key_vf<K>>(
+          Simt::Dim3{THREAD_NUM_2048}, n, keys, d_dst_keys, thread_all, GetBlockIdx())));
 }
 }  // namespace hkv
 }  // namespace npu
