@@ -960,31 +960,31 @@ __global__ __vector__ void write_kernel_unlock(
   uint64_t core_start_idx = GetBlockIdx() * former_num;
 
   AscendC::TPipe pipe;
-  AscendC::TQueBind<AscendC::TPosition::VECIN, AscendC::TPosition::VECOUT, 0> valueInQueue;
-  pipe.InitBuffer(valueInQueue, 2, dim * sizeof(V));
+  AscendC::TQueBind<AscendC::TPosition::VECIN, AscendC::TPosition::VECOUT, 0> move_queue;
+  pipe.InitBuffer(move_queue, 2, dim * sizeof(V));
   AscendC::GlobalTensor<V> src_values_gm;
   AscendC::GlobalTensor<V> dst_values_gm;
   // TODO: 1. DataCopy要求32B对齐，dim不满足
   //       2. 数据需要Tiling，超大DIM场景，有问题
-  AscendC::LocalTensor<V> src_values_local;
+  AscendC::LocalTensor<V> move_local;
   for (uint64_t i = core_start_idx; i < core_start_idx + core_move_count; i++) {
     __gm__ V* dst_value = d_dst_values[i];
     if (dst_value == nullptr) {
       continue;
     }
 
-    valueInQueue.AllocTensor<V>(src_values_local);
+    move_queue.AllocTensor<V>(move_local);
     // 搬进
     src_values_gm.SetGlobalBuffer(values + i * dim);
-    AscendC::DataCopy(src_values_local, src_values_gm, dim);
-    valueInQueue.EnQue<V>(src_values_local);
-    valueInQueue.DeQue<V>(src_values_local);
+    AscendC::DataCopy(move_local, src_values_gm, dim);
+    move_queue.EnQue<V>(move_local);
+    move_queue.DeQue<V>(move_local);
 
     // 搬出
     dst_values_gm.SetGlobalBuffer(reinterpret_cast<__gm__ V*>(dst_value));
-    AscendC::DataCopy(dst_values_gm, src_values_local, dim);
+    AscendC::DataCopy(dst_values_gm, move_local, dim);
 
-    valueInQueue.FreeTensor(src_values_local);
+    move_queue.FreeTensor(move_local);
   }
 
   const uint32_t thread_all = THREAD_NUM_512 * GetBlockNum();
@@ -1015,13 +1015,13 @@ __global__ __vector__ void write_kernel_unlock_sorted(
   uint64_t core_start_idx = GetBlockIdx() * former_num;
 
   AscendC::TPipe pipe;
-  AscendC::TQue<AscendC::TPosition::VECIN, 1> valueInQueue;
-  pipe.InitBuffer(valueInQueue, 1, value_size * dim);
+  AscendC::TQue<AscendC::TPosition::VECIN, 1> move_queue;
+  pipe.InitBuffer(move_queue, 1, value_size * dim);
   AscendC::GlobalTensor<uint8_t> src_values_gm;
   AscendC::GlobalTensor<uint8_t> dst_values_gm;
 
-  AscendC::LocalTensor<uint8_t> src_values_local =
-      valueInQueue.AllocTensor<uint8_t>();
+  AscendC::LocalTensor<uint8_t> move_local =
+      move_queue.AllocTensor<uint8_t>();
   for (uint64_t offset = core_start_idx;
        offset < core_start_idx + core_move_count; offset++) {
     int64_t i = d_dst_values_sorted_index[offset];
@@ -1032,16 +1032,16 @@ __global__ __vector__ void write_kernel_unlock_sorted(
     // 搬进
     src_values_gm.SetGlobalBuffer(reinterpret_cast<__gm__ uint8_t*>(values) +
                                   i * value_size * dim);
-    AscendC::DataCopy(src_values_local, src_values_gm, value_size * dim);
-    valueInQueue.EnQue<uint8_t>(src_values_local);
-    src_values_local = valueInQueue.DeQue<uint8_t>();
+    AscendC::DataCopy(move_local, src_values_gm, value_size * dim);
+    move_queue.EnQue<uint8_t>(move_local);
+    move_local = move_queue.DeQue<uint8_t>();
     // 搬出
     dst_values_gm.SetGlobalBuffer(reinterpret_cast<__gm__ uint8_t*>(dst_value));
-    AscendC::DataCopy(dst_values_gm, src_values_local, value_size * dim);
+    AscendC::DataCopy(dst_values_gm, move_local, value_size * dim);
     // 写key
     *(d_dst_keys[i]) = keys[i];
   }
-  valueInQueue.FreeTensor(src_values_local);
+  move_queue.FreeTensor(move_local);
 }
 }  // namespace hkv
 }  // namespace npu
