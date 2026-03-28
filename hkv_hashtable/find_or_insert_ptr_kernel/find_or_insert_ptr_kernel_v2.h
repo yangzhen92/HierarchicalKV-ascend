@@ -311,7 +311,7 @@
      __gm__ const K* __restrict__ keys, __gm__ K* __gm__* __restrict__ key_ptrs, uint64_t n, uint32_t blockIdx) {
    int kv_idx = blockIdx * blockDim.x + threadIdx.x;
    K key;
-   K* key_ptr{nullptr};
+   __gm__ K* key_ptr{nullptr};
    if (kv_idx < n) {
      key = keys[kv_idx];
      key_ptr = key_ptrs[kv_idx];
