@@ -1446,15 +1446,18 @@ class HashTable : public HashTableBase<K, V, S> {
       find_or_insert_ptr_kernel_unlock_key_v2<K><<<block_dim_, 0, stream>>>(
               keys, keys_ptr, n);
     } else {
-      uint32_t GROUP_SIZE = 32U;
-      find_ptr_or_insert_kernel_v2<K, V, S, evict_strategy, GROUP_SIZE>
-          <<<block_dim_, 0, stream>>>(
-              d_table_, table_->buckets, options_.max_bucket_size,
-              table_->buckets_num, value_move_opt_.dim, keys,
-              static_cast<void*>(values), scores, founds, global_epoch_, n,
-              value_move_opt_.size, table_->max_bucket_shift,
-              table_->capacity_divisor_magic, table_->capacity_divisor_shift,
-              n_align_warp, table_->capacity);
+      //uint32_t GROUP_SIZE = 32U;
+      int32_t cg_size = GetCGSize(options_.dim, table_->capacity);
+      DISPATCH_GROUP_SIZE(
+          cg_size,
+          (find_ptr_or_insert_kernel_v2<K, V, S, evict_strategy, GROUP_SIZE>
+           <<<block_dim_, 0, stream>>>(
+               d_table_, table_->buckets, options_.max_bucket_size,
+               table_->buckets_num, value_move_opt_.dim, keys,
+               static_cast<void*>(values), scores, founds, global_epoch_, n,
+               value_move_opt_.size, table_->max_bucket_shift,
+               table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+               n_align_warp, table_->capacity)));
     }
     NpuCheckError();
   }
