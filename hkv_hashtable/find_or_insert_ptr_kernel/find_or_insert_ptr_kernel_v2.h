@@ -368,7 +368,7 @@
      //const int bucket_size = buckets_size[bkt_idx];
      K evicted_key = static_cast<K>(EMPTY_KEY);
      do {
-       occupy_result = find_and_lock<K, V, S, GROUP_SIZE>(
+       occupy_result = find_and_lock<K, S, GROUP_SIZE>(
            bucket_keys, bucket_scores, bucket_max_size, find_or_insert_key,
            find_or_insert_score, key_pos, evicted_key, lane_id);
        //occupy_result = asc_shfl(occupy_result, lane_id, GROUP_SIZE);
