@@ -1454,7 +1454,7 @@ class HashTable : public HashTableBase<K, V, S> {
            <<<block_dim_, 0, stream>>>(
                d_table_, table_->buckets, options_.max_bucket_size,
                table_->buckets_num, value_move_opt_.dim, keys,
-               static_cast<void*>(values), scores, founds, global_epoch_, n,
+               values, scores, founds, global_epoch_, n,
                value_move_opt_.size, table_->max_bucket_shift,
                table_->capacity_divisor_magic, table_->capacity_divisor_shift,
                n_align_warp, table_->capacity)));
