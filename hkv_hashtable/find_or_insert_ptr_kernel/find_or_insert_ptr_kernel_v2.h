@@ -376,7 +376,7 @@
      if (lane_id == 0) {
        if ((occupy_result == OccupyResult::OCCUPIED_EMPTY ||
             occupy_result == OccupyResult::OCCUPIED_RECLAIMED)) {
-         atomicAdd(&(buckets_size[bkt_idx]), 1);
+         atomicAdd(&(buckets_size[bkt_idx]), 1u);
        }
        if (occupy_result != OccupyResult::REFUSED) {
          ScoreFunctor::update_with_digest(
