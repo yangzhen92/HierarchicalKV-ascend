@@ -53,6 +53,7 @@
 #include "../hkv_hashtable/assign_kernel/assign_kernel.h"
 #include "aclnn_helper.h"
 #include "aclnnop/aclnn_reduce_sum.h"
+#include "aclnnop/aclnn_sort.h"
 #include "bucket_memory_pool_manager.h"
 #include "hashtable_options.h"
 #include "memory_pool.h"
@@ -992,7 +993,7 @@ class HashTable : public HashTableBase<K, V, S> {
         std::make_unique<BucketMemoryPoolManager<key_type, value_type, score_type>>();
     bucket_memory_pool_manager_->initialize(options_);
     create_table<key_type, value_type, score_type>(
-        &table_, allocator_, block_dim_, options_.dim, options_.init_capacity,
+        &table_, allocator_, block_dim_, value_ptr_map_, options_.dim, options_.init_capacity,
         options_.max_capacity, options_.max_hbm_for_vectors,
         options_.max_bucket_size, options_.num_of_buckets_per_alloc,
         /* tile_size */ 32, /* primary */ true,
@@ -1020,6 +1021,11 @@ class HashTable : public HashTableBase<K, V, S> {
 
     initialized_ = true;
     NpuCheckError();
+  }
+
+  V *get_origin_ptr(V *ptr) {
+    auto it = value_ptr_map_.find(ptr);
+    return it != value_ptr_map_.end() ? it->second : ptr;
   }
 
   /**
@@ -1075,8 +1081,11 @@ class HashTable : public HashTableBase<K, V, S> {
                              const key_type* keys,      // (n)
                              const value_type* values,  // (n, DIM)
                              const score_type* scores,  // (n)
-                             aclrtStream stream, bool unique_key,
+                             aclrtStream input_stream, bool unique_key,
                              bool ignore_evict_strategy) {
+    ScopedStream scoped_stream(input_stream);
+    aclrtStream stream = scoped_stream.get();
+
     if (n == 0) {
       return;
     }
@@ -1091,22 +1100,90 @@ class HashTable : public HashTableBase<K, V, S> {
     }
 
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
-    if (value_move_opt_.is_large_size) {
-      insert_or_assign_kernel_with_thread_1024<K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
-        static_cast<void*>(table_->buckets), table_->buckets_size,
-        table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
-        const_cast<key_type*>(keys), const_cast<value_type*>(values),
-        const_cast<score_type*>(scores), n, global_epoch_, value_move_opt_.size,
-        table_->max_bucket_shift, table_->capacity_divisor_magic,
-        table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
+    if (is_fast_mode()) {
+      if (value_move_opt_.is_large_size) {
+        insert_or_assign_kernel_with_thread_1024<K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
+          static_cast<void*>(table_->buckets), table_->buckets_size,
+          table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
+          const_cast<key_type*>(keys), const_cast<value_type*>(values),
+          const_cast<score_type*>(scores), n, global_epoch_, value_move_opt_.size,
+          table_->max_bucket_shift, table_->capacity_divisor_magic,
+          table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
+      } else {
+        insert_or_assign_kernel<K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
+          static_cast<void*>(table_->buckets), table_->buckets_size,
+          table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
+          const_cast<key_type*>(keys), const_cast<value_type*>(values),
+          const_cast<score_type*>(scores), n, global_epoch_, value_move_opt_.size,
+          table_->max_bucket_shift, table_->capacity_divisor_magic,
+          table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
+      }
     } else {
-      insert_or_assign_kernel<K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
+      static bool sort_flag = false;
+      if (!sort_flag) {
+        size_t size_all = n * sizeof(value_type*) + n * sizeof(key_type*);
+        auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
+        auto temp_storage{dev_ws.get<uint8_t*>(0)};
+        value_type** d_dst_values{reinterpret_cast<value_type**>(temp_storage)};
+        key_type** d_dst_keys{reinterpret_cast<key_type**>(temp_storage + n * sizeof(value_type*))};
+
+        // 1. find_and_lock位置：输出dst_value* value_index dst_key*
+        upsert_kernel_lock_key_hybrid<K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
         static_cast<void*>(table_->buckets), table_->buckets_size,
-        table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
+        table_->capacity, table_->bucket_max_size, table_->dim,
         const_cast<key_type*>(keys), const_cast<value_type*>(values),
         const_cast<score_type*>(scores), n, global_epoch_, value_move_opt_.size,
         table_->max_bucket_shift, table_->capacity_divisor_magic,
-        table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
+        table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size, d_dst_values, d_dst_keys);
+
+        // 2. io：搬运value，释放lock
+        write_kernel_unlock<K, V, S, evict_strategy_><<<block_dim_, 192 * 1024, stream>>>(
+          static_cast<void*>(table_->buckets), table_->buckets_size,
+          table_->capacity, table_->bucket_max_size, table_->dim,
+          const_cast<key_type*>(keys), const_cast<value_type*>(values),
+          const_cast<score_type*>(scores), n, global_epoch_, value_move_opt_.size,
+          table_->max_bucket_shift, table_->capacity_divisor_magic,
+          table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size, d_dst_values, d_dst_keys);
+      } else {
+        size_t size_all = 2 * n * sizeof(value_type*) + n * sizeof(key_type*) + n * sizeof(int64_t);
+        auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
+        auto temp_storage{dev_ws.get<uint8_t*>(0)};
+        value_type** d_dst_values{reinterpret_cast<value_type**>(temp_storage)};
+        key_type** d_dst_keys{reinterpret_cast<key_type**>(temp_storage + n * sizeof(value_type*))};
+        value_type** d_dst_values_sorted{reinterpret_cast<value_type**>(temp_storage + n * sizeof(value_type*) + n * sizeof(key_type*))};
+        int64_t* d_dst_values_sorted_index{reinterpret_cast<int64_t*>(temp_storage + 2 * n * sizeof(value_type*) + n * sizeof(key_type*))};
+
+        // 1. find_and_lock位置：输出dst_value* value_index dst_key*
+        upsert_kernel_lock_key_hybrid<K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
+        static_cast<void*>(table_->buckets), table_->buckets_size,
+        table_->capacity, table_->bucket_max_size, table_->dim,
+        const_cast<key_type*>(keys), const_cast<value_type*>(values),
+        const_cast<score_type*>(scores), n, global_epoch_, value_move_opt_.size,
+        table_->max_bucket_shift, table_->capacity_divisor_magic,
+        table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size, d_dst_values, d_dst_keys);
+
+        // 2. sort：输出dst_value*_sorted value_index_sorted
+        DeviceTensor input;
+        input.init(d_dst_values, aclDataType::ACL_INT64, {static_cast<int64_t>(n)});
+        bool stable = false;
+        int64_t dim = 0;
+        bool descending = true;
+
+        DeviceTensor out;
+        out.init(d_dst_values_sorted, aclDataType::ACL_INT64, {static_cast<int64_t>(n)});
+        DeviceTensor out_index;
+        out_index.init(d_dst_values_sorted_index, aclDataType::ACL_INT64, {static_cast<int64_t>(n)});
+        EXEC_ACLNN_OP(aclnnSort, input, stable, dim, descending, out, out_index);
+
+        // 3. io：搬运value，释放lock
+        write_kernel_unlock_sorted<K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
+          static_cast<void*>(table_->buckets), table_->buckets_size,
+          table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
+          const_cast<key_type*>(keys), const_cast<value_type*>(values),
+          const_cast<score_type*>(scores), n, global_epoch_, value_move_opt_.size,
+          table_->max_bucket_shift, table_->capacity_divisor_magic,
+          table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size, d_dst_values_sorted, d_dst_values_sorted_index, d_dst_keys);
+      }
     }
 
     NpuCheckError();
@@ -2240,7 +2317,7 @@ class HashTable : public HashTableBase<K, V, S> {
         bucket_memory_pool_manager_->ensure_capacity(table_->buckets_num * 2);
       }
       double_capacity(
-          &table_, allocator_, block_dim_,
+          &table_, allocator_, block_dim_, value_ptr_map_,
           bucket_memory_pool_manager_ != nullptr
               ? bucket_memory_pool_manager_.get()
               : nullptr);
@@ -2649,6 +2726,7 @@ class HashTable : public HashTableBase<K, V, S> {
   ValueMoveOpt value_move_opt_;
   std::unique_ptr<BucketMemoryPoolManager<key_type, value_type, score_type>>
       bucket_memory_pool_manager_;
+  std::unordered_map<V *, V *> value_ptr_map_;
 };
 
 }  // namespace hkv

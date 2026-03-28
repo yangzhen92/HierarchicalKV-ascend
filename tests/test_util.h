@@ -373,7 +373,7 @@ std::unique_ptr<npu::hkv::HashTable<K, V, S, Strategy>> get_table(
   npu::hkv::HashTableOptions options{
       .init_capacity = capacity,
       .max_capacity = capacity,
-      .max_hbm_for_vectors = hbm_for_values,
+      .max_hbm_for_vectors = 0,
       .dim = dim,
       .io_by_cpu = false,
       .num_of_buckets_per_alloc = num_of_buckets_per_alloc,
