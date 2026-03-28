@@ -329,13 +329,12 @@
      __gm__ const Table<K, V, S>* __restrict table, __gm__ Bucket<K, V, S>* buckets,
      const size_t bucket_max_size, const size_t buckets_num, const size_t dim,
      __gm__ const K* __restrict keys, __gm__ V** __restrict vectors,
-     __gm__ S* __restrict scores, __gm__ S cur_score,
-     __gm__ bool* __restrict found, __gm__ const S global_epoch, const size_t n,
+     __gm__ S* __restrict scores, S cur_score,
+     __gm__ bool* __restrict found, const S global_epoch, const size_t n,
      uint32_t blockIdx, uint64_t thread_all, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
      uint64_t n_align_warp, uint64_t capacity) {
    // auto g = cg::tiled_partition<GROUP_SIZE>(cg::this_thread_block());
-   int* buckets_size = table->buckets_size;
 
    using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
    auto lane_id = threadIdx.x / GROUP_SIZE;
@@ -362,7 +361,8 @@
      __gm__ V* bucket_vectors = bucket->vectors;
 
      OccupyResult occupy_result{OccupyResult::INITIAL};
-     const int bucket_size = buckets_size[bkt_idx];
+     __gm__ int* buckets_size = table->buckets_size;
+     //const int bucket_size = buckets_size[bkt_idx];
      K evicted_key = static_cast<K>(EMPTY_KEY);
      do {
        occupy_result = find_and_lock<K, V, S, GROUP_SIZE>(
