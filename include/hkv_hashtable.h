@@ -1402,17 +1402,62 @@ class HashTable : public HashTableBase<K, V, S> {
       check_evict_strategy(scores);
     }
 
-    uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
-    find_or_insert_ptr_kernel_v2<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(table_->buckets,
-      table_->buckets_size,
-      table_->buckets_num, options_.max_bucket_size, value_move_opt_.dim,
-      keys, static_cast<void*>(values), scores, locked_key_ptrs, n, founds, global_epoch_,
-      value_move_opt_.size, table_->max_bucket_shift,
-      table_->capacity_divisor_magic, table_->capacity_divisor_shift,
-      n_align_warp, table_->capacity);
+    // std::unique_ptr<insert_unique_lock> lock_ptr;
+    // if (options_.api_lock) {
+    //   lock_ptr = std::make_unique<insert_unique_lock>(mutex_, stream);
+    // }
 
+    constexpr uint32_t MinBucketCapacityFilter = sizeof(VecD_Load) / sizeof(D);
+    uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+
+    if (locked_key_ptrs != nullptr) {
+      if (!unique_key || options_.max_bucket_size < MinBucketCapacityFilter) {
+        throw std::invalid_argument(
+            "unique_key should be true and max_bucket_size should be larger.");
+      }
+      find_or_insert_ptr_kernel_v2<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(table_->buckets,
+        table_->buckets_size,
+        table_->buckets_num, options_.max_bucket_size, value_move_opt_.dim,
+        keys, static_cast<void*>(values), scores, locked_key_ptrs, n, founds, global_epoch_,
+        value_move_opt_.size, table_->max_bucket_shift,
+        table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+        n_align_warp, table_->capacity);
+
+      NpuCheckError();
+      return;
+    }
+
+    if (unique_key && options_.max_bucket_size >= MinBucketCapacityFilter) {
+      constexpr uint32_t BLOCK_SIZE = 128U;
+
+      const size_type dev_ws_size{n * sizeof(key_type**)};
+      auto dev_ws{dev_mem_pool_->get_workspace<1>(dev_ws_size, stream)};
+      auto keys_ptr{dev_ws.get<key_type**>(0)};
+      NPU_CHECK(aclrtMemsetAsync(keys_ptr, dev_ws_size, 0, dev_ws_size, stream));
+
+      find_or_insert_ptr_kernel_v2<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(table_->buckets,
+        table_->buckets_size,
+        table_->buckets_num, options_.max_bucket_size, value_move_opt_.dim,
+        keys, static_cast<void*>(values), scores, locked_key_ptrs, n, founds, global_epoch_,
+        value_move_opt_.size, table_->max_bucket_shift,
+        table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+        n_align_warp, table_->capacity);
+
+      find_or_insert_ptr_kernel_unlock_key_v2<K><<<block_dim_, 0, stream>>>(
+              keys, keys_ptr, n);
+    } else {
+      uint32_t GROUP_SIZE = 32U;
+      find_ptr_or_insert_kernel_v2<K, V, S, evict_strategy, GROUP_SIZE><<<block_dim_, 0, stream>>>(
+        table_, table_->buckets, table_->buckets_size,
+        options_.max_bucket_size, table_->buckets_num, value_move_opt_.dim,
+        keys, static_cast<void*>(values), scores, founds, global_epoch_, n,
+        value_move_opt_.size, table_->max_bucket_shift,
+        table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+        n_align_warp, table_->capacity);
+    }
     NpuCheckError();
   }
+
 
   /**
    * @brief
