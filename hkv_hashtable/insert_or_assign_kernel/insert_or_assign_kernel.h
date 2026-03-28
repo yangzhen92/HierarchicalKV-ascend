@@ -962,8 +962,8 @@ __global__ __vector__ void write_kernel_unlock(
   AscendC::TPipe pipe;
   AscendC::TQue<AscendC::TPosition::VECIN, 0> valueInQueue;
   AscendC::TQue<AscendC::TPosition::VECOUT, 0> valueOutQueue;
-  pipe.InitBuffer(valueInQueue, 1, dim * sizeof(V));
-  pipe.InitBuffer(valueOutQueue, 1, dim * sizeof(V));
+  pipe.InitBuffer(valueInQueue, 2, dim * sizeof(V));
+  pipe.InitBuffer(valueOutQueue, 2, dim * sizeof(V));
   AscendC::GlobalTensor<V> src_values_gm;
   AscendC::GlobalTensor<V> dst_values_gm;
   // TODO: 1. DataCopy要求32B对齐，dim不满足
