@@ -700,11 +700,6 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void upsert_kernel_lock_key_hybrid_vf(
       bucket_keys = bucket->keys_;
       bucket_values = bucket->vectors;
       bucket_scores = bucket->scores_;
-      if (kv_idx == 0) {
-        AscendC::Simt::printf(
-            "upsert_kernel_lock_key_hybrid_vf key %lu bkt_idx %lu\r\n", key,
-            bkt_idx);
-      }
 
       // 3. 遍历桶，找key/空位
       for (uint32_t offset = 0; offset < bucket_max_size + STRIDE;
