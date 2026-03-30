@@ -1447,7 +1447,7 @@ class HashTable : public HashTableBase<K, V, S> {
               keys, keys_ptr, n);
     } else {
       uint32_t GROUP_SIZE = 32U;
-      find_ptr_or_insert_kernel_v2<K, V, S, evict_strategy, GROUP_SIZE>
+      find_ptr_or_insert_kernel_v2<K, V, S, evict_strategy, 32>
           <<<block_dim_, 0, stream>>>(
               d_table_, table_->buckets, options_.max_bucket_size,
               table_->buckets_num, value_move_opt_.dim, keys, values, scores,
