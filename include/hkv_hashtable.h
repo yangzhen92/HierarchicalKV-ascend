@@ -1023,7 +1023,7 @@ class HashTable : public HashTableBase<K, V, S> {
     NpuCheckError();
   }
 
-  V *get_origin_ptr(V *ptr) {
+  V *get_origin_ptr(V *ptr) const {
     auto it = value_ptr_map_.find(ptr);
     return it != value_ptr_map_.end() ? it->second : ptr;
   }
@@ -1119,7 +1119,7 @@ class HashTable : public HashTableBase<K, V, S> {
           table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
       }
     } else {
-      static bool sort_flag = true;
+      static bool sort_flag = false;
       if (!sort_flag) {
         size_t size_all = n * sizeof(value_type*) + n * sizeof(key_type*);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
@@ -1817,6 +1817,24 @@ class HashTable : public HashTableBase<K, V, S> {
       options_.dim, const_cast<key_type*>(keys), values, scores, founds, n, global_epoch_,
       table_->max_bucket_shift, table_->capacity_divisor_magic, table_->capacity_divisor_shift);
     NpuCheckError();
+    
+    std::vector<value_type *> real_values_ptr(n, nullptr);
+    NPU_CHECK(aclrtMemcpyAsync(real_values_ptr.data(), n * sizeof(value_type *),
+                          values, n * sizeof(value_type *),
+                          ACL_MEMCPY_DEVICE_TO_HOST, stream));
+    aclrtSynchronizeStream(stream);
+    for (size_t i = 0; i < n; i++) {
+      if (i == 0) {
+        printf("get_origin_ptr in : %p\r\n", real_values_ptr[i]);
+      }
+      real_values_ptr[i] = get_origin_ptr(real_values_ptr[i]);
+      if (i == 0) {
+        printf("get_origin_ptr out : %p\r\n", real_values_ptr[i]);
+      }
+    }
+    NPU_CHECK(aclrtMemcpy(values, n * sizeof(value_type *),
+                          real_values_ptr.data(), n * sizeof(value_type *),
+                          ACL_MEMCPY_DEVICE_TO_HOST));
   }
 
   /**
@@ -2304,6 +2322,10 @@ class HashTable : public HashTableBase<K, V, S> {
    * @param stream The CANN stream that is used to execute the operation.
    */
   void reserve(const size_type new_capacity, aclrtStream stream = 0) {
+    if (!is_fast_mode()) {
+      HKV_CHECK(false, "reserve is not supported in fast mode!");
+    }
+
     if (reach_max_capacity_ || new_capacity > options_.max_capacity) {
       reach_max_capacity_ = (capacity() * 2 > options_.max_capacity);
       return;

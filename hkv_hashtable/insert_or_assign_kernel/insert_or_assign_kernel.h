@@ -883,25 +883,9 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void upsert_kernel_lock_key_hybrid_vf(
       // key也是原子标记位，所有key的操作必须原子化
       d_dst_values[kv_idx] = bucket_values + key_pos * dim;
       d_dst_keys[kv_idx] = bucket_keys + key_pos;
-      if (kv_idx == 0) {
-        AscendC::Simt::printf(
-            "upsert_kernel_lock_key_hybrid_vf kv_idx == 0, key_pos %u\r\n",
-            key_pos);
-        AscendC::Simt::printf(
-            "upsert_kernel_lock_key_hybrid_vf kv_idx == 0, ptr %p\r\n",
-            bucket_values + key_pos * dim);
-        AscendC::Simt::printf(
-            "upsert_kernel_lock_key_hybrid_vf kv_idx == 0, d_dst_values ptr "
-            "%p\r\n",
-            d_dst_values[kv_idx]);
-      }
     } else {
       d_dst_values[kv_idx] = nullptr;
       d_dst_keys[kv_idx] = nullptr;
-      AscendC::Simt::printf(
-          "upsert_kernel_lock_key_hybrid_vf kv_idx == %lu key == %lu insert fail, "
-          "%p\r\n",
-          kv_idx, key);
     }
   }
 }
@@ -938,7 +922,9 @@ LAUNCH_BOUND(THREAD_NUM_2048) inline void write_key_vf(
     uint64_t n, __gm__ K* keys, __gm__ K* __gm__* d_dst_keys, uint32_t thread_all, uint32_t block_index) {
   for (uint64_t i = block_index * blockDim.x + threadIdx.x; i < n;
        i += thread_all) {
-    *(d_dst_keys[i]) = keys[i];
+    if (d_dst_keys[i] != nullptr) {
+      *(d_dst_keys[i]) = keys[i];
+    }
   }
 }
 
