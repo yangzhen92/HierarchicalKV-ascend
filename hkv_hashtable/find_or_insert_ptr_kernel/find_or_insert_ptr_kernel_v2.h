@@ -301,7 +301,7 @@
        value_ptrs[kv_idx] = bucket_values + key_pos * dim;
        __gm__ K* key_address = BUCKET::keys(bucket_keys, key_pos);
        //*key_address = key;
-       key_ptrs[kv_idx] = key;
+       key_ptrs[kv_idx] = key_address;
      }
      founds[kv_idx] = occupy_result == OccupyResult::DUPLICATE;
    }
