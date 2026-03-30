@@ -129,9 +129,6 @@
      // 4、设置输出
      if (found) {
        value_ptrs[kv_idx] = bucket->vectors + target_pos * dim;
-       if (kv_idx == 0) {
-         AscendC::Simt::printf("find_ptr_kernel_vf kv_idx == 0, key %lu bkt_idx %lu target_pos %u ptr %p\r\n", key, bkt_idx, target_pos, bucket->vectors + target_pos * dim);
-       }
        if (scores != nullptr) {
          scores[kv_idx] = *(BUCKET::scores(bucket->keys_, bucket_capacity, target_pos));
        }

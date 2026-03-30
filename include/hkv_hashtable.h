@@ -1081,11 +1081,8 @@ class HashTable : public HashTableBase<K, V, S> {
                              const key_type* keys,      // (n)
                              const value_type* values,  // (n, DIM)
                              const score_type* scores,  // (n)
-                             aclrtStream input_stream, bool unique_key,
+                             aclrtStream stream, bool unique_key,
                              bool ignore_evict_strategy) {
-    ScopedStream scoped_stream(input_stream);
-    aclrtStream stream = scoped_stream.get();
-
     if (n == 0) {
       return;
     }
@@ -1119,7 +1116,7 @@ class HashTable : public HashTableBase<K, V, S> {
           table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
       }
     } else {
-      static bool sort_flag = false;
+      static bool sort_flag = true;
       if (!sort_flag) {
         size_t size_all = n * sizeof(value_type*) + n * sizeof(key_type*);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
@@ -1145,7 +1142,6 @@ class HashTable : public HashTableBase<K, V, S> {
           table_->max_bucket_shift, table_->capacity_divisor_magic,
           table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size, d_dst_values, d_dst_keys);
       } else {
-        printf("sort flag !\r\n");
         size_t size_all = 2 * n * sizeof(value_type*) + n * sizeof(key_type*) + n * sizeof(int64_t);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
         auto temp_storage{dev_ws.get<uint8_t*>(0)};
@@ -1824,13 +1820,7 @@ class HashTable : public HashTableBase<K, V, S> {
                           ACL_MEMCPY_DEVICE_TO_HOST, stream));
     aclrtSynchronizeStream(stream);
     for (size_t i = 0; i < n; i++) {
-      if (i == 0) {
-        printf("get_origin_ptr in : %p\r\n", real_values_ptr[i]);
-      }
       real_values_ptr[i] = get_origin_ptr(real_values_ptr[i]);
-      if (i == 0) {
-        printf("get_origin_ptr out : %p\r\n", real_values_ptr[i]);
-      }
     }
     NPU_CHECK(aclrtMemcpy(values, n * sizeof(value_type *),
                           real_values_ptr.data(), n * sizeof(value_type *),
