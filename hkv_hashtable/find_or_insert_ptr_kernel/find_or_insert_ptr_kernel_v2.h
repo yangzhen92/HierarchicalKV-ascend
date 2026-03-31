@@ -336,7 +336,8 @@
      uint32_t blockIdx, uint64_t thread_all, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
      uint64_t n_align_warp, uint64_t capacity) {
-   if ((!table) || (!buckets) || (!keys) || (!vectors) || (!scores) || (!found)) {
+   if ((table == nullptr) || (buckets == nullptr) || (keys == nullptr) ||
+       (vectors == nullptr) || (found == nullptr)) {
      return;
    }
 
