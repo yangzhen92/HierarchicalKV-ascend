@@ -336,7 +336,9 @@
      uint32_t blockIdx, uint64_t thread_all, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
      uint64_t n_align_warp, uint64_t capacity) {
-   // auto g = cg::tiled_partition<GROUP_SIZE>(cg::this_thread_block());
+   if ((!table) || (!buckets) || (!keys) || (!vectors) || (!scores) || (!found)) {
+     return;
+   }
 
    using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
    auto lane_id = threadIdx.x / GROUP_SIZE;
@@ -352,9 +354,10 @@
 
      const S find_or_insert_score = ScoreFunctor::desired_when_missed(
          scores, key_idx, global_epoch, cur_score);
-
+     
+     const K hashed_key = Murmur3HashDevice(find_or_insert_key);
      uint64_t global_idx =
-         get_global_idx(find_or_insert_key, capacity_divisor_magic,
+         get_global_idx(hashed_key, capacity_divisor_magic,
                         capacity_divisor_shift, capacity);
      uint32_t key_pos = global_idx & (bucket_max_size - 1);
      uint64_t bkt_idx = global_idx >> max_bucket_shift;
@@ -374,7 +377,10 @@
        //occupy_result = asc_shfl(occupy_result, lane_id, GROUP_SIZE);
      } while (occupy_result == OccupyResult::CONTINUE);
 
-     //if (occupy_result == OccupyResult::REFUSED) continue;
+     if (occupy_result == OccupyResult::REFUSED) {
+       vectors[key_idx] = nullptr;
+       continue;
+     }
 
      if (lane_id == 0) {
        if ((occupy_result == OccupyResult::OCCUPIED_EMPTY ||
@@ -387,8 +393,8 @@
                                          bucket_max_size, false);
          __threadfence();
          vectors[key_idx] = (bucket_vectors + key_pos * dim);
-       } else if (occupy_result == OccupyResult::REFUSED) {
-         vectors[key_idx] = nullptr;
+      //  } else if (occupy_result == OccupyResult::REFUSED) {
+      //    vectors[key_idx] = nullptr;
        } else {
          ScoreFunctor::update_with_digest(bucket_keys, key_pos, scores, key_idx,
                                          find_or_insert_score,
