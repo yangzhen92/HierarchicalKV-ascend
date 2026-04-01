@@ -925,7 +925,7 @@ LAUNCH_BOUND(THREAD_NUM_2048) inline void write_key_vf(
 
 template <class K, class V, class S, int Strategy = -1>
 __global__ __vector__ void write_kernel_unlock(
-    __gm__ void* buckets, __gm__ int* buckets_size, uint64_t capacity,
+    uint32_t former_num, uint64_t former_core_move_num, uint64_t tail_core_move_num,
     uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ V* values,
     __gm__ void* scores, uint64_t n, uint64_t global_epoch, uint32_t value_size,
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
@@ -933,12 +933,16 @@ __global__ __vector__ void write_kernel_unlock(
     __gm__ V* __gm__* d_dst_values, __gm__ K* __gm__* d_dst_keys) {
   // 一共有n个数据，src在values，dst在d_dst_values
   // tiling：former核：n / core_num；tail核：n - former * (core_num - 1) * n
-  uint32_t core_num = GetBlockNum();
-  uint64_t former_num = n / core_num;
-  uint64_t tail_num = n - former_num * (core_num - 1);
-  uint64_t core_move_count =
-      (GetBlockIdx() == (core_num - 1)) ? tail_num : former_num;
-  uint64_t core_start_idx = GetBlockIdx() * former_num;
+  uint64_t cur_block_idx = GetBlockIdx();
+  uint64_t core_start_idx = 0;
+  uint64_t core_move_count = 0;
+  if (cur_block_idx < former_num) {
+    core_start_idx = cur_block_idx * former_core_move_num;
+    core_move_count = former_core_move_num;
+  } else {
+    core_start_idx = former_num * former_core_move_num + (cur_block_idx - former_num) * tail_core_move_num;
+    core_move_count = tail_core_move_num;
+  }
 
   AscendC::TPipe pipe;
   AscendC::TQueBind<AscendC::TPosition::VECIN, AscendC::TPosition::VECOUT, 0> move_queue;
@@ -981,7 +985,7 @@ __global__ __vector__ void write_kernel_unlock(
 
 template <class K, class V, class S, int Strategy = -1>
 __global__ __vector__ void write_kernel_unlock_sorted(
-    __gm__ void* buckets, __gm__ int* buckets_size, uint64_t capacity,
+    uint32_t former_num, uint64_t former_core_move_num, uint64_t tail_core_move_num,
     uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ V* values,
     __gm__ void* scores, uint64_t n, uint64_t global_epoch, uint32_t value_size,
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
@@ -990,12 +994,16 @@ __global__ __vector__ void write_kernel_unlock_sorted(
     __gm__ int64_t* d_dst_values_sorted_index, __gm__ K* __gm__* d_dst_keys) {
   // 一共有n个数据，src在values，dst在d_dst_values
   // tiling：former核：n / core_num；tail核：n - former * (core_num - 1) * n
-  uint32_t core_num = GetBlockNum();
-  uint64_t former_num = n / core_num;
-  uint64_t tail_num = n - former_num * (core_num - 1);
-  uint64_t core_move_count =
-      (GetBlockIdx() == (core_num - 1)) ? tail_num : former_num;
-  uint64_t core_start_idx = GetBlockIdx() * former_num;
+  uint64_t cur_block_idx = GetBlockIdx();
+  uint64_t core_start_idx = 0;
+  uint64_t core_move_count = 0;
+  if (cur_block_idx < former_num) {
+    core_start_idx = cur_block_idx * former_core_move_num;
+    core_move_count = former_core_move_num;
+  } else {
+    core_start_idx = former_num * former_core_move_num + (cur_block_idx - former_num) * tail_core_move_num;
+    core_move_count = tail_core_move_num;
+  }
 
   AscendC::TPipe pipe;
   AscendC::TQueBind<AscendC::TPosition::VECIN, AscendC::TPosition::VECOUT, 0> move_queue;

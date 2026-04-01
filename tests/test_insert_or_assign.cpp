@@ -107,21 +107,20 @@ void test_insert_and_assign_basic() {
 
   check_result(host_values, key_num, device_data);
 
-  // // 6. 插入重复key，更新value值，验证更新功能
-  // create_continuous_keys<K, S, V, DEFAULT_DIM>(
-  //     host_keys.data(), nullptr, host_values.data(), key_num, 1 + key_num);
-  // device_data.copy_values(host_values, key_num);
-  // table->insert_or_assign(key_num, device_data.device_keys,
-  //                         device_data.device_values, nullptr,
-  //                         device_data.stream);
-  // ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
-  // // 7. 再次校验
-  // table->find(key_num, device_data.device_keys, device_data.device_values_ptr,
-  //             device_data.device_found, nullptr, device_data.stream);
-  // ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  // 6. 插入重复key，更新value值，验证更新功能
+  create_continuous_keys<K, S, V, DEFAULT_DIM>(
+      host_keys.data(), nullptr, host_values.data(), key_num, 1 + key_num);
+  device_data.copy_values(host_values, key_num);
+  table->insert_or_assign(key_num, device_data.device_keys,
+                          device_data.device_values, nullptr,
+                          device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  // 7. 再次校验
+  table->find(key_num, device_data.device_keys, device_data.device_values_ptr,
+              device_data.device_found, nullptr, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
-  // value_ptr_to_real(device_data, key_num, table);
-  // check_result(host_values, key_num, device_data);
+  check_result(host_values, key_num, device_data);
 
   table->clear(device_data.stream);
   EXPECT_EQ(table->size(device_data.stream), 0);
@@ -132,6 +131,126 @@ TEST(TestInsertOrAssign, test_insert_and_assign) {
   test_insert_and_assign_basic<uint64_t, double, uint64_t>();
   test_insert_and_assign_basic<int64_t, uint16_t, uint64_t>();
   test_insert_and_assign_basic<int64_t, uint8_t, uint64_t>();
+}
+
+// 测试用例：dim=64，固定类型K=uint64_t, V=float, S=uint64_t，capacity作为入参
+void test_insert_and_assign_dim64_with_diff_capacity(size_t capacity) {
+  using K = uint64_t;
+  using V = float;
+  using S = uint64_t;
+  constexpr size_t dim = 64;
+  constexpr size_t key_num = 1UL * 1024 * 1024;  // 1M
+  constexpr float load_factor = 1.0f;
+  const float EPSILON = 0.001f;
+
+  // 初始化
+  init_env();
+
+  // 根据capacity设置不同的max_hbm_for_vectors
+  size_t max_hbm_for_vectors = 0;
+  if (capacity == 128UL * 1024 * 1024) {  // 128M
+    max_hbm_for_vectors = 16UL * 1024 * 1024 * 1024;  // 16G
+  } else if (capacity == 512UL * 1024 * 1024) {  // 512M
+    max_hbm_for_vectors = 32UL * 1024 * 1024 * 1024;  // 32G
+  } else {
+    FAIL() << "Unsupported capacity: " << capacity;
+  }
+
+  // 创建表
+  using Table = npu::hkv::HashTable<K, V, S>;
+  auto table = std::make_unique<Table>();
+
+  npu::hkv::HashTableOptions options{
+      .init_capacity = capacity,
+      .max_capacity = capacity,
+      .max_hbm_for_vectors = max_hbm_for_vectors,
+      .max_bucket_size = 128,
+      .dim = dim,
+      .max_load_factor = load_factor,
+  };
+
+  table->init(options);
+  EXPECT_EQ(table->size(), 0);
+
+  // 申请hbm内存
+  DeviceData<K, V, S> device_data;
+  device_data.malloc(key_num, dim);
+
+  // 准备数据
+  vector<K> host_keys(key_num, 0);
+  vector<V> host_values(key_num * dim, 0);
+  K start = 0UL;
+
+  // 第一阶段：批量插入数据
+  uint64_t key_num_init = static_cast<uint64_t>(capacity * load_factor);
+  const float target_load_factor = load_factor;
+  uint64_t key_num_remain = key_num_init % key_num == 0 ? key_num : key_num_init % key_num;
+  int32_t loop_num_init = (key_num_init + key_num - 1) / key_num;
+
+  for (int32_t global_epoch = 0; global_epoch < loop_num_init; global_epoch++) {
+    table->set_global_epoch(global_epoch);
+    uint64_t key_num_cur_insert = (global_epoch == loop_num_init - 1) ? key_num_remain : key_num;
+    
+    create_continuous_keys<K, S, V>(dim, host_keys.data(), nullptr, host_values.data(), key_num_cur_insert, start);
+    device_data.copy_keys(host_keys, key_num_cur_insert);
+    device_data.copy_values(host_values, key_num_cur_insert, dim);
+    
+    table->insert_or_assign(key_num_cur_insert, device_data.device_keys, device_data.device_values, nullptr, device_data.stream);
+    ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+    
+    start += key_num_cur_insert;
+  }
+
+  // 第二阶段：微调插入，确保负载率接近目标值
+  float real_load_factor = table->load_factor(device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  
+  while (target_load_factor - real_load_factor > EPSILON) {
+    auto key_num_append = static_cast<int64_t>((target_load_factor - real_load_factor) * capacity);
+    if (key_num_append <= 0) break;
+    
+    // 限制每次追加的键数量不超过key_num
+    key_num_append = std::min(static_cast<int64_t>(key_num), key_num_append);
+    
+    create_continuous_keys<K, S, V>(dim, host_keys.data(), nullptr, host_values.data(), key_num_append, start);
+    device_data.copy_keys(host_keys, key_num_append);
+    device_data.copy_values(host_values, key_num_append, dim);
+    
+    table->insert_or_assign(key_num_append, device_data.device_keys, device_data.device_values, nullptr, device_data.stream);
+    ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+    
+    start += key_num_append;
+    real_load_factor = table->load_factor(device_data.stream);
+    ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  }
+
+  // 验证最终负载率
+  EXPECT_NEAR(table->load_factor(device_data.stream), target_load_factor, EPSILON);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+
+  // 插入重复key，更新value值，验证更新功能
+  create_continuous_keys<K, S, V>(dim, host_keys.data(), nullptr, host_values.data(), key_num, 0);
+  device_data.copy_keys(host_keys, key_num);
+  device_data.copy_values(host_values, key_num, dim);
+  
+  table->insert_or_assign(key_num, device_data.device_keys, device_data.device_values, nullptr, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+
+  // 校验更新结果
+  table->find(key_num, device_data.device_keys, device_data.device_values_ptr, device_data.device_found, nullptr, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  
+  // 只检查找到的键值对
+  check_result(host_values, key_num, device_data, key_num, dim);
+
+  table->clear(device_data.stream);
+}
+
+TEST(TestInsertOrAssign, test_insert_and_assign_dim64_with_diff_capacity) {
+  // 测试128M capacity，16G max_hbm_for_vectors
+  test_insert_and_assign_dim64_with_diff_capacity(128UL * 1024 * 1024);
+  // 测试512M capacity，32G max_hbm_for_vectors
+  test_insert_and_assign_dim64_with_diff_capacity(512UL * 1024 * 1024);
 }
 
 void test_n_greater_than_thread_all(size_t dim) {

@@ -846,6 +846,21 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
       cout << endl;
     }
 
+    {
+      std::vector<API_Select> apis_a{
+        API_Select::insert_or_assign,
+      };
+      cout << "### On HBM+HMEM hybrid mode: " << endl;
+      print_configuration(64, 128 * 1024 * 1024UL, 16);
+      print_title_a();
+      test_main(apis_a, 64, 128 * 1024 * 1024UL, key_num_per_op, 16);
+
+      print_configuration(64, 512 * 1024 * 1024UL, 32);
+      print_title_a();
+      test_main(apis_a, 64, 512 * 1024 * 1024UL, key_num_per_op, 32);
+      cout << endl;
+    }
+
     NPU_CHECK(aclrtSynchronizeDevice());
   } catch (const npu::hkv::NpuException& e) {
     cerr << e.what() << endl;
