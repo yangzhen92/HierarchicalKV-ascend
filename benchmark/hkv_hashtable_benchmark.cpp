@@ -799,6 +799,7 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
       };
       std::vector<API_Select> apis_b{
         API_Select::export_batch_if_v2,
+        API_Select::export_batch_if,
       };
       cout << "### On pure HBM mode: " << endl;
       print_configuration(8, 128 * 1024 * 1024UL, 4);
