@@ -185,7 +185,7 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
         device_export_keys, device_export_values,
         config.use_scores ? device_export_scores : nullptr, stream);
   } else if (config.functor_version == FunctorVersion::V1) {
-    table.export_batch_if<ExportIfPredFunctor<K, S>>(
+    table.template export_batch_if<ExportIfPredFunctor<K, S>>(
         pattern, threshold, scan_len, config.offset, device_export_count,
         device_export_keys, device_export_values,
         config.use_scores ? device_export_scores : nullptr, stream);
