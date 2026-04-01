@@ -733,7 +733,7 @@ void test_main(std::vector<API_Select>& apis, const size_t dim,
           break;
         }
         case API_Select::export_batch_if: {
-          std::cout << rep(10);
+          std::cout << rep(6);
         }
         case API_Select::contains: {
           std::cout << rep(4);
