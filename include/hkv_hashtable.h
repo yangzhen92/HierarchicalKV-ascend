@@ -32,6 +32,7 @@
 #include <string>
 #include <type_traits>
 #include "../hkv_hashtable/dump_kernel/dump_kernel.h"
+#include "../hkv_hashtable/dump_kernel/dump_kernel_if.h"
 #include "../hkv_hashtable/dump_kernel/dump_kernel_if_v2.h"
 #include "../hkv_hashtable/rehash_kernel/rehash_kernel.h"
 #include "../hkv_hashtable/clear_kernel/clear_kernel.h"
