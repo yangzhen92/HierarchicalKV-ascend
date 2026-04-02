@@ -69,7 +69,7 @@ class DefaultAllocator : public virtual BaseAllocator {
         break;
       case MemoryType::Pinned:
         // 当前驱动报错Not support FEATURE_SVM_MEM_HOST_UVA
-        static bool va_feature_support = false;
+        static bool va_feature_support = true;
         if (va_feature_support) {
           aclrtMallocAttrValue attrValue;
           attrValue.vaFlag = 1;

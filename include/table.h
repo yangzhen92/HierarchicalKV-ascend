@@ -166,6 +166,7 @@ void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
     size_t slice_real_size = num_of_buckets_in_one_slice *
                              (*table)->bucket_max_size * sizeof(V) *
                              (*table)->dim;
+    V *slice_host_to_device_address = nullptr;
     if ((*table)->remaining_hbm_for_vectors >= slice_real_size) {
       if (!(*table)->is_pure_hbm) {
         mixed_hbm = true;
@@ -175,10 +176,13 @@ void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
       (*table)->remaining_hbm_for_vectors -= slice_real_size;
     } else {
       (*table)->is_pure_hbm = false;
+      const size_t host_min_size = MB(2);
+      slice_real_size = std::max(host_min_size, slice_real_size);
       allocator->alloc(MemoryType::Pinned, (void**)&((*table)->slices[i]),
                        slice_real_size);
+      printf("pinned ddr alloc: %p, slice_real_size: %zu\r\n", (*table)->slices[i], slice_real_size);
+      NPU_CHECK(aclrtHostRegister(static_cast<void*>((*table)->slices[i]), slice_real_size, ACL_HOST_REGISTER_MAPPED, (void**)(&slice_host_to_device_address)));
     }
-    V *slice_host_to_device_address = nullptr;
     for (size_t j = 0; j < num_of_buckets_in_one_slice; j++) {
       if ((*table)->is_pure_hbm || mixed_hbm) {
         size_t index = start + num_of_allocated_buckets + j;
@@ -186,10 +190,6 @@ void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
           (*table)->slices[i] + j * (*table)->bucket_max_size * (*table)->dim;
         allocate_bucket_vectors_kernel<K, V, S><<<1, 0, 0>>>((*table)->buckets, index, address);
       } else {
-        if (j == 0) {
-          NPU_CHECK(aclrtHostRegister(static_cast<void*>((*table)->slices[i]), slice_real_size, ACL_HOST_REGISTER_MAPPED, (void**)(&slice_host_to_device_address)));
-          // printf("host ddr: %p, device ddr: %p\r\n", (*table)->slices[i], slice_host_to_device_address);
-        }
         __gm__ V* address = slice_host_to_device_address + j * (*table)->bucket_max_size * (*table)->dim;
         size_t index = start + num_of_allocated_buckets + j;
         for (int k = 0; k <= (*table)->bucket_max_size; k++) {
@@ -281,7 +281,9 @@ size_t get_slice_size(Table<K, V, S>** table) {
     slice_size = min_slice_size;
   }
 
-  return std::max(min_slice_size, slice_size);
+  // host register限制约束
+  const size_t host_align_size = MB(2);
+  return std::max(std::max(min_slice_size, slice_size), max_table_size);
 }
 
 /* Initialize a Table struct.
