@@ -63,6 +63,7 @@
 #include "tiling/platform/platform_ascendc.h"
 #include "types.h"
 #include "utils.h"
+#include "simt_api/device_warp_functions.h"
 
 namespace npu {
 namespace hkv {
