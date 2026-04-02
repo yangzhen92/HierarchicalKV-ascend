@@ -63,7 +63,6 @@
 #include "tiling/platform/platform_ascendc.h"
 #include "types.h"
 #include "utils.h"
-#include "simt_api/cpp/kernel_simt_utils.h"
 
 namespace npu {
 namespace hkv {
@@ -2079,7 +2078,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if ((offset >= table_->capacity) || (n == 0)) {
       return;
     }
-    size_type n_align = ((n + warpSize - 1) / warpSize) * warpSize;
+    size_type n_align = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     DISPATCH_GROUP_SIZE(
         value_move_opt_.cg_size,
         (dump_kernel_if<K, V, S, PredFunctor, GROUP_SIZE>
