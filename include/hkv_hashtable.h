@@ -2078,7 +2078,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if ((offset >= table_->capacity) || (n == 0)) {
       return;
     }
-    size_type n_align = ((n + WarpSize - 1) / WarpSize) * WarpSize;
+    size_type n_align = ((n + warpSize - 1) / warpSize) * warpSize;
     DISPATCH_GROUP_SIZE(
         value_move_opt_.cg_size,
         (dump_kernel_if<K, V, S, PredFunctor, GROUP_SIZE>
