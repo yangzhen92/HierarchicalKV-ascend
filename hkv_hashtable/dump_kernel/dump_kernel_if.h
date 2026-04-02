@@ -78,7 +78,7 @@
       bool match = (!IS_RESERVED_KEY(key)) && pred(key, score, pattern, threshold);
       if (match) {
         choose_flag = 1;
-        local_index = atomicAdd(block_acc, 1u);
+        local_index = asc_atomic_add(block_acc, 1u);
         block_tuples[local_index].key = key;
         block_tuples[local_index].value = reinterpret_cast<uint64_t>(value_ptrs);
         block_tuples[local_index].score = score;
@@ -87,7 +87,7 @@
   
       if (threadIdx.x == 0) {
         global_acc[0] =
-            atomicAdd(dump_counter, static_cast<size_t>(block_acc[0]));
+            asc_atomic_add(dump_counter, static_cast<size_t>(block_acc[0]));
       }
       asc_syncthreads();
   
