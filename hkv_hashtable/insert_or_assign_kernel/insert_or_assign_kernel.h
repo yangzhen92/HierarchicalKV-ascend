@@ -946,13 +946,19 @@ __global__ __vector__ void write_kernel_unlock(
 
   AscendC::TPipe pipe;
   AscendC::TQueBind<AscendC::TPosition::VECIN, AscendC::TPosition::VECOUT, 0> move_queue;
-  pipe.InitBuffer(move_queue, 2, dim * sizeof(V));
+  
+  // 使用GetRuntimeUBSize获取可用UB大小，进行dim tiling
+  constexpr uint32_t DOUBLE_BUFFER = 2;
+  const uint32_t ub_total_size = GetRuntimeUBSize();
+  const uint32_t element_size = sizeof(V);
+  const uint32_t max_tile_size = ub_total_size / (DOUBLE_BUFFER * element_size);
+  const uint32_t tile_size = Std::max(dim, max_tile_size);
+  const uint32_t num_tiles = (dim + tile_size - 1) / tile_size;  // 向上取整
+  
+  pipe.InitBuffer(move_queue, 2, tile_size * element_size);
   AscendC::GlobalTensor<V> src_values_gm;
   AscendC::GlobalTensor<V> dst_values_gm;
-  // TODO: 1. DataCopy要求32B对齐，dim不满足
-  //       2. 数据需要Tiling，超大DIM场景，有问题
   AscendC::LocalTensor<V> move_local;
-  DataCopyExtParams copy_params {1, static_cast<uint32_t>(dim * sizeof(V)), 0, 0 ,0};
   DataCopyPadExtParams<V> pad_params {true, 0, 0, 0};
   src_values_gm.SetGlobalBuffer(values);
   for (uint64_t i = core_start_idx; i < core_start_idx + core_move_count; i++) {
@@ -961,17 +967,27 @@ __global__ __vector__ void write_kernel_unlock(
       continue;
     }
 
-    move_queue.AllocTensor<V>(move_local);
-    // 搬进
-    AscendC::DataCopyPad(move_local, src_values_gm[i * dim], copy_params, pad_params);
-    move_queue.EnQue<V>(move_local);
-    move_queue.DeQue<V>(move_local);
+    uint64_t src_offset = i * dim;
+    __gm__ V* dst_offset = dst_value;
 
-    // 搬出
-    dst_values_gm.SetGlobalBuffer(reinterpret_cast<__gm__ V*>(dst_value));
-    AscendC::DataCopyPad(dst_values_gm, move_local, copy_params);
+    // Tiling处理：分多次搬运数据
+    for (uint32_t tile_idx = 0; tile_idx < num_tiles; tile_idx++) {
+      uint32_t current_tile_size = (tile_idx == num_tiles - 1) ? (dim - tile_idx * tile_size) : tile_size;
+      // 动态调整copy_params的大小
+      DataCopyExtParams copy_params {1, static_cast<uint32_t>(current_tile_size * element_size), 0, 0 ,0};
 
-    move_queue.FreeTensor(move_local);
+      move_queue.AllocTensor<V>(move_local);
+      // 搬进：src_values_gm[src_offset + tile_idx * tile_size]
+      AscendC::DataCopyPad(move_local, src_values_gm[src_offset + tile_idx * tile_size], copy_params, pad_params);
+      move_queue.EnQue<V>(move_local);
+      move_queue.DeQue<V>(move_local);
+
+      // 搬出：dst_offset + tile_idx * tile_size
+      dst_values_gm.SetGlobalBuffer(dst_offset + tile_idx * tile_size);
+      AscendC::DataCopyPad(dst_values_gm, move_local, copy_params);
+
+      move_queue.FreeTensor(move_local);
+    }
   }
 
   const uint32_t thread_all = THREAD_NUM_2048 * GetBlockNum();
@@ -1007,13 +1023,20 @@ __global__ __vector__ void write_kernel_unlock_sorted(
 
   AscendC::TPipe pipe;
   AscendC::TQueBind<AscendC::TPosition::VECIN, AscendC::TPosition::VECOUT, 0> move_queue;
-  pipe.InitBuffer(move_queue, 2, dim * sizeof(V));
+  
+  // 使用GetRuntimeUBSize获取可用UB大小，进行dim tiling
+  constexpr uint32_t DOUBLE_BUFFER = 2;
+  const uint32_t ub_total_size = GetRuntimeUBSize();
+  const uint32_t element_size = sizeof(V);
+  const uint32_t max_tile_size = ub_total_size / (DOUBLE_BUFFER * element_size);
+  const uint32_t tile_size = Std::max(dim, max_tile_size);
+  const uint32_t num_tiles = (dim + tile_size - 1) / tile_size;  // 向上取整
+  
+  pipe.InitBuffer(move_queue, 2, tile_size * element_size);
   AscendC::GlobalTensor<V> src_values_gm;
   AscendC::GlobalTensor<V> dst_values_gm;
-  // TODO: 1. DataCopy要求32B对齐，dim不满足
-  //       2. 数据需要Tiling，超大DIM场景，有问题
   AscendC::LocalTensor<V> move_local;
-  DataCopyExtParams copy_params {1, static_cast<uint32_t>(dim * sizeof(V)), 0, 0 ,0};
+  DataCopyExtParams copy_params {1, static_cast<uint32_t>(tile_size * element_size), 0, 0 ,0};
   DataCopyPadExtParams<V> pad_params {true, 0, 0, 0};
   src_values_gm.SetGlobalBuffer(values);
   for (uint64_t offset = core_start_idx; offset < core_start_idx + core_move_count; offset++) {
@@ -1023,17 +1046,31 @@ __global__ __vector__ void write_kernel_unlock_sorted(
       continue;
     }
 
-    move_queue.AllocTensor<V>(move_local);
-    // 搬进
-    AscendC::DataCopyPad(move_local, src_values_gm[idx * dim], copy_params, pad_params);
-    move_queue.EnQue<V>(move_local);
-    move_queue.DeQue<V>(move_local);
+    uint64_t src_offset = idx * dim;
+    __gm__ V* dst_offset = dst_value;
 
-    // 搬出
-    dst_values_gm.SetGlobalBuffer(reinterpret_cast<__gm__ V*>(dst_value));
-    AscendC::DataCopyPad(dst_values_gm, move_local, copy_params);
+    // Tiling处理：分多次搬运数据
+    for (uint32_t tile_idx = 0; tile_idx < num_tiles; tile_idx++) {
+      uint32_t current_tile_size = (tile_idx == num_tiles - 1) ? (dim - tile_idx * tile_size) : tile_size;
+      if (current_tile_size == 0) {
+        break;
+      }
 
-    move_queue.FreeTensor(move_local);
+      // 动态调整copy_params的大小
+      DataCopyExtParams copy_params {1, static_cast<uint32_t>(current_tile_size * element_size), 0, 0 ,0};
+
+      move_queue.AllocTensor<V>(move_local);
+      // 搬进：src_values_gm[src_offset + tile_idx * tile_size]
+      AscendC::DataCopyPad(move_local, src_values_gm[src_offset + tile_idx * tile_size], copy_params, pad_params);
+      move_queue.EnQue<V>(move_local);
+      move_queue.DeQue<V>(move_local);
+
+      // 搬出：dst_offset + tile_idx * tile_size
+      dst_values_gm.SetGlobalBuffer(dst_offset + tile_idx * tile_size);
+      AscendC::DataCopyPad(dst_values_gm, move_local, copy_params);
+
+      move_queue.FreeTensor(move_local);
+    }
   }
 
   const uint32_t thread_all = THREAD_NUM_2048 * GetBlockNum();
