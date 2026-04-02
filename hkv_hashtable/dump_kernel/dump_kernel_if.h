@@ -15,8 +15,8 @@
  */
 
 /* !
- * \file find_or_insert_ptr_kernel.h
- * \brief find_or_insert_ptr_kernel
+ * \file dump_kernel_if.h
+ * \brief dump_kernel_if
  */
 
  #ifndef ASCENDC_DUMP_KERNEL_IF_H_
@@ -97,7 +97,6 @@
     }
  
      auto cg_rank_id = threadIdx.x % GROUP_SIZE;
-     auto cg_rank_id_start = threadIdx.x - cg_rank_id;
      uint64_t tuple_value_ptr = 0;
      __ubuf__ const KVM<K, S>& tuple{block_tuples[local_index]};
      const size_t j{global_acc[0] + local_index};
