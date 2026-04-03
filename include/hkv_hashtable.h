@@ -2078,13 +2078,12 @@ class HashTable : public HashTableBase<K, V, S> {
     if ((offset >= table_->capacity) || (n == 0)) {
       return;
     }
-    size_type n_align = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     DISPATCH_GROUP_SIZE(
         value_move_opt_.cg_size,
         (dump_kernel_if<K, V, S, PredFunctor, GROUP_SIZE>
          <<<block_dim_, 64 * 1024, stream>>>(
              d_table_, table_->buckets, pattern, threshold, keys, values, scores, offset, n,
-             n_align, d_counter, value_move_opt_.size, value_move_opt_.dim)));
+             d_counter, value_move_opt_.size, value_move_opt_.dim)));
     NpuCheckError();
   }
 
