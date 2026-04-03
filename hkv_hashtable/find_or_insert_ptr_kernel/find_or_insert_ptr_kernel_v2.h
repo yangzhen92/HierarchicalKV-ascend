@@ -30,7 +30,7 @@
  #include "../../include/score_functor.h"
  #include "../../include/simt_vf_dispatcher.h"
  #include "simt_api/asc_simt.h"
- #include "find_and_lock.h"
+ #include "../../include/find_utils.h"
  
  namespace npu {
  namespace hkv {
