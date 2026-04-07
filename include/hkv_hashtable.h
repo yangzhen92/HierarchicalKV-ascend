@@ -1402,11 +1402,6 @@ class HashTable : public HashTableBase<K, V, S> {
       check_evict_strategy(scores);
     }
 
-    // std::unique_ptr<insert_unique_lock> lock_ptr;
-    // if (options_.api_lock) {
-    //   lock_ptr = std::make_unique<insert_unique_lock>(mutex_, stream);
-    // }
-
     constexpr uint32_t MinBucketCapacityFilter = sizeof(VecD_Load) / sizeof(D);
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
 

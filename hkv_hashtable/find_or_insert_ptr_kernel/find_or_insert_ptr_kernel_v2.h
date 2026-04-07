@@ -372,13 +372,11 @@
 
      OccupyResult occupy_result{OccupyResult::INITIAL};
      __gm__ int* buckets_size = table->buckets_size;
-     //const int bucket_size = buckets_size[bkt_idx];
      K evicted_key = static_cast<K>(EMPTY_KEY);
      do {
        occupy_result = find_and_lock<K, S, GROUP_SIZE>(
            bucket_keys, bucket_scores, bucket_max_size, find_or_insert_key,
            find_or_insert_score, key_pos, evicted_key, lane_id);
-       //occupy_result = asc_shfl(occupy_result, lane_id, GROUP_SIZE);
      } while (occupy_result == OccupyResult::CONTINUE);
 
      if (occupy_result == OccupyResult::REFUSED) {
@@ -397,8 +395,6 @@
                                          bucket_max_size, false);
          __threadfence();
          vectors[key_idx] = (bucket_vectors + key_pos * dim);
-      //  } else if (occupy_result == OccupyResult::REFUSED) {
-      //    vectors[key_idx] = nullptr;
        } else {
          ScoreFunctor::update_with_digest(bucket_keys, key_pos, scores, key_idx,
                                          find_or_insert_score,
@@ -406,15 +402,6 @@
          __threadfence();
          vectors[key_idx] = (bucket_vectors + key_pos * dim);
        }
-      //  if (occupy_result != OccupyResult::REFUSED) {
-      //    ScoreFunctor::update_with_digest(
-      //        bucket_keys, key_pos, scores, key_idx, find_or_insert_score,
-      //        (occupy_result != OccupyResult::DUPLICATE));
-      //    __threadfence();
-      //    vectors[key_idx] = (bucket_vectors + key_pos * dim);
-      //  } else {
-      //    vectors[key_idx] = nullptr;
-      //  }
        found[key_idx] = occupy_result == OccupyResult::DUPLICATE;
        asc_atomic_exch(bucket_keys + key_pos, find_or_insert_key);
      }
