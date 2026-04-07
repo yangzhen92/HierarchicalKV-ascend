@@ -327,15 +327,18 @@
  /* find or insert with the end-user specified score.
  */
  template <class K, class V, class S, int Strategy, uint32_t GROUP_SIZE = 4>
- __simt_vf__ __aicore__ void find_ptr_or_insert_vf_v2(
-     __gm__ const Table<K, V, S>* __restrict__ table, __gm__ Bucket<K, V, S>* buckets,
-     const size_t bucket_max_size, const size_t buckets_num, const size_t dim,
-     __gm__ const K* __restrict__ keys, __gm__ V* __gm__* __restrict__ vectors,
-     __gm__ S* __restrict__ scores, S cur_score,
-     __gm__ bool* __restrict__ found, const S global_epoch, const size_t n,
-     uint32_t blockIdx, uint64_t thread_all, uint32_t max_bucket_shift,
-     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
-     uint64_t n_align_warp, uint64_t capacity) {
+ __simt_vf__ __aicore__
+ LAUNCH_BOUND(THREAD_NUM_512) inline void find_ptr_or_insert_vf_v2(
+     __gm__ const Table<K, V, S>* __restrict__ table,
+     __gm__ Bucket<K, V, S>* buckets, const size_t bucket_max_size,
+     const size_t buckets_num, const size_t dim,
+     __gm__ const K* __restrict__ keys,
+     __gm__ V * __gm__ * __restrict__ vectors, __gm__ S* __restrict__ scores,
+     S cur_score, __gm__ bool* __restrict__ found, const S global_epoch,
+     const size_t n, uint32_t blockIdx, uint64_t thread_all,
+     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
+     uint64_t capacity_divisor_shift, uint64_t n_align_warp,
+     uint64_t capacity) {
    if ((table == nullptr) || (buckets == nullptr) || (keys == nullptr) ||
        (vectors == nullptr) || (found == nullptr)) {
      return;
