@@ -345,7 +345,7 @@
    }
 
    using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
-   auto lane_id = threadIdx.x / GROUP_SIZE;
+   auto lane_id = threadIdx.x % GROUP_SIZE;
    const uint64_t N = n * GROUP_SIZE;
 
    for (size_t t = (blockIdx * blockDim.x) + threadIdx.x; t < N;
