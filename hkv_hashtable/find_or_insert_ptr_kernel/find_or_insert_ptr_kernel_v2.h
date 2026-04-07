@@ -29,8 +29,8 @@
  #include "../../include/utils.h"
  #include "../../include/score_functor.h"
  #include "../../include/simt_vf_dispatcher.h"
+ #include "../../include/find_utils.h" 
  #include "simt_api/asc_simt.h"
- #include "../../include/find_utils.h"
  
  namespace npu {
  namespace hkv {
