@@ -1140,10 +1140,24 @@ class HashTable : public HashTableBase<K, V, S> {
         uint64_t tail_core_move_num = n / block_dim_;
         uint64_t former_core_move_num = tail_core_move_num + 1;
         uint32_t former_num = n - tail_core_move_num * block_dim_;
+
+        constexpr uint32_t DOUBLE_BUFFER = 2;
+        auto platform = platform_ascendc::PlatformAscendCManager::GetInstance();
+        HKV_CHECK(platform != nullptr, "get platform failed.");
+        uint64_t ub_total_size = 0;
+        platform->GetCoreMemSize(platform_ascendc::CoreMemType::UB, ub_total_size);
+        const uint64_t RESERVE_UB_SIZE = KB(8);
+        const uint64_t SIMT_UB_SIZE = KB(32);
+        uint64_t valid_ub_size = ub_total_size - RESERVE_UB_SIZE - SIMT_UB_SIZE;
+        const uint32_t element_size = sizeof(value_type);
+        uint32_t max_tile_size = valid_ub_size / (DOUBLE_BUFFER * element_size);
+        uint32_t tile_size = Std::max(static_cast<uint32_t>(table_->dim), max_tile_size);
+        uint32_t num_tiles = (table_->dim + tile_size - 1) / tile_size;
+
         // 2. io：搬运value，释放lock
-        write_kernel_unlock<K, V, S, evict_strategy_><<<block_dim_, 192 * 1024, stream>>>(
+        write_kernel_unlock<K, V, S, evict_strategy_><<<block_dim_, valid_ub_size, stream>>>(
           former_num, former_core_move_num, tail_core_move_num,
-          table_->bucket_max_size, table_->dim,
+          tile_size, num_tiles, table_->dim,
           const_cast<key_type*>(keys), const_cast<value_type*>(values),
           const_cast<score_type*>(scores), n, global_epoch_, value_move_opt_.size,
           table_->max_bucket_shift, table_->capacity_divisor_magic,
@@ -1183,10 +1197,23 @@ class HashTable : public HashTableBase<K, V, S> {
         uint64_t former_core_move_num = tail_core_move_num + 1;
         uint32_t former_num = n - tail_core_move_num * block_dim_;
 
+        constexpr uint32_t DOUBLE_BUFFER = 2;
+        auto platform = platform_ascendc::PlatformAscendCManager::GetInstance();
+        HKV_CHECK(platform != nullptr, "get platform failed.");
+        uint64_t ub_total_size = 0;
+        platform->GetCoreMemSize(platform_ascendc::CoreMemType::UB, ub_total_size);
+        const uint64_t RESERVE_UB_SIZE = KB(8);
+        const uint64_t SIMT_UB_SIZE = KB(32);
+        uint64_t valid_ub_size = ub_total_size - RESERVE_UB_SIZE - SIMT_UB_SIZE;
+        const uint32_t element_size = sizeof(value_type);
+        uint32_t max_tile_size = valid_ub_size / (DOUBLE_BUFFER * element_size);
+        uint32_t tile_size = Std::max(static_cast<uint32_t>(table_->dim), max_tile_size);
+        uint32_t num_tiles = (table_->dim + tile_size - 1) / tile_size;
+
         // 3. io：搬运value，释放lock
-        write_kernel_unlock_sorted<K, V, S, evict_strategy_><<<block_dim_, 192 * 1024, stream>>>(
+        write_kernel_unlock_sorted<K, V, S, evict_strategy_><<<block_dim_, valid_ub_size, stream>>>(
           former_num, former_core_move_num, tail_core_move_num,
-          table_->bucket_max_size, table_->dim,
+          tile_size, num_tiles, table_->dim,
           const_cast<key_type*>(keys), const_cast<value_type*>(values),
           const_cast<score_type*>(scores), n, global_epoch_, value_move_opt_.size,
           table_->max_bucket_shift, table_->capacity_divisor_magic,
