@@ -54,6 +54,8 @@
 #include "../hkv_hashtable/assign_values_kernel/assign_values_kernel.h"
 #include "../hkv_hashtable/assign_kernel/assign_kernel.h"
 #include "../hkv_hashtable/accum_or_assign_kernel/accum_or_assign_kernel.h"
+#include "../hkv_hashtable/lock_keys_kernel/lock_keys_kernel.h"
+#include "../hkv_hashtable/lock_keys_kernel/unlock_keys_kernel.h"
 #include "aclnn_helper.h"
 #include "aclnnop/aclnn_reduce_sum.h"
 #include "bucket_memory_pool_manager.h"
@@ -1465,7 +1467,19 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
 
-    std::cout << "[Unsupport lock_keys yet]\n";
+    constexpr uint32_t MinBucketCapacityFilter = sizeof(VecD_Load) / sizeof(D);
+    if (options_.max_bucket_size < MinBucketCapacityFilter) {
+      throw std::runtime_error(
+          "Not support lock_keys API because the bucket capacity is too "
+          "small.");
+    }
+
+    uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+    lock_keys_kernel<K, V, S><<<block_dim_, 0, stream>>>(
+        table_->buckets, table_->buckets_num, options_.max_bucket_size,
+        options_.dim, const_cast<key_type*>(keys), locked_key_ptrs, success,
+        scores, global_epoch_, n, table_->max_bucket_shift,
+        table_->capacity_divisor_magic, table_->capacity_divisor_shift);
     NpuCheckError();
   }
 
@@ -1492,7 +1506,9 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
 
-    std::cout << "[Unsupport unlock_keys yet]\n";
+    unlock_keys_kernel<K><<<block_dim_, 0, stream>>>(
+        n, locked_key_ptrs, const_cast<key_type*>(keys), success);
+    NpuCheckError();
   }
 
   /**
