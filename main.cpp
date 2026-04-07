@@ -45,8 +45,6 @@ using TableOptions = npu::hkv::HashTableOptions;
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 
-static uint32_t core_num_aiv = 0;
-
 template <class K, class S, class V, size_t DIM = 16>
 void create_random_keys(K* h_keys, S* h_scores, V* h_vectors, size_t KEY_NUM,
                         size_t range = std::numeric_limits<uint64_t>::max()) {
@@ -246,17 +244,6 @@ void query_memory() {
 }
 
 int32_t main(int32_t argc, char* argv[]) {
-  uint32_t block_dim = 8;
-  const char* soc_version = TOSTRING(SOC_VERSION);
-  auto ascendc_platform =
-      platform_ascendc::PlatformAscendCManager::GetInstance(soc_version);
-  HKV_CHECK(ascendc_platform != nullptr,
-            "Get ascendc platform info failed, please check SOC_VERSION!");
-  block_dim = ascendc_platform->GetCoreNumAiv();
-  core_num_aiv = block_dim;
-  std::cout << "Soc version: " << soc_version
-            << " block_dim(aiv_num): " << block_dim << std::endl;
-
   NPU_CHECK(aclInit(nullptr));
   auto device_id_env = std::getenv("HKV_TEST_DEVICE");
   int32_t device_id = 0;
@@ -268,7 +255,13 @@ int32_t main(int32_t argc, char* argv[]) {
               << std::endl;
   }
   NPU_CHECK(aclrtSetDevice(device_id));
-  std::cout << "aclrtGetSocName:" << aclrtGetSocName() << std::endl;
+  auto ascendc_platform =
+      platform_ascendc::PlatformAscendCManager::GetInstance();
+  HKV_CHECK(ascendc_platform != nullptr,
+            "Get ascendc platform info failed");
+  std::cout << "Soc version:" << aclrtGetSocName()
+            << " device_id:" << device_id
+            << " aiv_num: " << ascendc_platform->GetCoreNumAiv() << std::endl;
   query_memory();
 
   demo_hkv_hashtable();
