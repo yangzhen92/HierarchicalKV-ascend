@@ -783,68 +783,68 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
          << "HMEM = " << hmem4values << " GB\n";
   };
   try {
-    {
-      std::vector<API_Select> apis_a{
-        API_Select::insert_or_assign,
-        API_Select::find,
-        API_Select::find_or_insert_ptr,
-        API_Select::find_and_update,
-        API_Select::find_ptr,
-        API_Select::export_batch,
-        API_Select::assign,
-        API_Select::assign_scores,
-        API_Select::assign_values,
-        API_Select::insert_and_evict,
-        API_Select::contains,
-      };
-      std::vector<API_Select> apis_b{
-        API_Select::export_batch_if_v2,
-      };
-      cout << "### On pure HBM mode: " << endl;
-      print_configuration(8, 128 * 1024 * 1024UL, 4);
-      print_title_a();
-      test_main(apis_a, 8, 128 * 1024 * 1024UL, key_num_per_op, 4);
-      print_title_b();
-      test_main(apis_b, 8, 128 * 1024 * 1024UL, key_num_per_op, 4);
+    // {
+    //   std::vector<API_Select> apis_a{
+    //     API_Select::insert_or_assign,
+    //     API_Select::find,
+    //     API_Select::find_or_insert_ptr,
+    //     API_Select::find_and_update,
+    //     API_Select::find_ptr,
+    //     API_Select::export_batch,
+    //     API_Select::assign,
+    //     API_Select::assign_scores,
+    //     API_Select::assign_values,
+    //     API_Select::insert_and_evict,
+    //     API_Select::contains,
+    //   };
+    //   std::vector<API_Select> apis_b{
+    //     API_Select::export_batch_if_v2,
+    //   };
+    //   cout << "### On pure HBM mode: " << endl;
+    //   print_configuration(8, 128 * 1024 * 1024UL, 4);
+    //   print_title_a();
+    //   test_main(apis_a, 8, 128 * 1024 * 1024UL, key_num_per_op, 4);
+    //   print_title_b();
+    //   test_main(apis_b, 8, 128 * 1024 * 1024UL, key_num_per_op, 4);
 
-      print_configuration(32, 128 * 1024 * 1024UL, 16);
-      print_title_a();
-      test_main(apis_a, 32, 128 * 1024 * 1024UL, key_num_per_op, 16);
-      print_title_b();
-      test_main(apis_b, 32, 128 * 1024 * 1024UL, key_num_per_op, 16);
+    //   print_configuration(32, 128 * 1024 * 1024UL, 16);
+    //   print_title_a();
+    //   test_main(apis_a, 32, 128 * 1024 * 1024UL, key_num_per_op, 16);
+    //   print_title_b();
+    //   test_main(apis_b, 32, 128 * 1024 * 1024UL, key_num_per_op, 16);
 
-      print_configuration(64, 64 * 1024 * 1024UL, 16);
-      print_title_a();
-      test_main(apis_a, 64, 64 * 1024 * 1024UL, key_num_per_op, 16);
-      print_title_b();
-      test_main(apis_b, 64, 64 * 1024 * 1024UL, key_num_per_op, 16);
+    //   print_configuration(64, 64 * 1024 * 1024UL, 16);
+    //   print_title_a();
+    //   test_main(apis_a, 64, 64 * 1024 * 1024UL, key_num_per_op, 16);
+    //   print_title_b();
+    //   test_main(apis_b, 64, 64 * 1024 * 1024UL, key_num_per_op, 16);
 
-      print_configuration(128, 32 * 1024 * 1024UL, 16);
-      print_title_a();
-      test_main(apis_a, 128, 32 * 1024 * 1024UL, key_num_per_op, 16);
-      print_title_b();
-      test_main(apis_b, 128, 32 * 1024 * 1024UL, key_num_per_op, 16);
+    //   print_configuration(128, 32 * 1024 * 1024UL, 16);
+    //   print_title_a();
+    //   test_main(apis_a, 128, 32 * 1024 * 1024UL, key_num_per_op, 16);
+    //   print_title_b();
+    //   test_main(apis_b, 128, 32 * 1024 * 1024UL, key_num_per_op, 16);
 
-      print_configuration(256, 16 * 1024 * 1024UL, 16);
-      print_title_a();
-      test_main(apis_a, 256, 16 * 1024 * 1024UL, key_num_per_op, 16);
-      print_title_b();
-      test_main(apis_b, 256, 16 * 1024 * 1024UL, key_num_per_op, 16);
+    //   print_configuration(256, 16 * 1024 * 1024UL, 16);
+    //   print_title_a();
+    //   test_main(apis_a, 256, 16 * 1024 * 1024UL, key_num_per_op, 16);
+    //   print_title_b();
+    //   test_main(apis_b, 256, 16 * 1024 * 1024UL, key_num_per_op, 16);
 
-      print_configuration(512, 8 * 1024 * 1024UL, 16);
-      print_title_a();
-      test_main(apis_a, 512, 8 * 1024 * 1024UL, key_num_per_op, 16);
-      print_title_b();
-      test_main(apis_b, 512, 8 * 1024 * 1024UL, key_num_per_op, 16);
+    //   print_configuration(512, 8 * 1024 * 1024UL, 16);
+    //   print_title_a();
+    //   test_main(apis_a, 512, 8 * 1024 * 1024UL, key_num_per_op, 16);
+    //   print_title_b();
+    //   test_main(apis_b, 512, 8 * 1024 * 1024UL, key_num_per_op, 16);
 
-      print_configuration(1024, 4 * 1024 * 1024UL, 16);
-      print_title_a();
-      test_main(apis_a, 1024, 4 * 1024 * 1024UL, key_num_per_op, 16);
-      print_title_b();
-      test_main(apis_b, 1024, 4 * 1024 * 1024UL, key_num_per_op, 16);
+    //   print_configuration(1024, 4 * 1024 * 1024UL, 16);
+    //   print_title_a();
+    //   test_main(apis_a, 1024, 4 * 1024 * 1024UL, key_num_per_op, 16);
+    //   print_title_b();
+    //   test_main(apis_b, 1024, 4 * 1024 * 1024UL, key_num_per_op, 16);
 
-      cout << endl;
-    }
+    //   cout << endl;
+    // }
 
     {
       std::vector<API_Select> apis_a{

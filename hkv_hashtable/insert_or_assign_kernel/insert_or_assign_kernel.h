@@ -926,7 +926,7 @@ LAUNCH_BOUND(THREAD_NUM_2048) inline void write_key_vf(
 template <class K, class V, class S, int Strategy = -1>
 __global__ __vector__ void write_kernel_unlock(
     uint32_t former_num, uint64_t former_core_move_num, uint64_t tail_core_move_num,
-    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ V* values,
+    uint32_t tile_size, uint32_t num_tiles, uint32_t dim, __gm__ K* keys, __gm__ V* values,
     __gm__ void* scores, uint64_t n, uint64_t global_epoch, uint32_t value_size,
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
     uint64_t capacity_divisor_shift, uint64_t n_align_warp, int32_t group_size,
@@ -947,15 +947,7 @@ __global__ __vector__ void write_kernel_unlock(
   AscendC::TPipe pipe;
   AscendC::TQueBind<AscendC::TPosition::VECIN, AscendC::TPosition::VECOUT, 0> move_queue;
   
-  // 使用GetRuntimeUBSize获取可用UB大小，进行dim tiling
-  constexpr uint32_t DOUBLE_BUFFER = 2;
-  const uint32_t ub_total_size = GetRuntimeUBSize();
-  const uint32_t element_size = sizeof(V);
-  const uint32_t max_tile_size = ub_total_size / (DOUBLE_BUFFER * element_size);
-  const uint32_t tile_size = Std::max(dim, max_tile_size);
-  const uint32_t num_tiles = (dim + tile_size - 1) / tile_size;  // 向上取整
-  
-  pipe.InitBuffer(move_queue, 2, tile_size * element_size);
+  pipe.InitBuffer(move_queue, 2, tile_size * sizeof(V));
   AscendC::GlobalTensor<V> src_values_gm;
   AscendC::GlobalTensor<V> dst_values_gm;
   AscendC::LocalTensor<V> move_local;
@@ -974,7 +966,7 @@ __global__ __vector__ void write_kernel_unlock(
     for (uint32_t tile_idx = 0; tile_idx < num_tiles; tile_idx++) {
       uint32_t current_tile_size = (tile_idx == num_tiles - 1) ? (dim - tile_idx * tile_size) : tile_size;
       // 动态调整copy_params的大小
-      DataCopyExtParams copy_params {1, static_cast<uint32_t>(current_tile_size * element_size), 0, 0 ,0};
+      DataCopyExtParams copy_params {1, static_cast<uint32_t>(current_tile_size * sizeof(V)), 0, 0 ,0};
 
       move_queue.AllocTensor<V>(move_local);
       // 搬进：src_values_gm[src_offset + tile_idx * tile_size]
@@ -1002,7 +994,7 @@ __global__ __vector__ void write_kernel_unlock(
 template <class K, class V, class S, int Strategy = -1>
 __global__ __vector__ void write_kernel_unlock_sorted(
     uint32_t former_num, uint64_t former_core_move_num, uint64_t tail_core_move_num,
-    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ V* values,
+    uint32_t tile_size, uint32_t num_tiles, uint32_t dim, __gm__ K* keys, __gm__ V* values,
     __gm__ void* scores, uint64_t n, uint64_t global_epoch, uint32_t value_size,
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
     uint64_t capacity_divisor_shift, uint64_t n_align_warp, int32_t group_size,
@@ -1023,20 +1015,10 @@ __global__ __vector__ void write_kernel_unlock_sorted(
 
   AscendC::TPipe pipe;
   AscendC::TQueBind<AscendC::TPosition::VECIN, AscendC::TPosition::VECOUT, 0> move_queue;
-  
-  // 使用GetRuntimeUBSize获取可用UB大小，进行dim tiling
-  constexpr uint32_t DOUBLE_BUFFER = 2;
-  const uint32_t ub_total_size = GetRuntimeUBSize();
-  const uint32_t element_size = sizeof(V);
-  const uint32_t max_tile_size = ub_total_size / (DOUBLE_BUFFER * element_size);
-  const uint32_t tile_size = Std::max(dim, max_tile_size);
-  const uint32_t num_tiles = (dim + tile_size - 1) / tile_size;  // 向上取整
-  
-  pipe.InitBuffer(move_queue, 2, tile_size * element_size);
+  pipe.InitBuffer(move_queue, 2, tile_size * sizeof(V));
   AscendC::GlobalTensor<V> src_values_gm;
   AscendC::GlobalTensor<V> dst_values_gm;
   AscendC::LocalTensor<V> move_local;
-  DataCopyExtParams copy_params {1, static_cast<uint32_t>(tile_size * element_size), 0, 0 ,0};
   DataCopyPadExtParams<V> pad_params {true, 0, 0, 0};
   src_values_gm.SetGlobalBuffer(values);
   for (uint64_t offset = core_start_idx; offset < core_start_idx + core_move_count; offset++) {
@@ -1057,7 +1039,7 @@ __global__ __vector__ void write_kernel_unlock_sorted(
       }
 
       // 动态调整copy_params的大小
-      DataCopyExtParams copy_params {1, static_cast<uint32_t>(current_tile_size * element_size), 0, 0 ,0};
+      DataCopyExtParams copy_params {1, static_cast<uint32_t>(current_tile_size * sizeof(V)), 0, 0 ,0};
 
       move_queue.AllocTensor<V>(move_local);
       // 搬进：src_values_gm[src_offset + tile_idx * tile_size]
