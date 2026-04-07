@@ -326,7 +326,7 @@
 
  /* find or insert with the end-user specified score.
  */
- template <class K, class V, class S, int Strategy, uint32_t GROUP_SIZE = 4>
+ template <class K, class V, class S, int Strategy, uint32_t GROUP_SIZE = 32>
  __simt_vf__ __aicore__
  LAUNCH_BOUND(THREAD_NUM_512) inline void find_ptr_or_insert_vf_v2(
      __gm__ const Table<K, V, S>* __restrict__ table,
