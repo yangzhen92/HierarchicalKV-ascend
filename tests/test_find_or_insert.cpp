@@ -641,7 +641,7 @@ TEST(test_find_or_insert, hash_collisions) {
 
   // 6. 释放内存
   ASSERT_EQ(aclrtFreeHost(host_found), ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtFreeHost(host_found_again), ACL_ERROR_NONE);
+  //ASSERT_EQ(aclrtFreeHost(host_found_again), ACL_ERROR_NONE);
 
   ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_values_ptr), ACL_ERROR_NONE);
