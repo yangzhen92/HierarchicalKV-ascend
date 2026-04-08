@@ -1474,10 +1474,11 @@ class HashTable : public HashTableBase<K, V, S> {
           "small.");
     }
 
-    uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     lock_keys_kernel<K, V, S><<<block_dim_, 0, stream>>>(
         table_->buckets, table_->buckets_num, options_.max_bucket_size,
-        options_.dim, const_cast<key_type*>(keys), locked_key_ptrs, success,
+        options_.dim, const_cast<key_type*>(keys),
+        static_cast<void*>(locked_key_ptrs),
+        static_cast<void*>(success),
         scores, global_epoch_, n, table_->max_bucket_shift,
         table_->capacity_divisor_magic, table_->capacity_divisor_shift);
     NpuCheckError();
@@ -1507,7 +1508,8 @@ class HashTable : public HashTableBase<K, V, S> {
     }
 
     unlock_keys_kernel<K><<<block_dim_, 0, stream>>>(
-        n, locked_key_ptrs, const_cast<key_type*>(keys), success);
+        n, static_cast<void*>(locked_key_ptrs),
+        const_cast<key_type*>(keys), static_cast<void*>(success));
     NpuCheckError();
   }
 

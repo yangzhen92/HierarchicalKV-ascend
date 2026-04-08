@@ -40,27 +40,40 @@ using namespace AscendC;
 template <typename K = uint64_t>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void unlock_keys_kernel_vf(
-    uint64_t n, __gm__ K** locked_key_ptrs,
-    __gm__ const K* keys, __gm__ bool* succeededs,
+    uint64_t n, __gm__ void* locked_key_ptrs_gm,
+    __gm__ const K* keys_gm, __gm__ void* succeededs_gm,
     uint64_t thread_all, uint32_t block_index) {
-  if (locked_key_ptrs == nullptr || keys == nullptr) {
+  if (!locked_key_ptrs_gm) {
     return;
+  }
+  if (!keys_gm) {
+    return;
+  }
+
+  __gm__ K* __gm__* __restrict__ locked_key_ptrs =
+      reinterpret_cast<__gm__ K* __gm__*>(locked_key_ptrs_gm);
+  __gm__ const K* __restrict__ keys =
+      reinterpret_cast<__gm__ const K*>(keys_gm);
+  __gm__ bool* __restrict__ succeededs = nullptr;
+  if (succeededs_gm) {
+    succeededs = reinterpret_cast<__gm__ bool*>(succeededs_gm);
   }
 
   for (uint64_t kv_idx = block_index * blockDim.x + threadIdx.x;
        kv_idx < n; kv_idx += thread_all) {
-    K* locked_key_ptr = locked_key_ptrs[kv_idx];
+    __gm__ K* locked_key_ptr = locked_key_ptrs[kv_idx];
     bool flag = false;
 
     if (locked_key_ptr != nullptr) {
       // 读取当前锁定的key值
-      K locked_key = *locked_key_ptr;
+      __gm__ K* locked_key_addr = locked_key_ptr;
+      K locked_key = *locked_key_addr;
       K expected_key = static_cast<K>(LOCKED_KEY);
       K key = keys[kv_idx];
 
       // 只有当当前值等于LOCKED_KEY时才进行解锁
       if (locked_key == expected_key) {
-        *locked_key_ptr = key;
+        *locked_key_addr = key;
         flag = true;
       } else {
         // 已经被其他线程修改，解锁失败
@@ -79,8 +92,8 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void unlock_keys_kernel_vf(
 
 template <typename K>
 __global__ __vector__ void unlock_keys_kernel(
-    uint64_t n, __gm__ K** locked_key_ptrs,
-    __gm__ const K* keys, __gm__ bool* succeededs) {
+    uint64_t n, __gm__ void* locked_key_ptrs,
+    __gm__ const K* keys, __gm__ void* succeededs) {
   const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
 
   Simt::VF_CALL<unlock_keys_kernel_vf<K>>(
