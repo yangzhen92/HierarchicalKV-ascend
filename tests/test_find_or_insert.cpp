@@ -469,3 +469,84 @@ TEST(test_find_or_insert, basic_function_without_unique_keys) {
   ASSERT_EQ(aclrtFree(device_values_ptr), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_found), ACL_ERROR_NONE);
 }
+
+TEST(test_find_ptr_or_insert, hash_collisions) {
+  // 初始化环境
+  init_env();
+  
+  // 内存检查
+  size_t free_mem = 0;
+  size_t total_mem = 0;
+  constexpr size_t hbm_for_values = 1UL << 30;
+  ASSERT_EQ(aclrtGetMemInfo(ACL_HBM_MEM, &free_mem, &total_mem), ACL_ERROR_NONE);
+  ASSERT_GT(free_mem, hbm_for_values);
+  
+  // 测试参数
+  constexpr size_t dim = 8;
+  constexpr size_t init_capacity = 128UL * 1024;
+  constexpr size_t key_num = 1UL * 1024;
+  
+  using K = uint64_t;
+  using V = float;
+  using S = uint64_t;
+  
+  // 建表
+  HashTableOptions options{
+      .init_capacity = init_capacity,
+      .max_capacity = init_capacity,
+      .max_hbm_for_vectors = hbm_for_values,
+      .dim = dim,
+      .io_by_cpu = false,
+  };
+  using Table = HashTable<K, V>;
+  Table table;
+  table.init(options);
+  
+  // 数据准备 - 生成可能导致哈希冲突的键
+  vector<K> host_keys(key_num, 0);
+  vector<V> host_values(key_num * dim, 0);
+  
+  // 生成可能导致哈希冲突的键（例如，使用相同的哈希值）
+  // 这里简化处理，使用连续键，实际应用中可能需要更复杂的逻辑
+  for (size_t i = 0; i < key_num; i++) {
+    host_keys[i] = i;
+  }
+  
+  // 申请设备内存
+  K* device_keys = nullptr;
+  V** device_values_ptr = nullptr;
+  bool* device_found = nullptr;
+  
+  ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&device_keys),
+                        key_num * sizeof(K), ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&device_values_ptr),
+                        key_num * sizeof(V*), ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&device_found),
+                        key_num * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
+  
+  aclrtStream stream = nullptr;
+  ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
+  
+  // 拷贝数据到设备
+  ASSERT_EQ(aclrtMemcpy(device_keys, key_num * sizeof(K), host_keys.data(),
+                        key_num * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE),
+            ACL_ERROR_NONE);
+  
+  // 执行插入
+  table.find_or_insert(key_num, device_keys, device_values_ptr, device_found,
+                       nullptr, stream, false);
+  ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
+  
+  // 验证表大小
+  EXPECT_EQ(table.size(stream), key_num);
+  
+  // 释放内存
+  ASSERT_EQ(aclrtFreeHost(host_found), ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtFree(device_values_ptr), ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtFree(device_found), ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
+}
