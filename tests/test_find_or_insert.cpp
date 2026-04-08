@@ -531,117 +531,15 @@ TEST(test_find_or_insert, hash_collisions) {
 
   // 4. 插值，插入相同的值
   // 4.1 生产连续值
-  // create_continuous_keys<K, S, V, dim>(host_keys.data(), nullptr, nullptr,
-  //                                      key_num);
   ASSERT_EQ(aclrtMemset(device_keys, key_num * each_key_size, 1,
                           key_num * each_key_size),
               ACL_ERROR_NONE);
-  // ASSERT_EQ(aclrtMemcpy(device_keys, key_num * each_key_size, host_keys.data(),
-  //                       key_num * each_key_size, ACL_MEMCPY_HOST_TO_DEVICE),
-  //           ACL_ERROR_NONE);
 
   // 4.2 下发算子
   table.find_or_insert(key_num, device_keys, device_values_ptr, device_found,
                        nullptr, stream, false);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
   EXPECT_EQ(table.size(stream), 1);
-
-  // 4.3 写值
-  // bool* host_found = nullptr;
-  // ASSERT_EQ(aclrtMallocHost(reinterpret_cast<void**>(&host_found),
-  //                           key_num * sizeof(bool)),
-  //           ACL_ERROR_NONE);
-  // size_t found_num = 0;
-  // size_t refused_num = 0;
-  // size_t insert_num = 0;
-  // ASSERT_EQ(aclrtMemcpy(host_found, key_num * sizeof(bool), device_found,
-  //                       key_num * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST),
-  //           ACL_ERROR_NONE);
-  // vector<void*> expect_values_ptr(key_num, nullptr);
-  // ASSERT_EQ(aclrtMemcpy(expect_values_ptr.data(), key_num * sizeof(void*),
-  //                       device_values_ptr, key_num * sizeof(void*),
-  //                       ACL_MEMCPY_DEVICE_TO_HOST),
-  //           ACL_ERROR_NONE);
-  // for (size_t i = 0; i < key_num; i++) {
-  //   if (host_found[i]) {
-  //     ASSERT_NE(expect_values_ptr[i], nullptr);
-  //     vector<V> expect_values(dim, i);
-  //     ASSERT_EQ(aclrtMemcpy(expect_values_ptr[i], dim * each_value_size,
-  //                           expect_values.data(), dim * each_value_size,
-  //                           ACL_MEMCPY_HOST_TO_DEVICE),
-  //               ACL_ERROR_NONE);
-  //     found_num++;
-  //   } else {
-  //     if (expect_values_ptr[i] == nullptr) {
-  //       refused_num++;
-  //     } else {
-  //       vector<V> expect_values(dim, i);
-  //       ASSERT_EQ(aclrtMemcpy(expect_values_ptr[i], dim * each_value_size,
-  //                             expect_values.data(), dim * each_value_size,
-  //                             ACL_MEMCPY_HOST_TO_DEVICE),
-  //                 ACL_ERROR_NONE);
-  //       insert_num++;
-  //     }
-  //   }
-  // }
-  // EXPECT_EQ(found_num, (key_num - 1));
-  // EXPECT_EQ(refused_num, 0);
-  // EXPECT_EQ(insert_num, 1);
-
-  // // 5. 校验结果
-  // ASSERT_EQ(
-  //     aclrtMemset(device_values_ptr, key_num * sizeof(V*), 0, key_num * sizeof(V*)),
-  //     ACL_ERROR_NONE);
-  // table.find_or_insert(key_num, device_keys, device_values_ptr, device_found,
-  //                      nullptr, stream, false);
-  // ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
-  // EXPECT_EQ(table.size(stream), key_num);
-
-  // vector<void*> real_values_ptr(key_num, nullptr);
-  // ASSERT_EQ(
-  //     aclrtMemcpy(real_values_ptr.data(), key_num * sizeof(void*), device_values_ptr,
-  //                 key_num * sizeof(void*), ACL_MEMCPY_DEVICE_TO_HOST),
-  //     ACL_ERROR_NONE);
-  // // 5.1 values指针相同
-  // EXPECT_EQ(real_values_ptr, expect_values_ptr);
-
-  // bool* host_found_again = nullptr;
-  // ASSERT_EQ(aclrtMallocHost(reinterpret_cast<void**>(&host_found_again),
-  //                           key_num * sizeof(bool)),
-  //           ACL_ERROR_NONE);
-  // ASSERT_EQ(aclrtMemcpy(host_found_again, key_num * sizeof(bool), device_found,
-  //                       key_num * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST),
-  //           ACL_ERROR_NONE);
-  
-  // // 5.2 
-  // // 5.2 结果相同
-  // for (size_t i = 0; i < key_num; i++) {
-  //   if (i == 0) {
-  //     EXPECT_EQ(host_found[i], host_found_again[i]);
-  //   } else {
-  //     EXPECT_NE(host_found[i], host_found_again[i]);
-  //   }
-  // }
-
-  // for (size_t i = 0; i < key_num; i++) {
-  //   EXPECT_NE(host_found[i], host_found_again[i]);
-  //   if (host_found_again[i]) {
-  //     ASSERT_NE(real_values_ptr[i], nullptr);
-  //     vector<V> expect_values(dim, i);
-  //     vector<V> real_values(dim, 0);
-  //     ASSERT_EQ(
-  //         aclrtMemcpy(real_values.data(), dim * each_value_size, real_values_ptr[i],
-  //                     dim * each_value_size, ACL_MEMCPY_HOST_TO_DEVICE),
-  //         ACL_ERROR_NONE);
-  //     EXPECT_EQ(real_values, expect_values);
-  //   } else {
-  //     EXPECT_EQ(real_values_ptr[i], nullptr);
-  //   }
-  // }
-
-  // 6. 释放内存
-  // ASSERT_EQ(aclrtFreeHost(host_found), ACL_ERROR_NONE);
-  //ASSERT_EQ(aclrtFreeHost(host_found_again), ACL_ERROR_NONE);
 
   ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_values_ptr), ACL_ERROR_NONE);
