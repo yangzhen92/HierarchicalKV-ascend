@@ -321,6 +321,26 @@ float test_one_api(std::shared_ptr<Table>& table, const API_Select api,
         NPU_CHECK(aclrtSynchronizeStream(stream));
         break;
       }
+      case API_Select::assign_values: {
+        table->assign_values(key_num_per_op_warmup, d_keys, d_vectors, stream);
+        NPU_CHECK(aclrtSynchronizeStream(stream));
+        break;
+      }
+      case API_Select::export_batch_if_v2: {
+        size_t* d_dump_counter = nullptr;
+        NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_dump_counter), sizeof(size_t),
+                              ACL_MEM_MALLOC_HUGE_FIRST));
+        NPU_CHECK(
+            aclrtMemset(d_dump_counter, sizeof(size_t), 0, sizeof(size_t)));
+        K pattern = 0;
+        ExportIfPredFunctorV2<K, V, S> pred(pattern, threshold);
+        table->template export_batch_if_v2<ExportIfPredFunctorV2<K, V, S>>(
+            pred, key_num_per_op_warmup, 0, d_dump_counter,
+            d_keys, d_vectors, d_scores, stream);
+        NPU_CHECK(aclrtSynchronizeStream(stream));
+        NPU_CHECK(aclrtFree(d_dump_counter));
+        break;
+      }
       default: {
         std::cout << "[Unsupport API]\n";
       }
@@ -488,6 +508,35 @@ float test_one_api(std::shared_ptr<Table>& table, const API_Select api,
       timer.end();
       break;
     }
+    case API_Select::assign_values: {
+      timer.start();
+      table->assign_values(key_num_per_op, d_keys, d_vectors, stream);
+      NPU_CHECK(aclrtSynchronizeStream(stream));
+      timer.end();
+      break;
+    }
+    case API_Select::export_batch_if_v2: {
+      size_t* d_dump_counter;
+
+      // Try to export close to but less than `key_num_per_op` data.
+      // It's normal to happen `illegal memory access` error occasionally.
+      float safe_ratio = 0.995;
+
+      NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_dump_counter), sizeof(size_t),
+                            ACL_MEM_MALLOC_HUGE_FIRST));
+      NPU_CHECK(aclrtMemset(d_dump_counter, sizeof(size_t), 0, sizeof(size_t)));
+      K pattern = 0;
+      ExportIfPredFunctorV2<K, V, S> pred(pattern, threshold);
+      timer.start();
+      table->template export_batch_if_v2<ExportIfPredFunctorV2<K, V, S>>(
+          pred, key_num_per_op / target_load_factor * safe_ratio,
+          0, d_dump_counter, d_keys, d_vectors, d_scores,
+          stream);
+      NPU_CHECK(aclrtSynchronizeStream(stream));
+      timer.end();
+      NPU_CHECK(aclrtFree(d_dump_counter));
+      break;
+    }
     default: {
       std::cout << "[Unsupport API]\n";
     }
@@ -511,27 +560,37 @@ float test_one_api(std::shared_ptr<Table>& table, const API_Select api,
   NPU_CHECK(aclrtSynchronizeDevice());
   NpuCheckError();
 
-  float througput =
+  float throughput =
       key_num_per_op / timer.getResult() / (1024 * 1024 * 1024.0f);
-  return througput;
+  return throughput;
 }
+
+static Test_Mode test_mode = Test_Mode::pure_hbm;
 
 void print_title_a() {
   cout << endl
        << "|    \u03BB "
        << "| insert_or_assign "
+       << "|   find "
        << "| find_or_insert* "
        << "| find_and_update "
        << "|   find* "
        << "| export_batch "
+       << "| assign "
        << "| assign_scores "
-       << "| insert_and_evict ";
+       << "| assign_values ";
+  if (test_mode == Test_Mode::pure_hbm) {
+    cout << "| insert_and_evict ";
+  }
+  cout << "|  contains ";
   cout << "|\n";
 
   //<< "| load_factor "
   cout << "|-----:"
        //<< "| insert_or_assign "
        << "|-----------------:"
+       //<< "|   find "
+ 	     << "|-------:"
        //<< "| find_or_insert* "
        << "|----------------:"
        //  << "| find_and_update "
@@ -540,17 +599,25 @@ void print_title_a() {
        << "|--------:"
        //<< "| export_batch "
        << "|-------------:"
+       //<< "| assign "
+       << "|-------:"
        //<< "| assign_scores "
        << "|--------------:"
-       //<< "| insert_and_evict "
-       << "|-----------------:";
+       //<< "| assign_values "
+       << "|--------------:";
+  if (test_mode == Test_Mode::pure_hbm) {
+    //<< "| insert_and_evict "
+    cout << "|-----------------:";
+  }
+       //<< "|  contains "
+  cout << "|----------:";
   cout << "|\n";
 }
 
 void print_title_b() {
   cout << endl
        << "|    \u03BB "
-       << "| export_batch "
+       << "| export_batch_if_v2 "
        << "| export_batch_if "
        << "|  contains "
        << "| find_and_update ";
@@ -558,8 +625,8 @@ void print_title_b() {
 
   //<< "| load_factor "
   cout << "|-----:"
-       //<< "| export_batch "
-       << "|-------------:"
+       //<< "| export_batch_if_v2 "
+       << "|-------------------:"
        //<< "| export_batch_if "
        << "|----------------:"
        //<< "|  contains "
@@ -631,6 +698,10 @@ void test_main(std::vector<API_Select>& apis, const size_t dim,
           std::cout << rep(11);
           break;
         }
+        case API_Select::find: {
+          std::cout << rep(1);
+          break;
+        }
         case API_Select::find_or_insert_ptr: {
           std::cout << rep(10);
           break;
@@ -647,12 +718,31 @@ void test_main(std::vector<API_Select>& apis, const size_t dim,
           std::cout << rep(7);
           break;
         }
+        case API_Select::assign: {
+          std::cout << rep(1);
+          break;
+        }
         case API_Select::assign_scores: {
+          std::cout << rep(8);
+          break;
+        }
+        case API_Select::assign_values: {
           std::cout << rep(8);
           break;
         }
         case API_Select::insert_and_evict: {
           std::cout << rep(11);
+          break;
+        }
+        case API_Select::export_batch_if_v2: {
+          std::cout << rep(13);
+          break;
+        }
+        case API_Select::export_batch_if: {
+          std::cout << rep(6);
+        }
+        case API_Select::contains: {
+          std::cout << rep(4);
           break;
         }
         default: {
@@ -702,42 +792,83 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
     {
       std::vector<API_Select> apis_a{
         API_Select::insert_or_assign,
+        API_Select::find,
         API_Select::find_or_insert_ptr,
         API_Select::find_and_update,
         API_Select::find_ptr,
         API_Select::export_batch,
+        API_Select::assign,
         API_Select::assign_scores,
+        API_Select::assign_values,
         API_Select::insert_and_evict,
+        API_Select::contains,
       };
+      std::vector<API_Select> apis_b{
+        API_Select::export_batch_if_v2,
+        API_Select::export_batch_if,
+      };
+      test_mode = Test_Mode::pure_hbm;
+
       cout << "### On pure HBM mode: " << endl;
       print_configuration(8, 128 * 1024 * 1024UL, 4);
       print_title_a();
       test_main(apis_a, 8, 128 * 1024 * 1024UL, key_num_per_op, 4);
+      print_title_b();
+      test_main(apis_b, 8, 128 * 1024 * 1024UL, key_num_per_op, 4);
 
       print_configuration(32, 128 * 1024 * 1024UL, 16);
       print_title_a();
       test_main(apis_a, 32, 128 * 1024 * 1024UL, key_num_per_op, 16);
+      print_title_b();
+      test_main(apis_b, 32, 128 * 1024 * 1024UL, key_num_per_op, 16);
 
       print_configuration(64, 64 * 1024 * 1024UL, 16);
       print_title_a();
       test_main(apis_a, 64, 64 * 1024 * 1024UL, key_num_per_op, 16);
+      print_title_b();
+      test_main(apis_b, 64, 64 * 1024 * 1024UL, key_num_per_op, 16);
 
       print_configuration(128, 32 * 1024 * 1024UL, 16);
       print_title_a();
       test_main(apis_a, 128, 32 * 1024 * 1024UL, key_num_per_op, 16);
+      print_title_b();
+      test_main(apis_b, 128, 32 * 1024 * 1024UL, key_num_per_op, 16);
 
       print_configuration(256, 16 * 1024 * 1024UL, 16);
       print_title_a();
       test_main(apis_a, 256, 16 * 1024 * 1024UL, key_num_per_op, 16);
+      print_title_b();
+      test_main(apis_b, 256, 16 * 1024 * 1024UL, key_num_per_op, 16);
 
       print_configuration(512, 8 * 1024 * 1024UL, 16);
       print_title_a();
       test_main(apis_a, 512, 8 * 1024 * 1024UL, key_num_per_op, 16);
+      print_title_b();
+      test_main(apis_b, 512, 8 * 1024 * 1024UL, key_num_per_op, 16);
 
       print_configuration(1024, 4 * 1024 * 1024UL, 16);
       print_title_a();
       test_main(apis_a, 1024, 4 * 1024 * 1024UL, key_num_per_op, 16);
+      print_title_b();
+      test_main(apis_b, 1024, 4 * 1024 * 1024UL, key_num_per_op, 16);
 
+      cout << endl;
+    }
+
+    {
+      std::vector<API_Select> apis_a{
+        API_Select::insert_or_assign,
+      };
+      
+      cout << "### On HBM+HMEM hybrid mode: " << endl;
+      test_mode = Test_Mode::hybrid;
+      print_configuration(64, 128 * 1024 * 1024UL, 16);
+      print_title_a();
+      test_main(apis_a, 64, 128 * 1024 * 1024UL, key_num_per_op, 16);
+
+      print_configuration(64, 512 * 1024 * 1024UL, 32);
+      print_title_a();
+      test_main(apis_a, 64, 512 * 1024 * 1024UL, key_num_per_op, 32);
       cout << endl;
     }
 
