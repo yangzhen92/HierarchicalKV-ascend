@@ -349,7 +349,7 @@ TEST(test_find_or_insert, basic_function_without_unique_keys) {
   vector<V> host_values(key_num * dim, 0);
 
   // 3.2 申请hbm内存
-  DeviceData device_data;
+  DeviceData<K, V, S> device_data;
   device_data.malloc(key_num, dim);
   // K* device_keys = nullptr;
   // V** device_values_ptr = nullptr;
@@ -518,7 +518,7 @@ TEST(test_find_or_insert, hash_collisions) {
   vector<V> host_values(key_num * dim, 0);
 
   // 3.2 申请hbm内存
-  DeviceData device_data;
+  DeviceData<K, V, S> device_data;
   device_data.malloc(key_num, dim);
   // K* device_keys = nullptr;
   // V** device_values_ptr = nullptr;
