@@ -1523,7 +1523,6 @@ class HashTable : public HashTableBase<K, V, S> {
     NpuCheckError();
   }
 
-
   /**
    * @brief
    * This function will lock the keys in the table and unexisted keys will be
