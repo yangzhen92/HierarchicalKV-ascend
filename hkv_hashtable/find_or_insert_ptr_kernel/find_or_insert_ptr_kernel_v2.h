@@ -441,7 +441,7 @@ __global__ __vector__ void find_or_insert_ptr_kernel_unlock_key_v2(
     Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_512)}, keys, key_ptrs, n, GetBlockIdx());
 }
 
- template <class K, class V, class S, int Strategy = -1, uint32_t GROUP_SIZE = 4>
+ template <class K, class V, class S, int Strategy = -1>
  __global__ __vector__ void find_ptr_or_insert_kernel_v2(
      __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
      uint32_t bucket_max_size, uint64_t buckets_num, uint32_t dim,
@@ -456,7 +456,7 @@ __global__ __vector__ void find_or_insert_ptr_kernel_unlock_key_v2(
                             ? static_cast<uint64_t>(GetSystemCycle())
                             : 0;
 
-   asc_vf_call<find_ptr_or_insert_vf_v2<K, V, S, Strategy, GROUP_SIZE>>(
+   asc_vf_call<find_ptr_or_insert_vf_v2<K, V, S, Strategy>>(
        dim3{static_cast<uint32_t>(THREAD_NUM_512)}, table, buckets,
        bucket_max_size, buckets_num, dim, keys, vectors, scores,
        static_cast<S>(cur_score), found, static_cast<S>(global_epoch), n,
