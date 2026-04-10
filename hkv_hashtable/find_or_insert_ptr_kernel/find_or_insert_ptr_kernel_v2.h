@@ -392,13 +392,11 @@
          ScoreFunctor::update_score_only(bucket_keys, key_pos, scores, key_idx,
                                          find_or_insert_score,
                                          bucket_max_size, false);
-         __threadfence();
          vectors[key_idx] = (bucket_vectors + key_pos * dim);
        } else {
          ScoreFunctor::update_with_digest(bucket_keys, key_pos, scores, key_idx,
                                          find_or_insert_score,
                                          bucket_max_size, get_digest<K>(find_or_insert_key), true);
-         __threadfence();
          vectors[key_idx] = (bucket_vectors + key_pos * dim);
        }
        found[key_idx] = occupy_result == OccupyResult::DUPLICATE;
