@@ -351,31 +351,12 @@ TEST(test_find_or_insert, basic_function_without_unique_keys) {
   // 3.2 申请hbm内存
   DeviceData<K, V, S> device_data;
   device_data.malloc(key_num, dim);
-  // K* device_keys = nullptr;
-  // V** device_values_ptr = nullptr;
-  // bool* device_found = nullptr;
-  // ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&device_keys),
-  //                       key_num * each_key_size, ACL_MEM_MALLOC_HUGE_FIRST),
-  //           ACL_ERROR_NONE);
-  // ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&device_values_ptr),
-  //                       key_num * sizeof(V*), ACL_MEM_MALLOC_HUGE_FIRST),
-  //           ACL_ERROR_NONE);
-  // ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&device_found),
-  //                       key_num * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST),
-  //           ACL_ERROR_NONE);
-
-  // aclrtStream stream = nullptr;
-  // ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
   // 4. 插值
   // 4.1 生产连续值
   create_continuous_keys<K, S, V, dim>(host_keys.data(), nullptr, nullptr,
                                        key_num);
   device_data.copy_keys(host_keys, key_num);
-
-  // ASSERT_EQ(aclrtMemcpy(device_keys, key_num * each_key_size, host_keys.data(),
-  //                       key_num * each_key_size, ACL_MEMCPY_HOST_TO_DEVICE),
-  //           ACL_ERROR_NONE);
 
   // 4.2 下发算子
   table.find_or_insert(key_num, device_data.device_keys, device_data.device_values_ptr, device_data.device_found,
@@ -469,10 +450,6 @@ TEST(test_find_or_insert, basic_function_without_unique_keys) {
   // 6. 释放内存
   ASSERT_EQ(aclrtFreeHost(host_found), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFreeHost(host_found_again), ACL_ERROR_NONE);
-
-  // ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
-  // ASSERT_EQ(aclrtFree(device_values_ptr), ACL_ERROR_NONE);
-  // ASSERT_EQ(aclrtFree(device_found), ACL_ERROR_NONE);
 }
 
 TEST(test_find_or_insert, hash_collisions) {
@@ -520,21 +497,6 @@ TEST(test_find_or_insert, hash_collisions) {
   // 3.2 申请hbm内存
   DeviceData<K, V, S> device_data;
   device_data.malloc(key_num, dim);
-  // K* device_keys = nullptr;
-  // V** device_values_ptr = nullptr;
-  // bool* device_found = nullptr;
-  // ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&device_keys),
-  //                       key_num * each_key_size, ACL_MEM_MALLOC_HUGE_FIRST),
-  //           ACL_ERROR_NONE);
-  // ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&device_values_ptr),
-  //                       key_num * sizeof(V*), ACL_MEM_MALLOC_HUGE_FIRST),
-  //           ACL_ERROR_NONE);
-  // ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&device_found),
-  //                       key_num * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST),
-  //           ACL_ERROR_NONE);
-
-  // aclrtStream stream = nullptr;
-  // ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
   // 4. 插值，插入相同的值
   // 4.1 生产连续值
@@ -547,8 +509,4 @@ TEST(test_find_or_insert, hash_collisions) {
                        nullptr, device_data.stream, false);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table.size(device_data.stream), 1);
-
-  // ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
-  // ASSERT_EQ(aclrtFree(device_values_ptr), ACL_ERROR_NONE);
-  // ASSERT_EQ(aclrtFree(device_found), ACL_ERROR_NONE);
 }
