@@ -306,7 +306,8 @@
  __global__ __vector__ void export_batch_value_kernel(
      uint32_t former_num, uint64_t former_core_move_num,
      uint64_t tail_core_move_num, uint32_t tile_size, uint32_t num_tiles,
-     __gm__ V* values, uint64_t n, __gm__ V * __gm__ * d_dst_values) {
+     uint32_t dim, __gm__ V* values, uint64_t n,
+     __gm__ V * __gm__ * d_dst_values) {
    uint64_t cur_block_idx = GetBlockIdx();
    uint64_t core_start_idx = 0;
    uint64_t core_move_count = 0;
