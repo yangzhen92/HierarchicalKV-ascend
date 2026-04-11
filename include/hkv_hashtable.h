@@ -1493,8 +1493,6 @@ class HashTable : public HashTableBase<K, V, S> {
     }
 
     if (unique_key) {
-      constexpr uint32_t BLOCK_SIZE = 128U;
-
       const size_type dev_ws_size{n * sizeof(key_type**)};
       auto dev_ws{dev_mem_pool_->get_workspace<1>(dev_ws_size, stream)};
       auto keys_ptr{dev_ws.get<key_type**>(0)};
