@@ -58,10 +58,12 @@ template <typename T>
 __simt_vf__ __aicore__ LAUNCH_BOUND(1) inline void lock_read_kernel_vf(
     __gm__ int32_t* update_count, __gm__ int32_t* read_count) {
   for (;;) {
-    while (update_count[0]) {
+    volatile int32_t tmp = update_count[0];
+    while (tmp) {
     }
     asc_atomic_add(read_count, 1);
-    if (update_count[0] == 0) {
+    tmp = update_count[0];
+    if (tmp == 0) {
       break;
     }
     asc_atomic_sub(read_count, 1);
@@ -97,15 +99,18 @@ template <typename T>
 __simt_vf__ __aicore__ LAUNCH_BOUND(1) inline void lock_update_kernel_vf(
     __gm__ int32_t* update_count, __gm__ int32_t* read_count) {
   for (;;) {
-    while (read_count[0]) {
+    volatile int32_t tmp = read_count[0];
+    while (tmp) {
     }
     asc_atomic_add(update_count, 1);
-    if (read_count[0] == 0) {
+    tmp = read_count[0];
+    if (tmp == 0) {
       break;
     }
     asc_atomic_sub(update_count, 1);
   }
 }
+
 template <typename T>
 __global__ __vector__ void lock_update_kernel(__gm__ int32_t* d_update_count,
                                               __gm__ int32_t* d_read_count) {
@@ -144,10 +149,12 @@ __simt_vf__ __aicore__ LAUNCH_BOUND(1) inline void lock_update_read_kernel_vf(
 
   /* Ban update */
   for (;;) {
-    while (update_count[0]) {
+    volatile int32_t tmp = update_count[0];
+    while (tmp) {
     }
     asc_atomic_add(read_count, 1);
-    if (update_count[0] == 0) {
+    tmp = update_count[0];
+    if (tmp == 0) {
       break;
     }
     asc_atomic_sub(read_count, 1);
@@ -155,10 +162,12 @@ __simt_vf__ __aicore__ LAUNCH_BOUND(1) inline void lock_update_read_kernel_vf(
 
   /* Ban read */
   for (;;) {
-    while (read_count[0] > 1) {
+    volatile int32_t tmp = read_count[0];
+    while (tmp > 1) {
     }
     asc_atomic_add(update_count, 1);
-    if (read_count[0] == 1) {
+    tmp = read_count[0];
+    if (tmp == 1) {
       break;
     }
     asc_atomic_sub(update_count, 1);
