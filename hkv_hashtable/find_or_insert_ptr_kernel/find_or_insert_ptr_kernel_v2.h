@@ -423,8 +423,8 @@
  
    DISPATCH_VALUE_SIZE(
      value_size,
-     (Simt::VF_CALL<find_or_insert_ptr_kernel_lock_key_vf_v2<K, V, S, DTYPE, Strategy>>(
-               Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets,
+     (asc_vf_call<find_or_insert_ptr_kernel_lock_key_vf_v2<K, V, S, DTYPE, Strategy>>(
+               dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets,
                buckets_size, buckets_num, bucket_capacity, dim, keys, value_ptrs,
                scores, key_ptrs, n, founds, global_epoch, cur_score,
                GetBlockIdx(), thread_all, max_bucket_shift, capacity_divisor_magic,
