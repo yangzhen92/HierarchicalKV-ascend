@@ -1127,7 +1127,6 @@ class HashTable : public HashTableBase<K, V, S> {
       value_type** d_dst_values{reinterpret_cast<value_type**>(temp_storage)};
       key_type** d_dst_keys{
           reinterpret_cast<key_type**>(temp_storage + n * sizeof(value_type*))};
-
       // 1. find_and_lock位置：输出dst_value* value_index dst_key*
       upsert_kernel_lock_key_hybrid<K, V, S, evict_strategy_>
           <<<block_dim_, 0, stream>>>(
@@ -1140,7 +1139,7 @@ class HashTable : public HashTableBase<K, V, S> {
 
       // 2. io：搬运value，释放lock
       auto tiling =
-          GetValueMoveTiling(n, block_dim_, table_->dim, sizeof(value_type));
+          GetValueMoveTiling(n, block_dim_, table_->dim, sizeof(value_type), false);
       write_kernel_unlock<K, V><<<block_dim_, tiling.valid_ub_size, stream>>>(
           tiling.former_num, tiling.former_core_move_num,
           tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
@@ -2409,8 +2408,42 @@ class HashTable : public HashTableBase<K, V, S> {
               ? bucket_memory_pool_manager_.get()
               : nullptr);
       sync_table_configuration();
+      printf("cur capacity %lu\r\n", capacity());
 
-      rehash_kernel<K, V, S><<<block_dim_, 0, stream>>>(d_table_, table_->buckets_num / 2);
+      if (is_fast_mode()) {
+        rehash_kernel<K, V, S, true><<<block_dim_, 0, stream>>>(d_table_, table_->buckets_num / 2, nullptr, nullptr, nullptr);
+      } else {
+        size_t old_capacity = capacity() / 2;
+        // 存储每个key的dst_value_ptr和目标位置
+        size_t size_all = old_capacity * (sizeof(value_type*) + sizeof(uint32_t) + sizeof(uint32_t));
+        auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
+        auto temp_storage{dev_ws.get<uint8_t*>(0)};
+        value_type** d_dst_values{reinterpret_cast<value_type**>(temp_storage)};
+        uint32_t* d_bkt_src_pos{reinterpret_cast<uint32_t*>(temp_storage + old_capacity * sizeof(value_type*))};
+        uint32_t* d_bkt_dst_pos{reinterpret_cast<uint32_t*>(temp_storage + old_capacity * sizeof(value_type*) + old_capacity * sizeof(uint32_t))};
+        rehash_kernel<K, V, S, false><<<block_dim_, 0, stream>>>(d_table_, table_->buckets_num / 2, d_dst_values, d_bkt_src_pos, d_bkt_dst_pos);  
+        printf("rehash_kernel start\r\n");
+        printf("rehash_kernel end\r\n");
+        NPU_CHECK(aclrtSynchronizeStream(stream));
+        std::vector<uint32_t> h_bkt_dst_pos(old_capacity);
+        NPU_CHECK(aclrtMemcpy(h_bkt_dst_pos.data(), old_capacity * sizeof(uint32_t), d_bkt_dst_pos, old_capacity * sizeof(uint32_t), ACL_MEMCPY_DEVICE_TO_HOST));
+        for (uint32_t i = 0; i < old_capacity; i++) {
+          uint32_t bkt = i / 128;
+          uint32_t key_pos = i % 128;
+          printf("bkt %u, key_pos %u, dst %u\r\n", bkt, key_pos, h_bkt_dst_pos[i]);
+        }
+        
+        // 2. io：搬运value，释放lock
+        auto tiling =
+            GetValueMoveTiling(table_->buckets_num / 2, block_dim_, table_->dim, sizeof(value_type), true);
+        rehash_write_kernel<K, V, S><<<block_dim_, GetTotalUbSize(), stream>>>(
+            tiling.former_num, tiling.former_core_move_num,
+            tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
+            table_->dim, old_capacity, table_->buckets, table_->bucket_max_size, d_dst_values, d_bkt_dst_pos);
+        printf("rehash_write_kernel start\r\n");
+        NPU_CHECK(aclrtSynchronizeDevice());
+        printf("rehash_write_kernel end\r\n");
+      }
       NPU_CHECK(aclrtSynchronizeDevice());
     }
 

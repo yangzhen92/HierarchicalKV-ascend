@@ -21,83 +21,6 @@ target_include_directories(hkv_includes INTERFACE
 
 add_compile_options(-std=c++17 -D_GLIBCXX_USE_CXX11_ABI=0)
 
-set_source_files_properties(
-  ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/benchmark/hkv_hashtable_benchmark.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/benchmark/benchmark_find_miss.cpp
-  PROPERTIES LANGUAGE ASC
-)
-
-add_executable(hkv_demo ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
-
-target_compile_options(hkv_demo PRIVATE
-    # 该NPU架构版本号暂未正式发布，后续可能会有变更，请关注正式版本发布信息
-    $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>
-    -g -O2
-)
-
-target_link_libraries(hkv_demo PRIVATE
-  m
-  graph_base
-  tiling_api
-  register
-  platform
-  ascendalog
-  dl
-  hkv_includes
-  opapi
-  nnopbase
-)
-
-add_executable(hkv_benchmark
-  ${CMAKE_CURRENT_SOURCE_DIR}/benchmark/hkv_hashtable_benchmark.cpp
-)
-
-target_compile_options(hkv_benchmark PRIVATE
-    # 该NPU架构版本号暂未正式发布，后续可能会有变更，请关注正式版本发布信息
-    $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>
-    -g -O2
-    -mllvm -disable-machine-licm
-    --cce-res-usage
-)
-
-target_link_libraries(hkv_benchmark PRIVATE
-  m
-  graph_base
-  tiling_api
-  register
-  platform
-  ascendalog
-  dl
-  hkv_includes
-  opapi
-  nnopbase
-)
-
-add_executable(hkv_benchmark_find_miss
-  ${CMAKE_CURRENT_SOURCE_DIR}/benchmark/benchmark_find_miss.cpp
-)
-
-target_compile_options(hkv_benchmark_find_miss PRIVATE
-  $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>
-  -g -O2
-  -mllvm -disable-machine-licm
-  --cce-res-usage
-)
-
-target_link_libraries(hkv_benchmark_find_miss PRIVATE
-  m
-  graph_base
-  tiling_api
-  register
-  platform
-  ascendalog
-  dl
-  hkv_includes
-  opapi
-  nnopbase
-)
-
 if(ENABLE_TEST STREQUAL 1)
   enable_testing()
   set(INSTALL_GTEST OFF CACHE BOOL "Disable installation of GTest" FORCE)
@@ -105,17 +28,3 @@ if(ENABLE_TEST STREQUAL 1)
   add_subdirectory(3rdparty/gtest)
   add_subdirectory(tests)
 endif()
-
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
-  DESTINATION ./
-)
-install(TARGETS hkv_demo
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
-install(TARGETS hkv_benchmark hkv_benchmark_find_miss
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
