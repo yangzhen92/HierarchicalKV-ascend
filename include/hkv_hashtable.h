@@ -2359,11 +2359,11 @@ class HashTable : public HashTableBase<K, V, S> {
         NPU_CHECK(aclrtSynchronizeStream(stream));
         std::vector<uint32_t> h_bkt_dst_pos(old_capacity);
         NPU_CHECK(aclrtMemcpy(h_bkt_dst_pos.data(), old_capacity * sizeof(uint32_t), d_bkt_dst_pos, old_capacity * sizeof(uint32_t), ACL_MEMCPY_DEVICE_TO_HOST));
-        for (uint32_t i = 0; i < old_capacity; i++) {
-          uint32_t bkt = i / 128;
-          uint32_t key_pos = i % 128;
-          printf("bkt %u, key_pos %u, dst %u\r\n", bkt, key_pos, h_bkt_dst_pos[i]);
-        }
+        // for (uint32_t i = 0; i < old_capacity; i++) {
+        //   uint32_t bkt = i / 128;
+        //   uint32_t key_pos = i % 128;
+        //   printf("bkt %u, key_pos %u, dst %u\r\n", bkt, key_pos, h_bkt_dst_pos[i]);
+        // }
         
         // 2. io：搬运value，释放lock
         auto tiling =

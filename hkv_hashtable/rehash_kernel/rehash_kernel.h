@@ -145,15 +145,15 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void rehash_kernel_vf(
   const size_t bucket_max_size = table->bucket_max_size;
   const size_t dim = table->dim;
 
-  if constexpr (!IS_FAST_MODE) {
-    const size_t old_capacity = table->capacity / 2;
-    for (uint64_t tid = block_index * blockDim.x + threadIdx.x;
-         tid < old_capacity; tid += thread_all) {
-      d_dst_values[tid] = nullptr;
-      d_bkt_src_pos[tid] = tid % bucket_max_size;
-      d_bkt_dst_pos[tid] = tid % bucket_max_size;
-    }
-  }
+  // if constexpr (!IS_FAST_MODE) {
+  //   const size_t old_capacity = table->capacity / 2;
+  //   for (uint64_t tid = block_index * blockDim.x + threadIdx.x;
+  //        tid < old_capacity; tid += thread_all) {
+  //     d_dst_values[tid] = nullptr;
+  //     d_bkt_src_pos[tid] = tid % bucket_max_size;
+  //     d_bkt_dst_pos[tid] = tid % bucket_max_size;
+  //   }
+  // }
 
   K cur_key = 0;
   S cur_score = 0;
@@ -161,6 +161,13 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void rehash_kernel_vf(
   uint64_t new_global_idx = 0;
   uint64_t bkt_idx = block_index * blockDim.x + threadIdx.x;
   for (; bkt_idx < old_buckets_num; bkt_idx += thread_all) {
+    if constexpr (!IS_FAST_MODE) {
+      for (uint32_t i = 0; i < bucket_max_size; i++) {
+        d_dst_values[bkt_idx * bucket_max_size + i] = nullptr;
+        d_bkt_src_pos[bkt_idx * bucket_max_size + i] = i;
+        d_bkt_dst_pos[bkt_idx * bucket_max_size + i] = i;
+      }
+    }
     // 1. 每个线程处理一个桶
     __gm__ Bucket<K, V, S>* cur_bucket = table->buckets + bkt_idx;
     // 2. 遍历桶内key，进行rehash
