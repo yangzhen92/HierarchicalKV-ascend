@@ -437,8 +437,8 @@ __global__ __vector__ void find_or_insert_ptr_kernel_unlock_key_v2(
   
   const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
   
-  Simt::VF_CALL<find_or_insert_ptr_kernel_unlock_key_vf<K>>(
-    Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_512)}, keys, key_ptrs, n, GetBlockIdx());
+  asc_vf_call<find_or_insert_ptr_kernel_unlock_key_vf<K>>(
+    dim3{static_cast<uint32_t>(THREAD_NUM_512)}, keys, key_ptrs, n, GetBlockIdx());
 }
 
 template <class K, class V, class S, int Strategy = -1>
