@@ -52,7 +52,7 @@ static uint64_t GetMixedOpUbSize() {
 
 static inline ValueMoveTiling GetValueMoveTiling(uint32_t n, uint32_t block_dim,
                                                  uint32_t dim,
-                                                 uint32_t element_size) {
+                                                 uint32_t element_size, uint32_t buffer_num = DOUBLE_BUFFER) {
   ValueMoveTiling tiling;
   tiling.tail_core_move_num = n / block_dim;
   tiling.former_core_move_num = tiling.tail_core_move_num + 1;
@@ -60,7 +60,7 @@ static inline ValueMoveTiling GetValueMoveTiling(uint32_t n, uint32_t block_dim,
   tiling.valid_ub_size = GetMixedOpUbSize();
 
   uint32_t max_tile_size =
-      tiling.valid_ub_size / (DOUBLE_BUFFER * element_size);
+      tiling.valid_ub_size / (buffer_num * element_size);
   tiling.tile_size = (dim <= max_tile_size) ? dim : max_tile_size;
   tiling.num_tiles = (dim + tiling.tile_size - 1) / tiling.tile_size;
 

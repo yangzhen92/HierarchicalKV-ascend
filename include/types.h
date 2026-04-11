@@ -90,6 +90,8 @@ constexpr uint32_t WARP_SIZE = 32;
 
 constexpr uint32_t DOUBLE_BUFFER = 2;
 
+constexpr uint32_t TRIPLE_BUFFER = 3;
+
 template <typename K>
 __forceinline__ __device__ D empty_digest() {
   const K hashed_key = Murmur3HashDevice(static_cast<K>(EMPTY_KEY));
