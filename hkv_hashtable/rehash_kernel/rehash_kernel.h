@@ -67,7 +67,7 @@ __inline__ __device__ void copy_key_to_new_bucket(
           L1CacheType::NON_CACHEABLE>(d_bkt_dst_pos + old_bkt_idx * bucket_max_size + origin_pos, origin_pos);
         __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
           L1CacheType::NON_CACHEABLE>(reinterpret_cast<__gm__ uint64_t*>(d_dst_values + old_bkt_idx * bucket_max_size + origin_pos), reinterpret_cast<uint64_t>(new_bucket->vectors + vector_start_pos));
-        AscendC::Simt::printf("old_bkt_idx %lu, origin_pos %u to new_bkt\r\n", old_bkt_idx, origin_pos);
+        AscendC::Simt::printf("old_bkt_idx %lu, old_key_pos %u, origin_pos %u to new_bkt key[%lu]\r\n", old_bkt_idx, old_key_pos, origin_pos, key);
       }
       break;
     }
@@ -88,9 +88,9 @@ __inline__ __device__ void defragmentation_for_rehash(
     const size_t& old_buckets_num, const size_t& dim,
     __gm__ V* __gm__* d_dst_values, __gm__ uint32_t* d_bkt_src_pos, __gm__ uint32_t* d_bkt_dst_pos, const uint64_t& bkt_idx) {
   // 1. 从空位置的后一个key开始遍历整个桶
-  size_t offset = 1;
+  uint32_t offset = 1;
   while (offset < bucket_max_size) {
-    size_t cur_pos = (remove_pos + offset) % bucket_max_size;
+    uint32_t cur_pos = (remove_pos + offset) % bucket_max_size;
     K cur_key = cur_bucket->keys_[cur_pos];
     // 2. 理想位置要在空位置前面，则key一定是连续有效的，不能为空key
     if (cur_key == EMPTY_KEY) {
@@ -143,7 +143,7 @@ __inline__ __device__ void defragmentation_for_rehash(
         // if (origin_pos < remove_pos) {
         //   AscendC::Simt::printf("forward bkt: %lu, cur_pos: %u, remove_pos: %u, origin_pos: %u\r\n", bkt_idx, cur_pos, remove_pos, origin_pos);
         // }
-        AscendC::Simt::printf("old_bkt_idx %lu, origin_pos %u to remove_pos %u\r\n", bkt_idx, origin_pos, remove_pos);
+        AscendC::Simt::printf("old_bkt_idx %lu, old_key_pos %u, origin_pos %u to remove_pos %u key[%lu]\r\n", bkt_idx, cur_pos, origin_pos, remove_pos, cur_key);
       }
 
       cur_bucket->keys_[cur_pos] = EMPTY_KEY;
@@ -170,15 +170,6 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void rehash_kernel_vf(
   const size_t bucket_max_size = table->bucket_max_size;
   const size_t dim = table->dim;
 
-  // if constexpr (!IS_FAST_MODE) {
-  //   const size_t old_capacity = table->capacity / 2;
-  //   for (uint64_t tid = block_index * blockDim.x + threadIdx.x;
-  //        tid < old_capacity; tid += thread_all) {
-  //     d_dst_values[tid] = nullptr;
-  //     d_bkt_src_pos[tid] = tid % bucket_max_size;
-  //     d_bkt_dst_pos[tid] = tid % bucket_max_size;
-  //   }
-  // }
   if constexpr (!IS_FAST_MODE) {
     const size_t old_capacity = table->capacity / 2;
     for (uint64_t tid = block_index * blockDim.x + threadIdx.x;
@@ -341,6 +332,7 @@ __global__ __vector__ void rehash_write_kernel(
         depend_local = move_queue.DeQue<V>();
         // 完成当前搬运，将前置依赖value赋值给当前value
         AscendC::DataCopyPad(moving_dst_values_gm, move_local, copy_params);
+        AscendC::PRINTF("move bkt %lu src %u to dst %u, value %f\r\n", i, moving_key_idx, depend_key_idx, move_local.GetValue(0));
         move_queue.FreeTensor(move_local);
         WriteGmByPassDCache<uint64_t>(
             reinterpret_cast<__gm__ uint64_t*>(d_dst_values + moving_key_idx +
@@ -359,6 +351,7 @@ __global__ __vector__ void rehash_write_kernel(
       // 没有前置依赖了，直接搬运
       moving_dst_values_gm.SetGlobalBuffer(dst_value);
       AscendC::DataCopyPad(moving_dst_values_gm, move_local, copy_params);
+      AscendC::PRINTF("move bkt %lu src %u to dst %u, value %f\r\n", i, moving_key_idx, depend_key_idx, move_local.GetValue(0));
       move_queue.FreeTensor(move_local);
       WriteGmByPassDCache<uint64_t>(reinterpret_cast<__gm__ uint64_t*>(
                                         d_dst_values + moving_key_idx + offset),
