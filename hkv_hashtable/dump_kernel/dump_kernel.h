@@ -217,6 +217,7 @@
        asc_syncthreads();
 
        if (choose_flag == 1) {
+        const size_t j{global_acc[0] + local_index};
         d_key[j] = key;
         dst_val[j] = bucket_values_ptr[key_idx * dim_in];
 
