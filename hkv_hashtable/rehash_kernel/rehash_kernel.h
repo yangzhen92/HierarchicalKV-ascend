@@ -51,13 +51,23 @@ __inline__ __device__ void copy_key_to_new_bucket(
         }
       } else {
         // old_key_pos -> new_bucket
-        uint32_t origin_pos =
-            d_bkt_src_pos[old_bkt_idx * bucket_max_size + old_key_pos];
-        d_bkt_src_pos[old_bkt_idx * bucket_max_size + old_key_pos] =
-            old_key_pos;
+        // uint32_t origin_pos =
+        //     d_bkt_src_pos[old_bkt_idx * bucket_max_size + old_key_pos];
+        // d_bkt_src_pos[old_bkt_idx * bucket_max_size + old_key_pos] =
+        //     old_key_pos;
 
-        d_bkt_dst_pos[old_bkt_idx * bucket_max_size + origin_pos] = origin_pos;
-        d_dst_values[old_bkt_idx * bucket_max_size + origin_pos] = new_bucket->vectors + vector_start_pos;
+        // d_bkt_dst_pos[old_bkt_idx * bucket_max_size + origin_pos] = origin_pos;
+        // d_dst_values[old_bkt_idx * bucket_max_size + origin_pos] = new_bucket->vectors + vector_start_pos;
+        uint32_t origin_pos = __ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+          L1CacheType::NON_CACHEABLE>(d_bkt_src_pos + old_bkt_idx * bucket_max_size + old_key_pos);
+        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+          L1CacheType::NON_CACHEABLE>(d_bkt_src_pos + old_bkt_idx * bucket_max_size + old_key_pos, origin_pos);
+        
+        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+          L1CacheType::NON_CACHEABLE>(d_bkt_dst_pos + old_bkt_idx * bucket_max_size + origin_pos, origin_pos);
+        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+          L1CacheType::NON_CACHEABLE>(reinterpret_cast<__gm__ uint64_t*>(d_dst_values + old_bkt_idx * bucket_max_size + origin_pos), reinterpret_cast<uint64_t>(new_bucket->vectors + vector_start_pos));
+        AscendC::Simt::printf("old_bkt_idx %lu, origin_pos %u to new_bkt\r\n", old_bkt_idx, origin_pos);
       }
       break;
     }
@@ -109,16 +119,31 @@ __inline__ __device__ void defragmentation_for_rehash(
         // bucket内会每个key都会位置前移，并可能多次移动，因此记录每个pos的src_pos
         // 本次移动为cur_pos -> remove_pos，cur_pos可能是其他pos的值
         // 实际是origin_pos -> remove_pos
-        uint32_t origin_pos = d_bkt_src_pos[move_offset_pos + cur_pos];
-        d_bkt_src_pos[move_offset_pos + remove_pos] = origin_pos;
-        d_bkt_src_pos[move_offset_pos + cur_pos] = cur_pos;
+        // uint32_t origin_pos = d_bkt_src_pos[move_offset_pos + cur_pos];
+        // d_bkt_src_pos[move_offset_pos + remove_pos] = origin_pos;
+        // d_bkt_src_pos[move_offset_pos + cur_pos] = cur_pos;
 
-        d_bkt_dst_pos[move_offset_pos + origin_pos] = remove_pos;
-        d_dst_values[move_offset_pos + origin_pos] =
-            cur_bucket->vectors + remove_pos * dim;
+        // d_bkt_dst_pos[move_offset_pos + origin_pos] = remove_pos;
+        // d_dst_values[move_offset_pos + origin_pos] =
+        //     cur_bucket->vectors + remove_pos * dim;
+        
+        uint32_t origin_pos = __ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+          L1CacheType::NON_CACHEABLE>(d_bkt_src_pos + move_offset_pos + cur_pos);
+        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+          L1CacheType::NON_CACHEABLE>(d_bkt_src_pos + move_offset_pos + remove_pos, origin_pos);
+        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+          L1CacheType::NON_CACHEABLE>(d_bkt_src_pos + move_offset_pos + cur_pos, cur_pos);
+
+        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+          L1CacheType::NON_CACHEABLE>(d_bkt_dst_pos + move_offset_pos + origin_pos, remove_pos);
+        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+          L1CacheType::NON_CACHEABLE>(reinterpret_cast<__gm__ uint64_t*>(d_dst_values + move_offset_pos + origin_pos), reinterpret_cast<uint64_t>(cur_bucket->vectors + remove_pos * dim));
+        
+        // if (origin_pos < remove_pos) {
         // if (origin_pos < remove_pos) {
         //   AscendC::Simt::printf("forward bkt: %lu, cur_pos: %u, remove_pos: %u, origin_pos: %u\r\n", bkt_idx, cur_pos, remove_pos, origin_pos);
         // }
+        AscendC::Simt::printf("old_bkt_idx %lu, origin_pos %u to remove_pos %u\r\n", bkt_idx, origin_pos, remove_pos);
       }
 
       cur_bucket->keys_[cur_pos] = EMPTY_KEY;
@@ -154,6 +179,21 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void rehash_kernel_vf(
   //     d_bkt_dst_pos[tid] = tid % bucket_max_size;
   //   }
   // }
+  if constexpr (!IS_FAST_MODE) {
+    const size_t old_capacity = table->capacity / 2;
+    for (uint64_t tid = block_index * blockDim.x + threadIdx.x;
+         tid < old_capacity; tid += thread_all) {
+      // d_dst_values[tid] = nullptr;
+      // d_bkt_src_pos[tid] = tid % bucket_max_size;
+      // d_bkt_dst_pos[tid] = tid % bucket_max_size;
+      __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+        L1CacheType::NON_CACHEABLE>(reinterpret_cast<__gm__ uint64_t*>(d_dst_values + tid), 0);
+      __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+        L1CacheType::NON_CACHEABLE>(d_bkt_src_pos + tid, tid % bucket_max_size);
+      __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+        L1CacheType::NON_CACHEABLE>(d_bkt_dst_pos + tid, tid % bucket_max_size);
+    }
+  }
 
   K cur_key = 0;
   S cur_score = 0;

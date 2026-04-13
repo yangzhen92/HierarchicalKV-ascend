@@ -229,6 +229,50 @@ void test_reserve_with_defragmentation(size_t dim, size_t key_num, size_t init_c
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table.size(device_data.stream), init_capacity);
 
+
+  table.find(key_num, device_data.device_keys, device_data.device_values_ptr, device_data.device_found,
+             nullptr, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+
+  bool* host_found = nullptr;
+  ASSERT_EQ(aclrtMallocHost(reinterpret_cast<void**>(&host_found),
+                            key_num * sizeof(bool)),
+            ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemcpy(host_found, key_num * sizeof(bool), device_data.device_found,
+                        key_num * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
+  vector<void*> real_values_ptr(key_num, nullptr);
+  ASSERT_EQ(aclrtMemcpy(real_values_ptr.data(), key_num * sizeof(void*),
+                        device_data.device_values_ptr, key_num * sizeof(void*),
+                        ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
+  size_t found_num = 0;
+  for (size_t i = 0; i < key_num; i++) {
+    if (host_found[i]) {
+      ASSERT_NE(real_values_ptr[i], nullptr);
+      found_num++;
+
+      vector<V> real_values(dim, 0);
+      ASSERT_EQ(aclrtMemcpy(real_values.data(), dim * device_data.each_value_size,
+                            real_values_ptr[i], dim * device_data.each_value_size,
+                            ACL_MEMCPY_DEVICE_TO_HOST),
+                ACL_ERROR_NONE);
+      vector<V> expect_values(host_values.begin() + i * dim,
+                              host_values.begin() + i * dim + dim);
+      uint64_t hash = test_util::Murmur3HashHost(host_keys[i]);
+      uint64_t hash_old = hash % (table.capacity() / 2);
+      uint64_t bkt_idx = hash_old / table.max_bucket_size();
+      uint64_t key_pos = hash_old % table.max_bucket_size();
+      uint64_t hash_new = hash % table.capacity();
+      uint64_t bkt_idx_new = hash_new / table.max_bucket_size();
+      uint64_t key_pos_new = hash_new % table.max_bucket_size();
+      ASSERT_EQ(expect_values, real_values) << "key id :" << host_keys[i] << " bkt_idx:" << bkt_idx << " key_pos:" << key_pos << " -> " << " bkt_idx_new:" << bkt_idx_new << " key_pos_new:" << key_pos_new;
+    } else {
+      EXPECT_EQ(real_values_ptr[i], nullptr);
+    }
+  }
+
+
   // 5. 验证reserve
   auto cur_capacity = table.capacity();
   auto load_factor = table.load_factor(device_data.stream);
@@ -247,19 +291,14 @@ void test_reserve_with_defragmentation(size_t dim, size_t key_num, size_t init_c
              nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
-  bool* host_found = nullptr;
-  ASSERT_EQ(aclrtMallocHost(reinterpret_cast<void**>(&host_found),
-                            key_num * sizeof(bool)),
-            ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMemcpy(host_found, key_num * sizeof(bool), device_data.device_found,
                         key_num * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST),
             ACL_ERROR_NONE);
-  vector<void*> real_values_ptr(key_num, nullptr);
   ASSERT_EQ(aclrtMemcpy(real_values_ptr.data(), key_num * sizeof(void*),
                         device_data.device_values_ptr, key_num * sizeof(void*),
                         ACL_MEMCPY_DEVICE_TO_HOST),
             ACL_ERROR_NONE);
-  size_t found_num = 0;
+  found_num = 0;
   for (size_t i = 0; i < key_num; i++) {
     if (host_found[i]) {
       ASSERT_NE(real_values_ptr[i], nullptr);
@@ -303,7 +342,7 @@ TEST(test_reserve, test_reserve_all_hbm_with_defragmentation) {
 
 TEST(test_reserve, test_reserve_to_ddr_with_defragmentation) {
   constexpr size_t dim = 8;
-  constexpr size_t init_capacity = 128UL * 1024;
+  constexpr size_t init_capacity = 128UL * 512;
   constexpr size_t max_capacity = init_capacity * 128;
   constexpr size_t key_num = max_capacity * 2;
   size_t max_hbm_for_vectors = init_capacity * dim * sizeof(V);
