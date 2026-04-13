@@ -349,13 +349,13 @@
 
        move_queue.AllocTensor<V>(move_local);
        dst_values_gm.SetGlobalBuffer(dst_offset + tile_idx * tile_size);
-       AscendC::DataCopyPad(move_local, dst_values_gm, copy_params);
+       AscendC::DataCopyPad(move_local, dst_values_gm, copy_params, pad_params);
        move_queue.EnQue<V>(move_local);
        move_queue.DeQue<V>(move_local);
 
        AscendC::DataCopyPad(src_values_gm[src_offset + tile_idx * tile_size],
                             move_local,
-                            copy_params, pad_params);
+                            copy_params);
 
        move_queue.FreeTensor(move_local);
      }
