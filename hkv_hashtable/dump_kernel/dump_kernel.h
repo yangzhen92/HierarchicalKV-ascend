@@ -193,8 +193,7 @@
        __gm__ Bucket<K, V, S>* bucket =
            buckets + (tid + offset) / bucket_max_size;
        __gm__ K* bucket_keys_ptr = bucket->keys_;
-       __gm__ VecV* bucket_values_ptr =
-           reinterpret_cast<__gm__ VecV*>(bucket->vectors);
+       __gm__ V* bucket_values_ptr =bucket->vectors;
        __gm__ S* bucket_scores_ptr = bucket->scores_;
 
        const int key_idx{static_cast<int>((tid + offset) % bucket_max_size)};
@@ -295,8 +294,8 @@
  
    DISPATCH_VALUE_SIZE(
          value_size,
-         (Simt::VF_CALL<dump_kernel_hybrid_vf<K, V, S, DTYPE>>(
-         Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, table, buckets,
+         (asc_vf_call<dump_kernel_hybrid_vf<K, V, S, DTYPE>>(
+         dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, table, buckets,
                keys, dst_vals, scores, offset, search_length, search_length_align, total_thread_num,
                dump_counter, shared_kvs_tensor.GetPhyAddr(),
                ub_shared_block_acc_mem, ub_shared_global_acc_mem, group_size, dim,
