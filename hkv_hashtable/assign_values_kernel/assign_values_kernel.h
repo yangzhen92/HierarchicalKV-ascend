@@ -266,6 +266,127 @@ __global__ __vector__ void assign_values_kernel_with_io(
       bucket_max_size, dim, keys, values, n, thread_all, GetBlockIdx(),
       max_bucket_shift, capacity_divisor_magic, capacity_divisor_shift);
 }
+
+template <typename K = uint64_t, typename V = float, typename S = uint64_t>
+__simt_vf__ __aicore__
+LAUNCH_BOUND(THREAD_NUM_512) inline void assign_values_kernel_lock_key_hybrid_vf(
+    __gm__ void* buckets_addr_gm, __gm__ int32_t* buckets_size_addr_gm,
+    uint64_t capacity, uint32_t bucket_max_size, uint32_t dim,
+    __gm__ void* keys_addr_gm, uint64_t n, uint32_t block_index,
+    uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
+    uint64_t capacity_divisor_shift, uint64_t n_align_warp, uint32_t thread_all,
+    __gm__ V* __gm__* d_dst_values, __gm__ K* __gm__* d_dst_keys) {
+  if (buckets_addr_gm == nullptr) {
+    return;
+  }
+  if (buckets_size_addr_gm == nullptr) {
+    return;
+  }
+  if (keys_addr_gm == nullptr) {
+    return;
+  }
+  using BUCKET = Bucket<K, V, S>;
+
+  __gm__ Bucket<K, V, S>* __restrict__ buckets =
+      reinterpret_cast<__gm__ Bucket<K, V, S>*>(buckets_addr_gm);
+  __gm__ int32_t* __restrict__ buckets_size =
+      reinterpret_cast<__gm__ int32_t*>(buckets_size_addr_gm);
+  __gm__ const K* __restrict__ keys =
+      reinterpret_cast<__gm__ const K*>(keys_addr_gm);
+
+  constexpr uint32_t STRIDE = sizeof(VecD_Comp) / sizeof(D);
+
+  uint32_t key_pos = 0;
+  K key = 0;
+  __gm__ K* bucket_keys = nullptr;
+  __gm__ V* bucket_values = nullptr;
+  for (uint64_t kv_idx = block_index * blockDim.x + threadIdx.x;
+       kv_idx < n_align_warp; kv_idx += thread_all) {
+    VecD_Comp target_digests{0};
+    OccupyResult occupy_result{OccupyResult::INITIAL};
+    if (kv_idx < n) {
+      key = keys[kv_idx];
+      if (IS_RESERVED_KEY<K>(key)) {
+        occupy_result = OccupyResult::ILLEGAL;
+      } else {
+        const K hashed_key = Murmur3HashDevice(key);
+        target_digests = digests_from_hashed<K>(hashed_key);
+        uint64_t global_idx = get_global_idx(hashed_key, capacity_divisor_magic,
+                                             capacity_divisor_shift, capacity);
+        key_pos = global_idx & (bucket_max_size - 1);
+        uint64_t bkt_idx = global_idx >> max_bucket_shift;
+
+        __gm__ Bucket<K, V, S>* bucket = buckets + bkt_idx;
+        bucket_keys = bucket->keys_;
+        bucket_values = bucket->vectors;
+
+        for (uint32_t offset = 0; offset < bucket_max_size + STRIDE;
+             offset += STRIDE) {
+          if (occupy_result != OccupyResult::INITIAL) {
+            break;
+          }
+          uint32_t pos_cur = align_to<STRIDE>(key_pos);
+          pos_cur = (pos_cur + offset) & (bucket_max_size - 1);
+
+          __gm__ D* digests_ptr =
+              BUCKET::digests(bucket_keys, bucket_max_size, pos_cur);
+          VecD_Comp probe_digests =
+              *reinterpret_cast<__gm__ VecD_Comp*>(digests_ptr);
+          uint32_t possible_pos = 0;
+          uint32_t cmp_result = vcmpeq4(probe_digests, target_digests);
+          cmp_result &= 0x01010101;
+          do {
+            if (cmp_result == 0) {
+              break;
+            }
+            uint32_t index = (__ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+            cmp_result &= (cmp_result - 1);
+            possible_pos = pos_cur + index;
+
+            auto current_key_ptr = BUCKET::keys(bucket_keys, possible_pos);
+            auto try_key = asc_atomic_cas(current_key_ptr, key,
+                                          static_cast<K>(LOCKED_KEY));
+            if (try_key == key) {
+              occupy_result = OccupyResult::DUPLICATE;
+              key_pos = possible_pos;
+              break;
+            }
+          } while (true);
+          if (occupy_result == OccupyResult::DUPLICATE) {
+            break;
+          }
+        }
+      }
+    } else {
+      occupy_result = OccupyResult::ILLEGAL;
+    }
+
+    if (occupy_result == OccupyResult::DUPLICATE) {
+      d_dst_values[kv_idx] = bucket_values + key_pos * dim;
+      d_dst_keys[kv_idx] = bucket_keys + key_pos;
+    } else {
+      d_dst_values[kv_idx] = nullptr;
+      d_dst_keys[kv_idx] = nullptr;
+    }
+  }
+}
+
+template <class K, class V, class S>
+__global__ __vector__ void assign_values_kernel_lock_key_hybrid(
+    __gm__ void* buckets, __gm__ int* buckets_size, uint64_t capacity,
+    uint32_t bucket_max_size, uint32_t dim, __gm__ void* keys, uint64_t n,
+    uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
+    uint64_t capacity_divisor_shift, uint64_t n_align_warp,
+    __gm__ V* __gm__* d_dst_values, __gm__ K* __gm__* d_dst_keys) {
+  constexpr uint32_t thread_num = 512;
+  const uint32_t thread_all = thread_num * GetBlockNum();
+
+  asc_vf_call<assign_values_kernel_lock_key_hybrid_vf<K, V, S>>(
+      dim3{thread_num}, buckets, buckets_size, capacity, bucket_max_size, dim,
+      keys, n, GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
+      capacity_divisor_shift, n_align_warp, thread_all, d_dst_values,
+      d_dst_keys);
+}
 }  // namespace hkv
 }  // namespace npu
 
