@@ -436,7 +436,6 @@ __global__ __vector__ void find_or_insert_ptr_kernel_unlock_key_v2(
     __gm__ const K* keys, __gm__ K* __gm__* key_ptrs, uint64_t n) {
   
   const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
-
   asc_vf_call<find_or_insert_ptr_kernel_unlock_key_vf<K>>(
       dim3{static_cast<uint32_t>(THREAD_NUM_512)}, keys, key_ptrs, n,
       thread_all, GetBlockIdx());
