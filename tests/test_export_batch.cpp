@@ -380,9 +380,9 @@ void run_export_hybrid_test(const ExportTestConfig& config) {
     table.export_batch(scan_len, config.offset, device_export_count,
                        device_export_keys, device_export_values,
                        config.use_scores ? device_export_scores : nullptr,
-                       stream);
+                       device_data.stream);
 
-    ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
+    ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
     ASSERT_EQ(aclrtMemcpy(&export_count, sizeof(size_t), device_export_count,
                           sizeof(size_t), ACL_MEMCPY_DEVICE_TO_HOST),
               ACL_ERROR_NONE);
