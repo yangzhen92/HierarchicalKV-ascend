@@ -342,7 +342,7 @@ TEST(test_reserve, test_reserve_all_hbm_with_defragmentation) {
 
 TEST(test_reserve, test_reserve_to_ddr_with_defragmentation) {
   constexpr size_t dim = 8;
-  constexpr size_t init_capacity = 128UL * 512;
+  constexpr size_t init_capacity = 128UL * 1024;
   constexpr size_t max_capacity = init_capacity * 128;
   constexpr size_t key_num = max_capacity * 2;
   size_t max_hbm_for_vectors = init_capacity * dim * sizeof(V);

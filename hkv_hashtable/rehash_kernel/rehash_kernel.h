@@ -51,23 +51,13 @@ __inline__ __device__ void copy_key_to_new_bucket(
         }
       } else {
         // old_key_pos -> new_bucket
-        // uint32_t origin_pos =
-        //     d_bkt_src_pos[old_bkt_idx * bucket_max_size + old_key_pos];
-        // d_bkt_src_pos[old_bkt_idx * bucket_max_size + old_key_pos] =
-        //     old_key_pos;
+        uint32_t origin_pos =
+            d_bkt_src_pos[old_bkt_idx * bucket_max_size + old_key_pos];
+        d_bkt_src_pos[old_bkt_idx * bucket_max_size + old_key_pos] =
+            old_key_pos;
 
-        // d_bkt_dst_pos[old_bkt_idx * bucket_max_size + origin_pos] = origin_pos;
-        // d_dst_values[old_bkt_idx * bucket_max_size + origin_pos] = new_bucket->vectors + vector_start_pos;
-        uint32_t origin_pos = __ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-          L1CacheType::NON_CACHEABLE>(d_bkt_src_pos + old_bkt_idx * bucket_max_size + old_key_pos);
-        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-          L1CacheType::NON_CACHEABLE>(d_bkt_src_pos + old_bkt_idx * bucket_max_size + old_key_pos, origin_pos);
-        
-        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-          L1CacheType::NON_CACHEABLE>(d_bkt_dst_pos + old_bkt_idx * bucket_max_size + origin_pos, origin_pos);
-        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-          L1CacheType::NON_CACHEABLE>(reinterpret_cast<__gm__ uint64_t*>(d_dst_values + old_bkt_idx * bucket_max_size + origin_pos), reinterpret_cast<uint64_t>(new_bucket->vectors + vector_start_pos));
-        AscendC::Simt::printf("old_bkt_idx %lu, old_key_pos %u, origin_pos %u to new_bkt key[%lu]\r\n", old_bkt_idx, old_key_pos, origin_pos, key);
+        d_bkt_dst_pos[old_bkt_idx * bucket_max_size + origin_pos] = origin_pos;
+        d_dst_values[old_bkt_idx * bucket_max_size + origin_pos] = new_bucket->vectors + vector_start_pos;
       }
       break;
     }
@@ -83,9 +73,9 @@ __inline__ __device__ void copy_key_to_new_bucket(
  */
 template <class K, class V, class S, bool IS_FAST_MODE>
 __inline__ __device__ void defragmentation_for_rehash(
-    __gm__ Bucket<K, V, S>* __restrict__ cur_bucket, uint64_t move_offset_pos,
-    uint32_t remove_pos, const size_t& bucket_max_size,
-    const size_t& old_buckets_num, const size_t& dim,
+    __gm__ Bucket<K, V, S>* __restrict__ cur_bucket, uint64_t move_pos_offset,
+    uint32_t remove_pos, const uint32_t& bucket_max_size,
+    const size_t& old_buckets_num, const uint32_t& dim,
     __gm__ V* __gm__* d_dst_values, __gm__ uint32_t* d_bkt_src_pos, __gm__ uint32_t* d_bkt_dst_pos, const uint64_t& bkt_idx) {
   // 1. 从空位置的后一个key开始遍历整个桶
   uint32_t offset = 1;
@@ -119,31 +109,13 @@ __inline__ __device__ void defragmentation_for_rehash(
         // bucket内会每个key都会位置前移，并可能多次移动，因此记录每个pos的src_pos
         // 本次移动为cur_pos -> remove_pos，cur_pos可能是其他pos的值
         // 实际是origin_pos -> remove_pos
-        // uint32_t origin_pos = d_bkt_src_pos[move_offset_pos + cur_pos];
-        // d_bkt_src_pos[move_offset_pos + remove_pos] = origin_pos;
-        // d_bkt_src_pos[move_offset_pos + cur_pos] = cur_pos;
+        uint32_t origin_pos = d_bkt_src_pos[move_pos_offset + cur_pos];
+        d_bkt_src_pos[move_pos_offset + remove_pos] = origin_pos;
+        d_bkt_src_pos[move_pos_offset + cur_pos] = cur_pos;
 
-        // d_bkt_dst_pos[move_offset_pos + origin_pos] = remove_pos;
-        // d_dst_values[move_offset_pos + origin_pos] =
-        //     cur_bucket->vectors + remove_pos * dim;
-        
-        uint32_t origin_pos = __ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-          L1CacheType::NON_CACHEABLE>(d_bkt_src_pos + move_offset_pos + cur_pos);
-        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-          L1CacheType::NON_CACHEABLE>(d_bkt_src_pos + move_offset_pos + remove_pos, origin_pos);
-        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-          L1CacheType::NON_CACHEABLE>(d_bkt_src_pos + move_offset_pos + cur_pos, cur_pos);
-
-        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-          L1CacheType::NON_CACHEABLE>(d_bkt_dst_pos + move_offset_pos + origin_pos, remove_pos);
-        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-          L1CacheType::NON_CACHEABLE>(reinterpret_cast<__gm__ uint64_t*>(d_dst_values + move_offset_pos + origin_pos), reinterpret_cast<uint64_t>(cur_bucket->vectors + remove_pos * dim));
-        
-        // if (origin_pos < remove_pos) {
-        // if (origin_pos < remove_pos) {
-        //   AscendC::Simt::printf("forward bkt: %lu, cur_pos: %u, remove_pos: %u, origin_pos: %u\r\n", bkt_idx, cur_pos, remove_pos, origin_pos);
-        // }
-        AscendC::Simt::printf("old_bkt_idx %lu, old_key_pos %u, origin_pos %u to remove_pos %u key[%lu]\r\n", bkt_idx, cur_pos, origin_pos, remove_pos, cur_key);
+        d_bkt_dst_pos[move_pos_offset + origin_pos] = remove_pos;
+        d_dst_values[move_pos_offset + origin_pos] =
+            cur_bucket->vectors + remove_pos * dim;
       }
 
       cur_bucket->keys_[cur_pos] = EMPTY_KEY;
@@ -167,24 +139,8 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void rehash_kernel_vf(
     __gm__ uint32_t* d_bkt_dst_pos, const uint64_t thread_all,
     const uint32_t block_index) {
   const size_t new_buckets_num = table->buckets_num;
-  const size_t bucket_max_size = table->bucket_max_size;
-  const size_t dim = table->dim;
-
-  if constexpr (!IS_FAST_MODE) {
-    const size_t old_capacity = table->capacity / 2;
-    for (uint64_t tid = block_index * blockDim.x + threadIdx.x;
-         tid < old_capacity; tid += thread_all) {
-      // d_dst_values[tid] = nullptr;
-      // d_bkt_src_pos[tid] = tid % bucket_max_size;
-      // d_bkt_dst_pos[tid] = tid % bucket_max_size;
-      __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-        L1CacheType::NON_CACHEABLE>(reinterpret_cast<__gm__ uint64_t*>(d_dst_values + tid), 0);
-      __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-        L1CacheType::NON_CACHEABLE>(d_bkt_src_pos + tid, tid % bucket_max_size);
-      __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-        L1CacheType::NON_CACHEABLE>(d_bkt_dst_pos + tid, tid % bucket_max_size);
-    }
-  }
+  const uint32_t bucket_max_size = table->bucket_max_size;
+  const uint32_t dim = table->dim;
 
   K cur_key = 0;
   S cur_score = 0;
@@ -284,7 +240,7 @@ __global__ __vector__ void rehash_write_kernel(
   AscendC::TPipe pipe;
   AscendC::TQueBind<AscendC::TPosition::VECIN, AscendC::TPosition::VECOUT, 2> move_queue;
 
-  pipe.InitBuffer(move_queue, DOUBLE_BUFFER, dim * sizeof(V));
+  pipe.InitBuffer(move_queue, DOUBLE_BUFFER, tile_size * sizeof(V));
   AscendC::GlobalTensor<V> moving_src_values_gm;
   AscendC::GlobalTensor<V> moving_dst_values_gm;
   AscendC::LocalTensor<V> move_local;
@@ -302,60 +258,72 @@ __global__ __vector__ void rehash_write_kernel(
       if (dst_value == nullptr) {
         continue;
       }
-      // 不为空，判断是否有前置依赖
-      uint32_t moving_key_idx = key_idx;
-      move_local = move_queue.AllocTensor<V>();
-      DataCopyExtParams copy_params{1, static_cast<uint32_t>(dim * sizeof(V)),
-                                    0, 0, 0};
-      moving_src_values_gm.SetGlobalBuffer(bucket->vectors +
-                                           moving_key_idx * dim);
-      AscendC::DataCopyPad(move_local, moving_src_values_gm, copy_params,
-                           pad_params);
-      move_queue.EnQue<V>(move_local);
 
-      // 这里depend_key_idx可能为moving_key_idx本身，表明本身是最后一次搬运，搬运至新桶
-      uint32_t depend_key_idx =
-          ReadGmByPassDCache<uint32_t>(d_bkt_dst_pos + moving_key_idx + offset);
-      auto depend_key_dst_value = reinterpret_cast<__gm__ V*>(
-          ReadGmByPassDCache<uint64_t>(reinterpret_cast<__gm__ uint64_t*>(
-              d_dst_values + depend_key_idx + offset)));
-      // 确保当前value被搬进UB
-      move_local = move_queue.DeQue<V>();
-      while (depend_key_dst_value != nullptr && depend_key_idx != moving_key_idx) {
-        // 有前置依赖，则搬运前置依赖
-        moving_dst_values_gm.SetGlobalBuffer(dst_value);
-        depend_local = move_queue.AllocTensor<V>();
-        AscendC::DataCopyPad(depend_local, moving_dst_values_gm, copy_params,
-                             pad_params);
-        move_queue.EnQue<V>(depend_local);
-        // 确保前置依赖value先被搬进UB
-        depend_local = move_queue.DeQue<V>();
-        // 完成当前搬运，将前置依赖value赋值给当前value
-        AscendC::DataCopyPad(moving_dst_values_gm, move_local, copy_params);
-        AscendC::PRINTF("move bkt %lu src %u to dst %u, value %f\r\n", i, moving_key_idx, depend_key_idx, move_local.GetValue(0));
-        move_queue.FreeTensor(move_local);
-        WriteGmByPassDCache<uint64_t>(
-            reinterpret_cast<__gm__ uint64_t*>(d_dst_values + moving_key_idx +
-                                               offset),
-            (uint64_t)0);
+      for (uint32_t tile_idx = 0; tile_idx < num_tiles; tile_idx++) {
+        bool is_last_tile = (tile_idx == num_tiles - 1);
+        uint32_t current_tile_size = is_last_tile
+                                       ? (dim - tile_idx * tile_size)
+                                       : tile_size;
+        // 不为空，判断是否有前置依赖
+        uint32_t moving_key_idx = key_idx;
+        move_local = move_queue.AllocTensor<V>();
+        DataCopyExtParams copy_params{1, static_cast<uint32_t>(current_tile_size * sizeof(V)),
+                                      0, 0, 0};
+        moving_src_values_gm.SetGlobalBuffer(bucket->vectors +
+                                             tile_idx * tile_size + moving_key_idx * dim);
+        AscendC::DataCopyPad(move_local, moving_src_values_gm, copy_params,
+                            pad_params);
+        move_queue.EnQue<V>(move_local);
 
-        moving_key_idx = depend_key_idx;
-        move_local = depend_local;
-        dst_value = depend_key_dst_value;
-        depend_key_idx = ReadGmByPassDCache<uint32_t>(d_bkt_dst_pos +
-                                                      moving_key_idx + offset);
-        depend_key_dst_value = reinterpret_cast<__gm__ V*>(
+        // 这里depend_key_idx可能为moving_key_idx本身，表明本身是最后一次搬运，搬运至新桶
+        uint32_t depend_key_idx =
+            ReadGmByPassDCache<uint32_t>(d_bkt_dst_pos + moving_key_idx + offset);
+        auto depend_key_dst_value = reinterpret_cast<__gm__ V*>(
             ReadGmByPassDCache<uint64_t>(reinterpret_cast<__gm__ uint64_t*>(
                 d_dst_values + depend_key_idx + offset)));
+        // 确保当前value被搬进UB
+        move_local = move_queue.DeQue<V>();
+        while (depend_key_dst_value != nullptr && depend_key_idx != moving_key_idx) {
+          // 有前置依赖，则搬运前置依赖
+          moving_dst_values_gm.SetGlobalBuffer(dst_value + tile_idx * tile_size);
+          depend_local = move_queue.AllocTensor<V>();
+          AscendC::DataCopyPad(depend_local, moving_dst_values_gm, copy_params,
+                              pad_params);
+          move_queue.EnQue<V>(depend_local);
+          // 确保前置依赖value先被搬进UB
+          depend_local = move_queue.DeQue<V>();
+          // 完成当前搬运，将前置依赖value赋值给当前value
+          AscendC::DataCopyPad(moving_dst_values_gm, move_local, copy_params);
+          // AscendC::PRINTF("move bkt %lu src %u to dst %u, value %f\r\n", i, moving_key_idx, depend_key_idx, move_local.GetValue(0));
+          move_queue.FreeTensor(move_local);
+          if (is_last_tile) {
+            WriteGmByPassDCache<uint64_t>(
+              reinterpret_cast<__gm__ uint64_t*>(d_dst_values + moving_key_idx +
+                offset),
+                (uint64_t)0);
+          }
+
+          moving_key_idx = depend_key_idx;
+          move_local = depend_local;
+          dst_value = depend_key_dst_value;
+          depend_key_idx = ReadGmByPassDCache<uint32_t>(d_bkt_dst_pos +
+                                                        moving_key_idx + offset);
+          depend_key_dst_value = reinterpret_cast<__gm__ V*>(
+              ReadGmByPassDCache<uint64_t>(reinterpret_cast<__gm__ uint64_t*>(
+                  d_dst_values + depend_key_idx + offset)));
+        }
+        // 没有前置依赖了，直接搬运
+        moving_dst_values_gm.SetGlobalBuffer(dst_value + tile_idx * tile_size);
+        AscendC::DataCopyPad(moving_dst_values_gm, move_local, copy_params);
+        // AscendC::PRINTF("move bkt %lu src %u to dst %u, value %f\r\n", i, moving_key_idx, depend_key_idx, move_local.GetValue(0));
+        move_queue.FreeTensor(move_local);
+        if (is_last_tile) {
+          WriteGmByPassDCache<uint64_t>(reinterpret_cast<__gm__ uint64_t*>(
+                                          d_dst_values + moving_key_idx + offset),
+                                      (uint64_t)0);
+          PipeBarrier<PIPE_ALL>();
+        }
       }
-      // 没有前置依赖了，直接搬运
-      moving_dst_values_gm.SetGlobalBuffer(dst_value);
-      AscendC::DataCopyPad(moving_dst_values_gm, move_local, copy_params);
-      AscendC::PRINTF("move bkt %lu src %u to dst %u, value %f\r\n", i, moving_key_idx, depend_key_idx, move_local.GetValue(0));
-      move_queue.FreeTensor(move_local);
-      WriteGmByPassDCache<uint64_t>(reinterpret_cast<__gm__ uint64_t*>(
-                                        d_dst_values + moving_key_idx + offset),
-                                    (uint64_t)0);
     }
   }
 }
