@@ -50,12 +50,12 @@ class group_shared_mutex {
   group_shared_mutex() noexcept
       : h_update_count_(0), h_read_count_(0), h_unique_flag_(false) {
     // Allocate device memory for counters
-    NPU_CHECK(aclrtMalloc((void**)&d_update_count_, sizeof(int32_t),
-                          ACL_MEM_MALLOC_NORMAL_ONLY));
-    NPU_CHECK(aclrtMalloc((void**)&d_read_count_, sizeof(int32_t),
-                          ACL_MEM_MALLOC_NORMAL_ONLY));
-    NPU_CHECK(aclrtMalloc((void**)&d_unique_flag_, sizeof(int32_t),
-                          ACL_MEM_MALLOC_NORMAL_ONLY));
+    NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_update_count_),
+                          sizeof(int32_t), ACL_MEM_MALLOC_NORMAL_ONLY));
+    NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_read_count_),
+                          sizeof(int32_t), ACL_MEM_MALLOC_NORMAL_ONLY));
+    NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_unique_flag_),
+                          sizeof(int32_t), ACL_MEM_MALLOC_NORMAL_ONLY));
     // Initialize device counters
     group_lock::init_kernel<int32_t>
         <<<1, 0, 0>>>(d_update_count_, d_read_count_, d_unique_flag_);
