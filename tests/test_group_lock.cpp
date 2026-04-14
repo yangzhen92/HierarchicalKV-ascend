@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2022, NVIDIA CORPORATION.
  * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -23,6 +22,7 @@
 #include <thread>
 #include <vector>
 #include "acl/acl.h"
+#include "hkv_hashtable.h"
 #include "group_lock.h"
 #include "test_util.h"
 
