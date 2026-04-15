@@ -309,7 +309,8 @@ void run_export_hybrid_test(const ExportTestConfig& config) {
   V* device_values = nullptr;
 
   DeviceData<K, V, S> device_data;
-  device_data.malloc(config.key_num, DIM);
+  size_t key_num = config.key_num > 0 ? config.key_num : 1024;
+  device_data.malloc(key_num, DIM);
 
   if (!config.test_empty_table) {
     // 生成测试数据
