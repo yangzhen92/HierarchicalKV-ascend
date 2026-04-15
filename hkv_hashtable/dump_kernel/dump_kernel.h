@@ -176,8 +176,6 @@
  
    auto block_tuples =
        reinterpret_cast<__ubuf__ KVM<K, S>*>(ub_shared_kvs_mem);
-
-   //__gm__ VecV* __restrict__ d_vecv_val = reinterpret_cast<__gm__ VecV*>(d_val);
  
    const size_t bucket_max_size{table->bucket_max_size};
  
@@ -202,10 +200,6 @@
        if (!IS_RESERVED_KEY<K>(key)) {
          choose_flag = 1;
          local_index = atomicAdd(block_acc, 1u);
-        //  block_tuples[local_index].key = key;
-        //  block_tuples[local_index].value =
-        //      reinterpret_cast<uint64_t>(&bucket_values_ptr[key_idx * dim_in]);
-        //  block_tuples[local_index].score = bucket_scores_ptr[key_idx];
        }
        asc_syncthreads();
 
@@ -229,34 +223,6 @@
          continue;
        }
      }
-
-    //  auto cg_rank_id = threadIdx.x % group_size;
-    //  auto cg_rank_id_start = threadIdx.x - cg_rank_id;
-    //  uint64_t tuple_value_ptr = 0;
-    //  __ubuf__ const KVM<K, S>& tuple{block_tuples[local_index]};
-    //  const size_t j{global_acc[0] + local_index};
-    //  if (choose_flag == 1) {
-    //    d_key[j] = tuple.key;
-
-    //    if (d_score != nullptr) {
-    //      d_score[j] = tuple.score;
-    //    }
-    //  }
-
-    //  for (int32_t i = 0; i < group_size; i++) {
-    //    auto cg_flag = asc_shfl(choose_flag, i, group_size);
-    //    if (cg_flag == 1) {
-    //      // 协程组并行写入向量值
-    //      auto val_start = asc_shfl(j, i, group_size);
-    //      uint64_t value_sync_ptr = asc_shfl(tuple.value, i, group_size);
-    //      auto value_sync = reinterpret_cast<__gm__ VecV*>(value_sync_ptr);
-    //      for (uint32_t k = cg_rank_id; k < dim_in; k += group_size) {
-    //        __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-    //              L1CacheType::NON_CACHEABLE>(d_vecv_val + val_start * dim_in + k,
-    //                                          value_sync[k]);
-    //      }
-    //    }
-    //  }
    }
  }
 

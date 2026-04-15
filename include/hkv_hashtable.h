@@ -2141,19 +2141,22 @@ class HashTable : public HashTableBase<K, V, S> {
       size_t size_all = n * sizeof(value_type*);
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
       auto temp_storage{dev_ws.get<uint8_t*>(0)};
-      value_type** d_dst_values{reinterpret_cast<value_type**>(temp_storage)};
+      value_type** d_src_values{reinterpret_cast<value_type**>(temp_storage)};
       dump_kernel_hybrid<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
-        d_table_, table_->buckets, keys, d_dst_values, scores, offset, n, n_align,
+        d_table_, table_->buckets, keys, d_src_values, scores, offset, n, n_align,
         d_counter, value_move_opt_.size, value_move_opt_.cg_size,
         table_->dim);
-      
       // 2. io：搬运value，释放lock
+      NPU_CHECK(aclrtMemsetAsync(d_src_values, size_all, 0, size_all, stream));
+      size_type counter = 0;
+      NPU_CHECK(aclrtMemcpyAsync(&counter, sizeof(size_type), d_counter,
+                          sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST, stream));
       auto tiling =
-          GetValueMoveTiling(n, block_dim_, table_->dim, sizeof(value_type));
-      export_batch_value_kernel<K, V><<<block_dim_, tiling.valid_ub_size, stream>>>(
+          GetValueMoveTiling(counter, block_dim_, table_->dim, sizeof(value_type));
+      read_value_kernel<K, V><<<block_dim_, tiling.valid_ub_size, stream>>>(
           tiling.former_num, tiling.former_core_move_num,
           tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-          table_->dim, const_cast<value_type*>(values), n, d_dst_values);
+          table_->dim, values, counter, d_src_values);
     }
     NpuCheckError();
   }
