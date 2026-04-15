@@ -105,6 +105,11 @@ class DefaultAllocator : public virtual BaseAllocator {
     }
     switch (type) {
       case MemoryType::Pinned:
+        static bool flag = true;
+        if (flag) {
+          printf("free Pinned call!!\r\n");
+          flag = false;
+        }
         NPU_CHECK(aclrtFreeHost(ptr));
         break;
       case MemoryType::Device:
