@@ -135,7 +135,7 @@ struct ValueMoveOpt {
  *    ```
  *    template <class K, class S>
  *    struct EraseIfPredFunctor {
- *      __forceinline__ __device__ bool operator()(const K& key,
+ *      __forceinline__ __simt_callee__ bool operator()(const K& key,
  *                                                 S& score,
  *                                                 const K& pattern,
  *                                                 const S& threshold) {
@@ -149,7 +149,7 @@ struct ValueMoveOpt {
  *    ```
  *    template <class K, class S>
  *    struct ExportIfPredFunctor {
- *      __forceinline__ __device__ bool operator()(const K& key,
+ *      __forceinline__ __simt_callee__ bool operator()(const K& key,
  *                                                 S& score,
  *                                                 const K& pattern,
  *                                                 const S& threshold) {
@@ -1096,6 +1096,11 @@ class HashTable : public HashTableBase<K, V, S> {
     if (!ignore_evict_strategy) {
       check_evict_strategy(scores);
     }
+    
+    std::unique_ptr<insert_unique_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<insert_unique_lock>(mutex_, stream);
+    }
 
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     if (is_fast_mode()) {
@@ -1219,6 +1224,11 @@ class HashTable : public HashTableBase<K, V, S> {
 
     if (!ignore_evict_strategy) {
       check_evict_strategy(scores);
+    }
+
+    std::unique_ptr<insert_unique_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<insert_unique_lock>(mutex_, stream);
     }
 
     // Currently only need eviction when using HashTable as HBM cache.
@@ -1383,6 +1393,11 @@ class HashTable : public HashTableBase<K, V, S> {
         check_evict_strategy(scores);
       }
 
+      std::unique_ptr<insert_unique_lock> lock_ptr;
+      if (options_.api_lock) {
+        lock_ptr = std::make_unique<insert_unique_lock>(mutex_, stream);
+      }
+
       if (is_fast_mode()) {
         accum_or_assign_kernel<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
             table_->buckets, table_->buckets_size,
@@ -1424,6 +1439,11 @@ class HashTable : public HashTableBase<K, V, S> {
                       bool ignore_evict_strategy = false) {
     if (n == 0) {
       return;
+    }
+
+    std::unique_ptr<insert_unique_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<insert_unique_lock>(mutex_, stream);
     }
 
     std::cout << "[Unsupport find_or_insert yet]\n";
@@ -1473,6 +1493,11 @@ class HashTable : public HashTableBase<K, V, S> {
 
     if (!ignore_evict_strategy) {
       check_evict_strategy(scores);
+    }
+
+    std::unique_ptr<insert_unique_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<insert_unique_lock>(mutex_, stream);
     }
 
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
@@ -1546,6 +1571,11 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
 
+    std::unique_ptr<insert_unique_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<insert_unique_lock>(mutex_, stream);
+    }
+
     std::cout << "[Unsupport lock_keys yet]\n";
     NpuCheckError();
   }
@@ -1571,6 +1601,11 @@ class HashTable : public HashTableBase<K, V, S> {
                    aclrtStream stream = 0) {
     if (n == 0) {
       return;
+    }
+
+    std::unique_ptr<insert_unique_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<insert_unique_lock>(mutex_, stream);
     }
 
     std::cout << "[Unsupport unlock_keys yet]\n";
@@ -1610,6 +1645,11 @@ class HashTable : public HashTableBase<K, V, S> {
     }
 
     check_evict_strategy(scores);
+
+    std::unique_ptr<update_shared_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<update_shared_lock>(mutex_, stream);
+    }
 
     if (is_fast_mode()) {
       constexpr uint32_t MinBucketCapacityFilter = sizeof(VecD_Load) / sizeof(D);
@@ -1662,6 +1702,11 @@ class HashTable : public HashTableBase<K, V, S> {
 
     check_evict_strategy(scores);
 
+    std::unique_ptr<update_shared_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<update_shared_lock>(mutex_, stream);
+    }
+
     constexpr uint32_t MinBucketCapacityFilter = sizeof(VecD_Load) / sizeof(D);
     if (unique_key && options_.max_bucket_size >= MinBucketCapacityFilter) {
       assign_scores_kernel_with_filter<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
@@ -1710,6 +1755,12 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+
+    std::unique_ptr<update_shared_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<update_shared_lock>(mutex_, stream);
+    }
+
     if (is_fast_mode()) {
       constexpr uint32_t MinBucketCapacityFilter = sizeof(VecD_Load) / sizeof(D);
       if (unique_key && options_.max_bucket_size >= MinBucketCapacityFilter) {
@@ -1756,6 +1807,11 @@ class HashTable : public HashTableBase<K, V, S> {
             aclrtStream stream = 0) const {
     if (n == 0) {
       return;
+    }
+
+    std::unique_ptr<read_shared_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
     }
 
     uint64_t n_align_warp =
@@ -1823,6 +1879,11 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
     NPU_CHECK(aclrtMemsetAsync(missed_size, sizeof(int), 0, sizeof(int), stream));
+    
+    std::unique_ptr<read_shared_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
+    }
 
     uint64_t n_align_warp =
         ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
@@ -1889,6 +1950,12 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+
+    std::unique_ptr<read_shared_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
+    }
+
     find_ptr_with_digest_kernel<K, V, S><<<block_dim_, 0, stream>>>(
       table_->buckets, table_->capacity, table_->buckets_num, options_.max_bucket_size,
       options_.dim, const_cast<key_type*>(keys), values, scores, founds, n, global_epoch_,
@@ -1927,12 +1994,11 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
 
-    /* api_lock暂不支持，先注释标注下，后续支持后放开
     std::unique_ptr<read_shared_lock> lock_ptr;
     if (options_.api_lock) {
       lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
     }
-    */
+
     check_evict_strategy(scores);
     constexpr uint32_t MinBucketCapacityFilter = sizeof(VecD_Load) / sizeof(D);
     if (unique_key && options_.max_bucket_size >= MinBucketCapacityFilter) {
@@ -1965,6 +2031,11 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
 
+    std::unique_ptr<read_shared_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
+    }
+
     contains_kernel<K, V, S><<<block_dim_, 0, stream>>>(
       table_->buckets, table_->capacity,
       static_cast<uint32_t>(table_->bucket_max_size),
@@ -1984,6 +2055,11 @@ class HashTable : public HashTableBase<K, V, S> {
   void erase(const size_type n, const key_type* keys, aclrtStream stream = 0) {
     if (n == 0) {
       return;
+    }
+
+    std::unique_ptr<update_read_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<update_read_lock>(mutex_, stream);
     }
 
     remove_kernel<K, V, S><<<block_dim_, 0, stream>>>(
@@ -2009,7 +2085,7 @@ class HashTable : public HashTableBase<K, V, S> {
    *    ```
    *    template <class K, class S>
    *    struct EraseIfPredFunctor {
-   *      __forceinline__ __device__ bool operator()(const K& key,
+   *      __forceinline__ __simt_callee__ bool operator()(const K& key,
    *                                                 S& score,
    *                                                 const K& pattern,
    *                                                 const S& threshold) {
@@ -2030,6 +2106,11 @@ class HashTable : public HashTableBase<K, V, S> {
   template <template <typename, typename> class PredFunctor>
   size_type erase_if(const key_type& pattern, const score_type& threshold,
                      aclrtStream stream = 0) {
+    std::unique_ptr<update_read_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<update_read_lock>(mutex_, stream);
+    }
+
     auto dev_ws{dev_mem_pool_->get_workspace<1>(sizeof(size_type), stream)};
     auto d_counter{dev_ws.get<size_type*>(0)};
 
@@ -2053,7 +2134,7 @@ class HashTable : public HashTableBase<K, V, S> {
   /**
    * @brief Erase the key-value-score tuples which match @tparam PredFunctor.
    * @param pred A functor with template <K, V, S> defined an operator with
-   * signature:  __device__ (bool*)(const K&, const V*, const S&, int32_t).
+   * signature:  __simt_callee__ (bool*)(const K&, const V*, const S&, int32_t).
    *  @param stream The CANN stream that is used to execute the operation.
    *
    * @return The number of elements removed.
@@ -2061,6 +2142,11 @@ class HashTable : public HashTableBase<K, V, S> {
 
   template <typename PredFunctor>
   size_type erase_if_v2(PredFunctor& pred, aclrtStream stream = 0) {
+    std::unique_ptr<update_read_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<update_read_lock>(mutex_, stream);
+    }
+
     auto dev_ws{dev_mem_pool_->get_workspace<1>(sizeof(size_type), stream)};
     auto d_counter{dev_ws.get<size_type*>(0)};
 
@@ -2091,6 +2177,11 @@ class HashTable : public HashTableBase<K, V, S> {
    * object.
    */
   void clear(aclrtStream stream = 0) {
+    std::unique_ptr<update_read_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<update_read_lock>(mutex_, stream);
+    }
+
     clear_kernel<K, V, S><<<block_dim_, 0, stream>>>(static_cast<void*>(table_->buckets),
       static_cast<void*>(table_->buckets_size), options_.max_bucket_size, table_->capacity);
     NpuCheckError();
@@ -2126,6 +2217,11 @@ class HashTable : public HashTableBase<K, V, S> {
                     value_type* values,            // (n, DIM)
                     score_type* scores = nullptr,  // (n)
                     aclrtStream stream = 0) const {
+    std::unique_ptr<read_shared_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
+    }
+
     NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0, sizeof(size_type), stream));
     if (offset >= table_->capacity) {
       return;
@@ -2163,7 +2259,7 @@ class HashTable : public HashTableBase<K, V, S> {
    * @brief Exports a certain number of the key-value-score tuples which match
    *
    * @tparam PredFunctor A functor with template <K, S> defined an operator
-   * with signature:  __device__ (bool*)(const K&, S&, const K&, const S&).
+   * with signature:  __simt_callee__ (bool*)(const K&, S&, const K&, const S&).
    * specified condition from the hash table.
    *
    * @param n The maximum number of exported pairs.
@@ -2173,7 +2269,7 @@ class HashTable : public HashTableBase<K, V, S> {
    *    ```
    *    template <class K, class S>
    *    struct ExportIfPredFunctor {
-   *      __forceinline__ __device__ bool operator()(const K& key,
+   *      __forceinline__ __simt_callee__ bool operator()(const K& key,
    *                                                 S& score,
    *                                                 const K& pattern,
    *                                                 const S& threshold) {
@@ -2211,6 +2307,10 @@ class HashTable : public HashTableBase<K, V, S> {
                        value_type* values,            // (n, DIM)
                        score_type* scores = nullptr,  // (n)
                        aclrtStream stream = 0) const {
+    std::unique_ptr<read_shared_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
+    }
     NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0, sizeof(size_type), stream));
     n = std::min(table_->capacity - offset, n);
     if ((offset >= table_->capacity) || (n == 0)) {
@@ -2231,7 +2331,7 @@ class HashTable : public HashTableBase<K, V, S> {
    *
    * @tparam PredFunctor A functor type with a template signature `<K, V, S>`.
    * It should define an operator with the signature:
-   * `__device__ bool operator()(const K&, const V*, const S&)`.
+   * `__simt_callee__ bool operator()(const K&, const V*, const S&)`.
    *
    * @param pred A functor of type `PredFunctor` that defines the predicate for
    * filtering tuples.
@@ -2259,6 +2359,11 @@ class HashTable : public HashTableBase<K, V, S> {
                           value_type* values,            // (n, DIM)
                           score_type* scores = nullptr,  // (n)
                           aclrtStream stream = 0) const {
+    std::unique_ptr<read_shared_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
+    }
+
     NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0, sizeof(size_type), stream));
     n = std::min(table_->capacity - offset, n);
     if ((offset >= table_->capacity) || (n == 0)) {
@@ -2280,14 +2385,14 @@ class HashTable : public HashTableBase<K, V, S> {
    *
    * @tparam ExecutionFunc A functor type with a template signature `<K, V, S>`.
    * It should define an operator with the signature:
-   * `__device__ void operator()(const K&, V*, S*, int32_t)`.
+   * `__simt_callee__ void operator()(const K&, V*, S*, int32_t)`.
    *
    * @param first The first element to which the function object will be
    * applied.
    * @param last The last element(excluding) to which the function object will
    * be applied.
    * @param f A functor of type `ExecutionFunc` that defines the predicate for
-   * filtering tuples. signature:  __device__ (bool*)(const K&, const V*, const
+   * filtering tuples. signature:  __simt_callee__ (bool*)(const K&, const V*, const
    * S&, int32_t).
    * @param stream The CANN stream that is used to execute the operation.
    *
@@ -2298,6 +2403,11 @@ class HashTable : public HashTableBase<K, V, S> {
   template <typename ExecutionFunc>
   void for_each(const size_type first, const size_type last, ExecutionFunc& f,
                 aclrtStream stream = 0) {
+    std::unique_ptr<update_read_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<update_read_lock>(mutex_, stream);
+    }
+
     if (first >= table_->capacity || last > table_->capacity || first >= last) {
       return;
     }
@@ -2329,6 +2439,11 @@ class HashTable : public HashTableBase<K, V, S> {
    * @return The table size.
    */
   size_type size(aclrtStream input_stream = 0) const {
+    std::unique_ptr<read_shared_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
+    }
+
     ScopedStream scoped_stream(input_stream);
     aclrtStream stream = scoped_stream.get();
     DeviceTensor input;
@@ -2360,6 +2475,10 @@ class HashTable : public HashTableBase<K, V, S> {
   template <template <typename, typename> class PredFunctor>
   void size_if(const key_type& pattern, const score_type& threshold,
                size_type* d_counter, aclrtStream stream = 0) const {
+    std::unique_ptr<read_shared_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
+    }
     std::cout << "[Unsupport size_if yet]\n";
     NpuCheckError();
   }
@@ -2393,6 +2512,11 @@ class HashTable : public HashTableBase<K, V, S> {
     if (reach_max_capacity_ || new_capacity > options_.max_capacity) {
       reach_max_capacity_ = (capacity() * 2 > options_.max_capacity);
       return;
+    }
+
+    std::unique_ptr<update_read_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<update_read_lock>(mutex_, stream);
     }
 
     NPU_CHECK(aclrtSynchronizeDevice());
@@ -2442,6 +2566,11 @@ class HashTable : public HashTableBase<K, V, S> {
     if (!is_power(2, new_max_capacity)) {
       throw std::invalid_argument(
           "None power-of-2 new_max_capacity is not supported.");
+    }
+
+    std::unique_ptr<update_read_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<update_read_lock>(mutex_);
     }
 
     if (new_max_capacity < capacity()) {
@@ -2496,6 +2625,11 @@ class HashTable : public HashTableBase<K, V, S> {
     HKV_CHECK(max_workspace_size >= tuple_size,
               "[HierarchicalKV] max_workspace_size is smaller than a single "
               "`key + score + value` tuple! Please set a larger value!");
+    
+    std::unique_ptr<update_read_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr = std::make_unique<update_read_lock>(mutex_, stream);
+    }
 
     const size_type total_size{capacity()};
     // Calculate how many tuples can fit in the workspace
@@ -2678,6 +2812,15 @@ class HashTable : public HashTableBase<K, V, S> {
   inline float fast_load_factor(const size_type delta = 0,
                                 aclrtStream input_stream = 0,
                                 const bool need_lock = true) const {
+    std::unique_ptr<read_shared_lock> lock_ptr;
+    if (options_.api_lock) {
+      lock_ptr =
+          std::make_unique<read_shared_lock>(mutex_, std::defer_lock, stream);
+      if (need_lock) {
+        lock_ptr->lock();
+      }
+    }
+
     ScopedStream scoped_stream(input_stream);
     aclrtStream stream = scoped_stream.get();
 
