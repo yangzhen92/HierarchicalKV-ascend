@@ -25,6 +25,7 @@
 #include <exception>
 #include <limits>
 #include <string>
+#include <thread>
 #include "cuda2npu.h"
 #include "kernel_operator.h"
 #include <acl/acl.h>
@@ -138,6 +139,39 @@ __forceinline__ __device__ T ldg_l2nc_l1c(__gm__ T* ptr) {
   return __ldg<LD_L2CacheType::L2_CACHE_HINT_NOTALLOC_CLEAN, L1CacheType::CACHEABLE>(ptr);
 }
 #endif
+
+template <typename V>
+void write_by_cpu(V** __restrict dst, const V* __restrict src, size_t dim, int N, int n_worker = 16) {
+  std::vector<std::thread> thds;
+  n_worker = std::max(n_worker, 1);
+
+  auto functor = [dim](V** __restrict dst, const V* __restrict src, int handled_size, int trunk_size) {
+    for (int i = handled_size; i < handled_size + trunk_size; ++i) {
+      if (dst[i] != nullptr) {
+        memcpy(dst[i], src + i * dim, sizeof(V) * dim);
+      }
+    }
+  };
+
+  int32_t trunk_size_floor = N / n_worker;
+  int32_t trunk_size_remain = N % n_worker;
+  int32_t n_worker_used = trunk_size_floor == 0 ? trunk_size_remain : n_worker;
+
+  size_t handled_size = 0;
+  for (int i = 0; i < n_worker_used; ++i) {
+    int32_t cur_trunk_size = trunk_size_floor;
+    if (trunk_size_remain != 0) {
+      cur_trunk_size++;
+      trunk_size_remain--;
+    }
+    thds.emplace_back(functor, dst, src, handled_size, cur_trunk_size);
+    handled_size += cur_trunk_size;
+  }
+
+  for (int i = 0; i < n_worker_used; i++) {
+    thds[i].join();
+  }
+}
 
 }  // namespace hkv
 }  // namespace npu
