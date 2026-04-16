@@ -280,11 +280,7 @@ void run_export_hybrid_test(const ExportTestConfig& config) {
   // 1. 初始化环境
   init_env();
 
-  // 2. 检查HBM内存
-  size_t total_mem = 0;
-  size_t free_mem = 0;
-
-  // 3. 配置哈希表
+  // 2. 配置哈希表
   constexpr size_t init_capacity = 128UL * 1024;
   HashTableOptions options{
       .init_capacity = init_capacity,
@@ -294,7 +290,7 @@ void run_export_hybrid_test(const ExportTestConfig& config) {
       .io_by_cpu = false,
   };
 
-  // 4. 初始化哈希表并插入数据
+  // 3. 初始化哈希表并插入数据
   HashTable<K, V> table;
   table.init(options);
   EXPECT_EQ(table.size(), 0);
@@ -324,7 +320,7 @@ void run_export_hybrid_test(const ExportTestConfig& config) {
     EXPECT_LE(table.size(), config.key_num);
   }
 
-  // 5. 准备导出缓冲区
+  // 4. 准备导出缓冲区
   const size_t scan_len = table.capacity();
   K* device_export_keys = nullptr;
   V* device_export_values = nullptr;
@@ -353,7 +349,7 @@ void run_export_hybrid_test(const ExportTestConfig& config) {
                         scan_len * DIM * sizeof(V)),
             ACL_ERROR_NONE);
 
-  // 6. 执行导出操作
+  // 5. 执行导出操作
   size_t export_count = 0;
 
   if (config.test_overload) {
@@ -385,7 +381,7 @@ void run_export_hybrid_test(const ExportTestConfig& config) {
     ASSERT_EQ(aclrtFree(device_export_count), ACL_ERROR_NONE);
   }
 
-  // 7. 验证结果
+  // 6. 验证结果
   if (config.test_empty_table) {
     // 空表测试：导出数量应为0
     ASSERT_EQ(export_count, table.size(device_data.stream));
@@ -439,7 +435,7 @@ void run_export_hybrid_test(const ExportTestConfig& config) {
     }
   }
 
-  // 8. 清理资源
+  // 7. 清理资源
   ASSERT_EQ(aclrtFree(device_export_keys), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_export_values), ACL_ERROR_NONE);
   if (config.use_scores) {
