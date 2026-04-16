@@ -563,21 +563,17 @@ float test_one_api(std::shared_ptr<Table>& table, const API_Select api,
 static Test_Mode test_mode = Test_Mode::pure_hbm;
 
 void print_title_a() {
-  cout << endl
+       << endl
        << "|    \u03BB "
        << "| insert_or_assign "
-       << "|   find ";
-  if (test_mode == Test_Mode::pure_hbm) {        
-  cout << "| find_or_insert* "
+       << "|   find ";     
+       << "| find_or_insert* "
        << "| find_and_update "
        << "|   find* ";
-  }
-  cout << "| export_batch ";
-  if (test_mode == Test_Mode::pure_hbm) {        
-  cout << "| assign "
+       << "| export_batch ";     
+       << "| assign "
        << "| assign_scores "
        << "| assign_values ";
-  }
   if (test_mode == Test_Mode::pure_hbm) {
     cout << "| insert_and_evict ";
   }
@@ -589,25 +585,21 @@ void print_title_a() {
        //<< "| insert_or_assign "
        << "|-----------------:"
        //<< "|   find "
- 	     << "|-------:";
-  if (test_mode == Test_Mode::pure_hbm) {     
+ 	     << "|-------:";    
        //<< "| find_or_insert* "
-  cout << "|----------------:"
+       << "|----------------:"
        //  << "| find_and_update "
        << "|----------------:"
        //<< "|   find* "
        << "|--------:";
-  }
        //<< "| export_batch "
-  cout << "|-------------:";
-  if (test_mode == Test_Mode::pure_hbm) { 
+       << "|-------------:";
        //<< "| assign "
-  cout << "|-------:"
+       << "|-------:"
        //<< "| assign_scores "
        << "|--------------:"
        //<< "| assign_values "
        << "|--------------:";
-  }
   if (test_mode == Test_Mode::pure_hbm) {        
     //<< "| insert_and_evict "
     cout << "|-----------------:";
@@ -622,8 +614,6 @@ void print_title_b() {
        << "|    \u03BB "
        << "| export_batch_if_v2 "
        << "| export_batch_if "
-       << "|  contains "
-       << "| find_and_update ";
   cout << "|\n";
 
   //<< "| load_factor "
@@ -632,10 +622,6 @@ void print_title_b() {
        << "|-------------------:"
        //<< "| export_batch_if "
        << "|----------------:"
-       //<< "|  contains "
-       << "|----------:"
-       //<< "| find_and_update "
-       << "|----------------:";
   cout << "|\n";
 }
 
@@ -651,6 +637,26 @@ void print_title_a_static() {
        << "|---------------:";
   cout << "|\n";
 }
+
+void print_title_hybrid_a() {
+       << endl
+       << "|    \u03BB "
+       << "| insert_or_assign "
+       << "|   find ";     
+       << "| export_batch ";     
+       << "|\n";
+
+  //<< "| load_factor "
+  cout << "|-----:"
+       //<< "| insert_or_assign "
+       << "|-----------------:"
+       //<< "|   find "
+ 	     << "|-------:";    
+       //<< "| export_batch "
+       << "|-------------:";
+       << "|\n";
+}
+
 
 void test_main(std::vector<API_Select>& apis, const size_t dim,
                const size_t init_capacity = 64 * 1024 * 1024UL,
@@ -868,11 +874,11 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
       cout << "### On HBM+HMEM hybrid mode: " << endl;
       test_mode = Test_Mode::hybrid;
       print_configuration(64, 128 * 1024 * 1024UL, 16);
-      print_title_a();
+      print_title_hybrid_a();
       test_main(apis_a, 64, 128 * 1024 * 1024UL, key_num_per_op, 16);
 
       print_configuration(64, 512 * 1024 * 1024UL, 32);
-      print_title_a();
+      print_title_hybrid_a();
       test_main(apis_a, 64, 512 * 1024 * 1024UL, key_num_per_op, 32);
       cout << endl;
     }
