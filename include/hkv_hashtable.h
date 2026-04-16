@@ -2249,7 +2249,7 @@ class HashTable : public HashTableBase<K, V, S> {
       NPU_CHECK(aclrtMemcpyAsync(&counter, sizeof(size_type), d_counter,
                           sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST, stream));
       auto tiling =
-          GetValueMoveTiling(counter, block_dim_, table_->dim, sizeof(value_type));
+          GetValueMoveTiling(counter, block_dim_, table_->dim, sizeof(value_type), false);
       read_value_kernel<V><<<block_dim_, tiling.valid_ub_size, stream>>>(
           tiling.former_num, tiling.former_core_move_num,
           tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
