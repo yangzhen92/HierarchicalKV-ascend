@@ -563,7 +563,7 @@ float test_one_api(std::shared_ptr<Table>& table, const API_Select api,
 static Test_Mode test_mode = Test_Mode::pure_hbm;
 
 void print_title_a() {
-       << endl
+  cout << endl
        << "|    \u03BB "
        << "| insert_or_assign "
        << "|   find "   
@@ -639,11 +639,11 @@ void print_title_a_static() {
 }
 
 void print_title_hybrid_a() {
-       << endl
+  cout << endl
        << "|    \u03BB "
        << "| insert_or_assign "
        << "|   find ";     
-       << "| export_batch ";     
+       << "| export_batch "   
        << "|\n";
 
   //<< "| load_factor "
@@ -651,7 +651,7 @@ void print_title_hybrid_a() {
        //<< "| insert_or_assign "
        << "|-----------------:"
        //<< "|   find "
- 	     << "|-------:";    
+ 	     << "|-------:"
        //<< "| export_batch "
        << "|-------------:"
        << "|\n";
