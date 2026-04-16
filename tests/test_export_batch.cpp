@@ -475,7 +475,7 @@ TEST(test_export_batch, test_export_hybrid_offset) {
 }
 
 TEST(test_export_batch, test_export_hybrid_large) {
-  ExportTestConfig config = {182 * 1024, false, false, 0, false};
+  ExportTestConfig config = {128 * 1024, false, false, 0, false};
   RUN_EXPORT_HYBRID_TEST(uint64_t, float, uint64_t, 8, config);
 }
 

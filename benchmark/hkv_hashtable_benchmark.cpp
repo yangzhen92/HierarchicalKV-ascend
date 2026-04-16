@@ -657,6 +657,19 @@ void print_title_hybrid_a() {
        << "|\n";
 }
 
+void print_title_hybrid_b() {
+  cout << endl
+       << "|    \u03BB "
+       << "| export_batch "   
+       << "|\n";
+
+  //<< "| load_factor "
+  cout << "|-----:"
+       //<< "| export_batch "
+       << "|-------------:"
+       << "|\n";
+}
+
 
 void test_main(std::vector<API_Select>& apis, const size_t dim,
                const size_t init_capacity = 64 * 1024 * 1024UL,
@@ -868,6 +881,9 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
       std::vector<API_Select> apis_a{
         API_Select::insert_or_assign,
         API_Select::find,
+      };
+
+      std::vector<API_Select> apis_b{
         API_Select::export_batch,
       };
       
@@ -876,10 +892,15 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
       print_configuration(64, 128 * 1024 * 1024UL, 16);
       print_title_hybrid_a();
       test_main(apis_a, 64, 128 * 1024 * 1024UL, key_num_per_op, 16);
+      print_title_hybrid_b();
+      test_main(apis_b, 64, 128 * 1024 * 1024UL, key_num_per_op, 16);
 
       print_configuration(64, 512 * 1024 * 1024UL, 32);
       print_title_hybrid_a();
       test_main(apis_a, 64, 512 * 1024 * 1024UL, key_num_per_op, 32);
+      print_title_hybrid_b();
+      test_main(apis_b, 64, 512 * 1024 * 1024UL, key_num_per_op, 32);
+
       cout << endl;
     }
 
