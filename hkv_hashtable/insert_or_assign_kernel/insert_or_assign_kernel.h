@@ -972,14 +972,6 @@ __global__ __vector__ void write_kernel(
   }
 }
 
-template <typename V, int32_t TILE_SIZE = 32>
-__forceinline__ __simt_callee__ void copy_vector(V* src, V* dst, const uint32_t &dim, const int32_t &lane_id) {
-  for (int32_t i = lane_id; i < dim; i += TILE_SIZE) {
-    __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-      L1CacheType::NON_CACHEABLE>(dst + i, src + i);
-  }
-}
-
 template <bool MoveV, typename K = uint64_t, typename V = float, typename S = uint64_t,
           int32_t Strategy = -1, int32_t TILE_SIZE = 32>
 __simt_vf__ __aicore__

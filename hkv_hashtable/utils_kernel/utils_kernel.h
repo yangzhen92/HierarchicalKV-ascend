@@ -138,6 +138,18 @@ __global__ __vector__ void read_value_kernel(
   }
 }
 
+template <typename V, int32_t TILE_SIZE>
+__forceinline__ __simt_callee__ void copy_vector(__gm__ const V* src, __gm__ V* dst,
+                                            const uint32_t dim,
+                                            const uint32_t lane_id) {
+  for (uint32_t i = lane_id; i < dim; i += TILE_SIZE) {
+    V val = src[i];
+    __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV, L1CacheType::NON_CACHEABLE>(
+        dst + i, val);
+  }
+}
+
+
 }  // namespace hkv
 }  // namespace npu
  

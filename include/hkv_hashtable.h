@@ -1129,9 +1129,9 @@ class HashTable : public HashTableBase<K, V, S> {
                   n_align_warp, value_move_opt_.cg_size);
         }
       } else {
-        upsert_kernel<K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
+        upsert_kernel<true, K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
             table_->buckets, table_->buckets_size, table_->capacity,
-            table_->bucket_max_size, table_->dim, keys, scores, n, values, nullptr,
+            table_->bucket_max_size, table_->dim, keys, scores, n, const_cast<value_type*>(values), nullptr,
             global_epoch_, table_->max_bucket_shift,
             table_->capacity_divisor_magic, table_->capacity_divisor_shift);
       }
@@ -1171,7 +1171,7 @@ class HashTable : public HashTableBase<K, V, S> {
                                    stream));
 
         // 区别在于，不搬运value，但释放key
-        upsert_kernel<K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
+        upsert_kernel<false, K, V, S, evict_strategy_><<<block_dim_, 0, stream>>>(
             table_->buckets, table_->buckets_size, table_->capacity,
             table_->bucket_max_size, table_->dim, keys, scores, n, nullptr, d_dst_values,
             global_epoch_, table_->max_bucket_shift,
