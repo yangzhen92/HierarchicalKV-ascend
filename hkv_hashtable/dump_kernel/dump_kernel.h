@@ -163,7 +163,7 @@
                GetBlockIdx())));
  }
 
- template <class K, class V, class S, class VecV>
+ template <class K, class V, class S>
  __simt_vf__ __aicore__
  LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_kernel_hybrid_vf(
      __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
