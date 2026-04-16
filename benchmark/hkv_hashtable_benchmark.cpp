@@ -566,11 +566,11 @@ void print_title_a() {
   cout << endl
        << "|    \u03BB "
        << "| insert_or_assign "
-       << "|   find "   
+       << "|   find "
        << "| find_or_insert* "
        << "| find_and_update "
        << "|   find* "
-       << "| export_batch "  
+       << "| export_batch "
        << "| assign "
        << "| assign_scores "
        << "| assign_values ";
@@ -585,7 +585,7 @@ void print_title_a() {
        //<< "| insert_or_assign "
        << "|-----------------:"
        //<< "|   find "
- 	     << "|-------:"    
+ 	     << "|-------:"
        //<< "| find_or_insert* "
        << "|----------------:"
        //  << "| find_and_update "
@@ -642,7 +642,7 @@ void print_title_hybrid_a() {
   cout << endl
        << "|    \u03BB "
        << "| insert_or_assign "
-       << "|   find " 
+       << "|   find "
        << "|\n";
 
   //<< "| load_factor "
