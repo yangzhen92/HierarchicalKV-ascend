@@ -567,13 +567,17 @@ void print_title_a() {
        << "|    \u03BB "
        << "| insert_or_assign "
        << "|   find "
+  if (test_mode == Test_Mode::pure_hbm) {        
        << "| find_or_insert* "
        << "| find_and_update "
        << "|   find* "
+  }
        << "| export_batch "
+  if (test_mode == Test_Mode::pure_hbm) {        
        << "| assign "
        << "| assign_scores "
        << "| assign_values ";
+  }
   if (test_mode == Test_Mode::pure_hbm) {
     cout << "| insert_and_evict ";
   }
@@ -586,21 +590,25 @@ void print_title_a() {
        << "|-----------------:"
        //<< "|   find "
  	     << "|-------:"
+  if (test_mode == Test_Mode::pure_hbm) {     
        //<< "| find_or_insert* "
        << "|----------------:"
        //  << "| find_and_update "
        << "|----------------:"
        //<< "|   find* "
        << "|--------:"
+  }
        //<< "| export_batch "
        << "|-------------:"
+  if (test_mode == Test_Mode::pure_hbm) { 
        //<< "| assign "
        << "|-------:"
        //<< "| assign_scores "
        << "|--------------:"
        //<< "| assign_values "
        << "|--------------:";
-  if (test_mode == Test_Mode::pure_hbm) {
+  }
+  if (test_mode == Test_Mode::pure_hbm) {        
     //<< "| insert_and_evict "
     cout << "|-----------------:";
   }
@@ -854,6 +862,7 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
       std::vector<API_Select> apis_a{
         API_Select::insert_or_assign,
         API_Select::find,
+        API_Select::export_batch,
       };
       
       cout << "### On HBM+HMEM hybrid mode: " << endl;
