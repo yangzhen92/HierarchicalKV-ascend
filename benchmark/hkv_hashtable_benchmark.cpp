@@ -572,7 +572,7 @@ void print_title_a() {
        << "| find_and_update "
        << "|   find* ";
   }
-       << "| export_batch "
+  cout << "| export_batch "
   if (test_mode == Test_Mode::pure_hbm) {        
   cout << "| assign "
        << "| assign_scores "
