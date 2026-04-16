@@ -642,8 +642,7 @@ void print_title_hybrid_a() {
   cout << endl
        << "|    \u03BB "
        << "| insert_or_assign "
-       << "|   find "
-       << "| export_batch "   
+       << "|   find " 
        << "|\n";
 
   //<< "| load_factor "
@@ -652,8 +651,6 @@ void print_title_hybrid_a() {
        << "|-----------------:"
        //<< "|   find "
  	     << "|-------:"
-       //<< "| export_batch "
-       << "|-------------:"
        << "|\n";
 }
 
