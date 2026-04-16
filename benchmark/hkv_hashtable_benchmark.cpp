@@ -566,11 +566,11 @@ void print_title_a() {
        << endl
        << "|    \u03BB "
        << "| insert_or_assign "
-       << "|   find ";     
+       << "|   find "   
        << "| find_or_insert* "
        << "| find_and_update "
-       << "|   find* ";
-       << "| export_batch ";     
+       << "|   find* "
+       << "| export_batch "  
        << "| assign "
        << "| assign_scores "
        << "| assign_values ";
@@ -585,15 +585,15 @@ void print_title_a() {
        //<< "| insert_or_assign "
        << "|-----------------:"
        //<< "|   find "
- 	     << "|-------:";    
+ 	     << "|-------:"    
        //<< "| find_or_insert* "
        << "|----------------:"
        //  << "| find_and_update "
        << "|----------------:"
        //<< "|   find* "
-       << "|--------:";
+       << "|--------:"
        //<< "| export_batch "
-       << "|-------------:";
+       << "|-------------:"
        //<< "| assign "
        << "|-------:"
        //<< "| assign_scores "
@@ -613,7 +613,7 @@ void print_title_b() {
   cout << endl
        << "|    \u03BB "
        << "| export_batch_if_v2 "
-       << "| export_batch_if "
+       << "| export_batch_if ";
   cout << "|\n";
 
   //<< "| load_factor "
@@ -621,7 +621,7 @@ void print_title_b() {
        //<< "| export_batch_if_v2 "
        << "|-------------------:"
        //<< "| export_batch_if "
-       << "|----------------:"
+       << "|----------------:";
   cout << "|\n";
 }
 
@@ -653,7 +653,7 @@ void print_title_hybrid_a() {
        //<< "|   find "
  	     << "|-------:";    
        //<< "| export_batch "
-       << "|-------------:";
+       << "|-------------:"
        << "|\n";
 }
 
