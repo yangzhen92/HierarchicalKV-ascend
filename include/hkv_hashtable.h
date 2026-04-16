@@ -2241,10 +2241,9 @@ class HashTable : public HashTableBase<K, V, S> {
       value_type** d_src_values{reinterpret_cast<value_type**>(temp_storage)};
       NPU_CHECK(aclrtMemsetAsync(d_src_values, size_all, 0, size_all, stream));
       dump_kernel_hybrid<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
-        d_table_, table_->buckets, keys, d_src_values, scores, offset, n, n_align,
-        d_counter, value_move_opt_.size, value_move_opt_.cg_size,
-        table_->dim);
-      // 2. io：搬运value，释放lock
+          d_table_, table_->buckets, keys, d_src_values, scores, offset, n,
+          d_counter, table_->dim);
+
       size_type counter = 0;
       NPU_CHECK(aclrtMemcpyAsync(&counter, sizeof(size_type), d_counter,
                           sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST, stream));
