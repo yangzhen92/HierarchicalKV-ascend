@@ -600,7 +600,7 @@ void print_title_a() {
        << "|--------------:"
        //<< "| assign_values "
        << "|--------------:";
-  if (test_mode == Test_Mode::pure_hbm) {        
+  if (test_mode == Test_Mode::pure_hbm) {
     //<< "| insert_and_evict "
     cout << "|-----------------:";
   }
