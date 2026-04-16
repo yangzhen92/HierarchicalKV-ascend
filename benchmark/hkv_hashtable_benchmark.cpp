@@ -566,15 +566,15 @@ void print_title_a() {
   cout << endl
        << "|    \u03BB "
        << "| insert_or_assign "
-       << "|   find "
+       << "|   find ";
   if (test_mode == Test_Mode::pure_hbm) {        
-       << "| find_or_insert* "
+  cout << "| find_or_insert* "
        << "| find_and_update "
-       << "|   find* "
+       << "|   find* ";
   }
        << "| export_batch "
   if (test_mode == Test_Mode::pure_hbm) {        
-       << "| assign "
+  cout << "| assign "
        << "| assign_scores "
        << "| assign_values ";
   }
@@ -589,20 +589,20 @@ void print_title_a() {
        //<< "| insert_or_assign "
        << "|-----------------:"
        //<< "|   find "
- 	     << "|-------:"
+ 	     << "|-------:";
   if (test_mode == Test_Mode::pure_hbm) {     
        //<< "| find_or_insert* "
-       << "|----------------:"
+  cout << "|----------------:"
        //  << "| find_and_update "
        << "|----------------:"
        //<< "|   find* "
-       << "|--------:"
+       << "|--------:";
   }
        //<< "| export_batch "
-       << "|-------------:"
+  cout << "|-------------:";
   if (test_mode == Test_Mode::pure_hbm) { 
        //<< "| assign "
-       << "|-------:"
+  cout << "|-------:"
        //<< "| assign_scores "
        << "|--------------:"
        //<< "| assign_values "
