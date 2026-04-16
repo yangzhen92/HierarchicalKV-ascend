@@ -178,7 +178,7 @@
  
    const size_t bucket_max_size{table->bucket_max_size};
    size_t tid{blockIdx * blockDim.x + threadIdx.x};
-   for (; tid < search_length_align; tid += total_thread_num) {
+   for (; tid < search_length; tid += total_thread_num) {
      if (threadIdx.x == 0) {
        block_acc[0] = 0;
      }
