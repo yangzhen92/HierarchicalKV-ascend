@@ -2250,9 +2250,8 @@ class HashTable : public HashTableBase<K, V, S> {
       HKV_CHECK(max_tile_size != 0,
                 log_format("UB size %lu is too small.", valid_ub_size));
       export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
-          tiling.former_num, tiling.former_core_move_num,
-          tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-          table_->dim, values, counter, d_src_values);
+          block_dim_, table_->dim, max_tile_size, values, d_counter,
+          d_src_values);
     }
     NpuCheckError();
   }
