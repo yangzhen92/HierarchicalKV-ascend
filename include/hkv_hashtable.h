@@ -2239,17 +2239,17 @@ class HashTable : public HashTableBase<K, V, S> {
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
       auto temp_storage{dev_ws.get<uint8_t*>(0)};
       value_type** d_src_values{reinterpret_cast<value_type**>(temp_storage)};
-      NPU_CHECK(aclrtMemsetAsync(d_src_values, size_all, 0, size_all, stream));
+      //NPU_CHECK(aclrtMemsetAsync(d_src_values, size_all, 0, size_all, stream));
       dump_kernel_hybrid<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
           d_table_, table_->buckets, keys, d_src_values, scores, offset, n,
           d_counter, table_->dim);
 
-      size_type counter = 0;
-      NPU_CHECK(aclrtMemcpyAsync(&counter, sizeof(size_type), d_counter,
-                          sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST, stream));
-      auto tiling =
-          GetValueMoveTiling(counter, block_dim_, table_->dim, sizeof(value_type), false);
-      read_value_kernel<V><<<block_dim_, tiling.valid_ub_size, stream>>>(
+      uint64_t valid_ub_size = GetMixedOpUbSize();
+      uint32_t max_tile_size =
+          valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
+      HKV_CHECK(max_tile_size != 0,
+                log_format("UB size %lu is too small.", valid_ub_size));
+      export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
           tiling.former_num, tiling.former_core_move_num,
           tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
           table_->dim, values, counter, d_src_values);

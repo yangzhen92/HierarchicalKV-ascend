@@ -667,7 +667,6 @@ void print_title_hybrid_b() {
        << "|\n";
 }
 
-
 void test_main(std::vector<API_Select>& apis, const size_t dim,
                const size_t init_capacity = 64 * 1024 * 1024UL,
                const size_t key_num_per_op = 1 * 1024 * 1024UL,

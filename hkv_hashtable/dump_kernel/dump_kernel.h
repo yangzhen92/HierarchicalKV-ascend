@@ -253,6 +253,73 @@
        src_vals, scores, offset, search_length, total_thread_num, dump_counter,
        ub_shared_block_acc_mem, ub_shared_global_acc_mem, dim, GetBlockIdx());
  }
+
+ template <class V>
+ __global__ __vector__ void export_batch_value_kernel(
+     uint32_t block_dim, uint32_t dim, uint32_t max_tile_size, __gm__ V* values,
+     __gm__ size_t* dump_counter, __gm__ V * __gm__ * d_src_values) {
+   size_t n = *dump_counter;
+   uint64_t tail_core_move_num = n / block_dim;
+   uint64_t former_core_move_num = tail_core_move_num + 1;
+   uint32_t former_num = n - tail_core_move_num * block_dim;
+   uint32_t tile_size = (dim <= max_tile_size) ? dim : max_tile_size;
+   uint32_t num_tiles = (dim + tile_size - 1) / tile_size;
+
+   uint64_t cur_block_idx = GetBlockIdx();
+   uint64_t core_start_idx = 0;
+   uint64_t core_move_count = 0;
+   constexpr uint32_t BUFFER_NUM = 2;
+   if (cur_block_idx < former_num) {
+     core_start_idx = cur_block_idx * former_core_move_num;
+     core_move_count = former_core_move_num;
+   } else {
+     core_start_idx = former_num * former_core_move_num +
+                      (cur_block_idx - former_num) * tail_core_move_num;
+     core_move_count = tail_core_move_num;
+   }
+
+   TPipe pipe;
+   TQueBind<TPosition::VECIN, TPosition::VECOUT, 0> move_queue;
+   pipe.InitBuffer(move_queue, BUFFER_NUM, tile_size * sizeof(V));
+
+   GlobalTensor<V> src_values_gm;
+   GlobalTensor<V> dst_values_gm;
+   LocalTensor<V> move_local;
+   DataCopyPadExtParams<V> pad_params{true, 0, 0, 0};
+
+   dst_values_gm.SetGlobalBuffer(values);
+
+   for (uint64_t i = core_start_idx; i < core_start_idx + core_move_count;
+        i++) {
+     __gm__ V* src_value = d_src_values[i];
+     if (src_value == nullptr) {
+       continue;
+     }
+
+     uint64_t dst_offset = i * dim;
+
+     for (uint32_t tile_idx = 0; tile_idx < num_tiles; tile_idx++) {
+       uint32_t current_tile_size = (tile_idx == num_tiles - 1)
+                                        ? (dim - tile_idx * tile_size)
+                                        : tile_size;
+       DataCopyExtParams copy_params{
+           1, static_cast<uint32_t>(current_tile_size * sizeof(V)), 0, 0, 0};
+
+       move_queue.AllocTensor<V>(move_local);
+
+       src_values_gm.SetGlobalBuffer(src_value + tile_idx * tile_size);
+       DataCopyPad(move_local, src_values_gm, copy_params, pad_params);
+       move_queue.EnQue<V>(move_local);
+       move_queue.DeQue<V>(move_local);
+
+       DataCopyPad(dst_values_gm[dst_offset + tile_idx * tile_size], move_local,
+                   copy_params);
+
+       move_queue.FreeTensor(move_local);
+     }
+   }
+ }
+
  }  // namespace hkv
  }  // namespace npu
  
