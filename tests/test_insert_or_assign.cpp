@@ -520,83 +520,88 @@ void test_repeat_key_basic(size_t dim, size_t hbm_for_values, bool io_by_cpu) {
 
   // 3. 申请hbm内存
   DeviceData<K, V, S> device_data;
-  device_data.malloc(key_num);
+  device_data.malloc(key_num, dim);
 
   // 4. 空桶插值
   vector<K> host_keys(key_num, 0);
-  vector<V> host_values(key_num * DEFAULT_DIM, 0);
-  create_continuous_keys<K, S, V, DEFAULT_DIM>(host_keys.data(), nullptr,
-                                               host_values.data(), key_num);
+  vector<V> host_values(key_num * dim, 0);
+  create_continuous_keys<K, S, V>(dim, host_keys.data(), nullptr,
+                                       host_values.data(), key_num);
   constexpr size_t repeat_num = 10;
   for (size_t i = 0; i < key_num; i++) {
     host_keys[i] = i / repeat_num;
   }
   device_data.copy_keys(host_keys, key_num);
-  device_data.copy_values(host_values, key_num);
+  device_data.copy_values(host_values, key_num, dim);
   table->insert_or_assign(key_num, device_data.device_keys,
                           device_data.device_values, nullptr,
-                          device_data.stream, true);
+                          device_data.stream, false);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream),
             (key_num + repeat_num - 1) / repeat_num);
 
   // 5. 校验插入结果
   DeviceData<K, V, S> find_data;
-  find_data.malloc(key_num);
+  find_data.malloc(key_num, dim);
   table->find(key_num, device_data.device_keys, find_data.device_values,
-              find_data.device_found, nullptr, device_data.stream);
-  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+              find_data.device_found, nullptr, find_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(find_data.stream), ACL_ERROR_NONE);
 
   bool* host_found = nullptr;
   ASSERT_EQ(aclrtMallocHost(reinterpret_cast<void**>(&host_found),
                             key_num * sizeof(bool)),
             ACL_ERROR_NONE);
   ASSERT_EQ(
-      aclrtMemcpy(host_found, key_num * sizeof(bool), device_data.device_found,
+      aclrtMemcpy(host_found, key_num * sizeof(bool), find_data.device_found,
                   key_num * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST),
       ACL_ERROR_NONE);
   set<K> found_keys;
-  vector<V> real_values(key_num * dim, 0);
-
   for (size_t i = 0; i < key_num; i++) {
     if (!host_found[i] || found_keys.find(host_keys[i]) != found_keys.end()) {
       continue;
     }
     found_keys.insert(host_keys[i]);
     bool found = false;
-    vector<V> expect_values(host_values.begin() + i * dim,
-                            host_values.begin() + i * dim + dim);
-    for (size_t j = 0; j < key_num; j++) {
-      if (host_keys[i] == host_keys[j]) {
+    vector<V> real_values(dim, 0);
         ASSERT_EQ(
-            aclrtMemcpy(real_values.data(), dim * device_data.each_value_size,
-                        find_data.device_values + j * dim,
-                        dim * device_data.each_value_size,
+            aclrtMemcpy(real_values.data(), dim * find_data.each_value_size,
+                        find_data.device_values + i * dim,
+                        dim * find_data.each_value_size,
                         ACL_MEMCPY_DEVICE_TO_HOST),
             ACL_ERROR_NONE);
-
-        if (expect_values == real_values) {
+    printf("real_values %f\r\n", real_values[0]);
+    for (size_t j = 0; j < key_num; j++) {
+      vector<V> maybe_values(host_values.begin() + j * dim,
+                             host_values.begin() + j * dim + dim);
+      printf("maybe_values %zu: %f\r\n", j, maybe_values[0]);
+      for (size_t k = 0; k < dim; k++) {
+        ASSERT_FLOAT_EQ(maybe_values[k], real_values[k]) << k;
+      }
+      if (host_keys[i] == host_keys[j] && maybe_values == real_values) {
           found = true;
           break;
-        }
       }
       ASSERT_TRUE(found) << "key: " << host_keys[i] << " not found";
     }
-    EXPECT_EQ(found_keys.size(), key_num);
-
-    ASSERT_EQ(aclrtFreeHost(host_found), ACL_ERROR_NONE);
-
-    table->clear(device_data.stream);
-    EXPECT_EQ(table->size(device_data.stream), 0);
   }
+
+  EXPECT_EQ(found_keys.size(), key_num);
+  ASSERT_EQ(aclrtFreeHost(host_found), ACL_ERROR_NONE);
+  table->clear(find_data.stream);
+  EXPECT_EQ(table->size(find_data.stream), 0);
 }
 
 TEST(TestInsertOrAssign, test_repeat_key_20480) {
-  constexpr size_t hbm_for_values = 4UL << 30;
+  constexpr size_t hbm_for_values = numeric_limits<size_t>::max();
   test_repeat_key_basic(20480, hbm_for_values, false);
 }
 
 TEST(TestInsertOrAssign, test_repeat_key_with_ddr) {
+  constexpr size_t hbm_for_values = 4UL << 30;
+  test_repeat_key_basic(20480, hbm_for_values, false);
+}
+
+TEST(TestInsertOrAssign, test_repeat_key_with_pure_ddr) {
   test_repeat_key_basic(DEFAULT_DIM, 0, false);
 }
 

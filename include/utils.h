@@ -17,7 +17,6 @@
 
 #pragma once
 
-#include <acl/acl.h>
 #include <stdarg.h>
 #include <algorithm>
 #include <cstdint>
@@ -30,9 +29,7 @@
 #include <acl/acl.h>
 #include <thread>
 #include "../hkv_hashtable/utils_kernel/utils_kernel.h"
-#include "cuda2npu.h"
 #include "debug.h"
-#include "kernel_operator.h"
 
 namespace npu {
 namespace hkv {
