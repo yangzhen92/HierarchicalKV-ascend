@@ -575,7 +575,10 @@ void test_repeat_key_basic(size_t dim, size_t hbm_for_values, bool io_by_cpu) {
                              host_values.begin() + j * dim + dim);
       printf("maybe_values %zu: %f\r\n", j, maybe_values[0]);
       for (size_t k = 0; k < dim; k++) {
-        ASSERT_FLOAT_EQ(maybe_values[k], real_values[k]) << k;
+        if (maybe_values[k] != real_values[k]) {
+          printf("maybe_values %zu: %f != real_values %f\r\n", j, maybe_values[k], real_values[k]);
+          break;
+        }
       }
       if (host_keys[i] == host_keys[j] && maybe_values == real_values) {
           found = true;
