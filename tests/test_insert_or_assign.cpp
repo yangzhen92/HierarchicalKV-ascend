@@ -528,8 +528,10 @@ void test_repeat_key_basic(size_t dim, size_t hbm_for_values, bool io_by_cpu) {
   create_continuous_keys<K, S, V>(dim, host_keys.data(), nullptr,
                                        host_values.data(), key_num);
   constexpr size_t repeat_num = 10;
+  set<K> inserted_keys;
   for (size_t i = 0; i < key_num; i++) {
     host_keys[i] = i / repeat_num;
+    inserted_keys.insert(host_keys[i]);
   }
   device_data.copy_keys(host_keys, key_num);
   device_data.copy_values(host_values, key_num, dim);
@@ -570,13 +572,14 @@ void test_repeat_key_basic(size_t dim, size_t hbm_for_values, bool io_by_cpu) {
                         ACL_MEMCPY_DEVICE_TO_HOST),
             ACL_ERROR_NONE);
     printf("real_values %f\r\n", real_values[0]);
-    for (size_t j = 0; j < key_num; j++) {
+    size_t search_start = i / repeat_num * repeat_num;
+    for (size_t j = search_start; j < search_start + repeat_num; j++) {
       vector<V> maybe_values(host_values.begin() + j * dim,
                              host_values.begin() + j * dim + dim);
       printf("maybe_values %zu: %f\r\n", j, maybe_values[0]);
       for (size_t k = 0; k < dim; k++) {
         if (maybe_values[k] != real_values[k]) {
-          printf("maybe_values %zu: %f != real_values %f\r\n", j, maybe_values[k], real_values[k]);
+          printf("i %zu j %zu k %zu maybe_values %f != real_values %f\r\n", i, j, k, maybe_values[k], real_values[k]);
           break;
         }
       }
@@ -584,11 +587,11 @@ void test_repeat_key_basic(size_t dim, size_t hbm_for_values, bool io_by_cpu) {
           found = true;
           break;
       }
-      ASSERT_TRUE(found) << "key: " << host_keys[i] << " not found";
     }
+    ASSERT_TRUE(found) << "key: " << host_keys[i] << " not found";
   }
 
-  EXPECT_EQ(found_keys.size(), key_num);
+  EXPECT_EQ(found_keys.size(), inserted_keys.size());
   ASSERT_EQ(aclrtFreeHost(host_found), ACL_ERROR_NONE);
   table->clear(find_data.stream);
   EXPECT_EQ(table->size(find_data.stream), 0);
@@ -606,6 +609,10 @@ TEST(TestInsertOrAssign, test_repeat_key_with_ddr) {
 
 TEST(TestInsertOrAssign, test_repeat_key_with_pure_ddr) {
   test_repeat_key_basic(DEFAULT_DIM, 0, false);
+}
+
+TEST(TestInsertOrAssign, test_repeat_key_with_pure_ddr_20480) {
+  test_repeat_key_basic(20480, 0, false);
 }
 
 TEST(TestInsertOrAssign, test_repeat_key_with_io_by_cpu) {
