@@ -171,11 +171,11 @@
  __simt_vf__ __aicore__
  LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_kernel_if_hybrid_vf(
      __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
-     __gm__ K* d_key, __gm__ V * __gm__ * dst_val, __gm__ S* d_score,
-     const size_t offset, const size_t search_length,
-     const uint64_t total_thread_num, __gm__ size_t* d_dump_counter,
-     __ubuf__ uint32_t* block_acc, __ubuf__ uint32_t* global_acc,
-     uint32_t dim_in, uint32_t blockIdx) {
+     const K pattern, const S threshold, __gm__ K* d_key,
+     __gm__ V * __gm__ * dst_val, __gm__ S* d_score, const size_t offset,
+     const size_t search_length, const uint64_t total_thread_num,
+     __gm__ size_t* d_dump_counter, __ubuf__ uint32_t* block_acc,
+     __ubuf__ uint32_t* global_acc, uint32_t dim_in, uint32_t blockIdx) {
    if ((!table) || (!buckets) || (!d_key) || (!dst_val) || (!d_dump_counter)) {
      return;
    }
@@ -232,9 +232,9 @@
            template <typename, typename> class PredFunctor>
  __global__ __vector__ void dump_kernel_if_hybrid(
      __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
-     __gm__ K* keys, __gm__ V * __gm__ * src_vals, __gm__ S* scores,
-     const size_t offset, const size_t search_length,
-     __gm__ size_t* dump_counter, uint32_t dim) {
+     const K pattern, const S threshold, __gm__ K* keys,
+     __gm__ V * __gm__ * src_vals, __gm__ S* scores, const size_t offset,
+     const size_t search_length, __gm__ size_t* dump_counter, uint32_t dim) {
    const uint64_t total_thread_num = THREAD_NUM_2048 * GetBlockNum();
  
    AscendC::TPipe pipe;
@@ -257,8 +257,9 @@
 
    asc_vf_call<dump_kernel_if_hybrid_vf<K, V, S, PredFunctor>>(
        dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, table, buckets, keys,
-       src_vals, scores, offset, search_length, total_thread_num, dump_counter,
-       ub_shared_block_acc_mem, ub_shared_global_acc_mem, dim, GetBlockIdx());
+       pattern, threshold, src_vals, scores, offset, search_length,
+       total_thread_num, dump_counter, ub_shared_block_acc_mem,
+       ub_shared_global_acc_mem, dim, GetBlockIdx());
  }
 
  }  // namespace hkv
