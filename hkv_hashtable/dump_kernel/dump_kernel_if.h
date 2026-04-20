@@ -256,8 +256,8 @@
            shared_global_acc_tensor.GetPhyAddr());
 
    asc_vf_call<dump_kernel_if_hybrid_vf<K, V, S, PredFunctor>>(
-       dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, table, buckets, keys,
-       pattern, threshold, src_vals, scores, offset, search_length,
+       dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, table, buckets, pattern,
+       threshold, keys, src_vals, scores, offset, search_length,
        total_thread_num, dump_counter, ub_shared_block_acc_mem,
        ub_shared_global_acc_mem, dim, GetBlockIdx());
  }
