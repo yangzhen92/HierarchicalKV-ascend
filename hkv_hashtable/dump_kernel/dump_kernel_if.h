@@ -75,7 +75,7 @@
       const K key{bucket_keys_ptr[key_idx]};
       const __gm__ V* value_ptrs = reinterpret_cast<__gm__ V*>(&bucket_values_ptr[key_idx * dim_in]);
       S score = bucket_scores_ptr[key_idx];
-      bool match = (!IS_RESERVED_KEY(key)) && pred(key, score, pattern, threshold);
+      bool match = (!IS_RESERVED_KEY<K>(key)) && pred(key, score, pattern, threshold);
       if (match) {
         choose_flag = 1;
         local_index = asc_atomic_add(block_acc, 1u);
