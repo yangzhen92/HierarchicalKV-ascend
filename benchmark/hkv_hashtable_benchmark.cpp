@@ -657,13 +657,16 @@ void print_title_hybrid_a() {
 void print_title_hybrid_b() {
   cout << endl
        << "|    \u03BB "
-       << "| export_batch "   
+       << "| export_batch "
+       << "| export_batch_if "
        << "|\n";
 
   //<< "| load_factor "
   cout << "|-----:"
        //<< "| export_batch "
        << "|-------------:"
+       //<< "| export_batch_if "
+       << "|----------------:"
        << "|\n";
 }
 
@@ -881,6 +884,7 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
 
       std::vector<API_Select> apis_b{
         API_Select::export_batch,
+        API_Select::export_batch_if,
       };
       
       cout << "### On HBM+HMEM hybrid mode: " << endl;
