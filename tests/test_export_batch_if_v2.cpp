@@ -102,9 +102,6 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
   table.init(options);
   EXPECT_EQ(table.size(), 0);
 
-  K* device_keys = nullptr;
-  V* device_values = nullptr;
-
   DeviceData<K, V, S> device_data;
   size_t keynum = config.key_num > 0 ? config.key_num : 1024;
   device_data.malloc(keynum, DIM);
@@ -121,7 +118,7 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
     device_data.copy_values(host_values, config.key_num, DIM);
 
     // 插入数据
-    table.insert_or_assign(config.key_num, device_keys, device_values, nullptr,
+    table.insert_or_assign(config.key_num, device_data.device_keys, device_data.device_values, nullptr,
                            device_data.stream);
     ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   }

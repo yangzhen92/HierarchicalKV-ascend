@@ -221,10 +221,6 @@
          d_score[j] = score;
        }
      }
-
-     if (block_acc[0] == 0) {
-       continue;
-     }
    }
  }
 
