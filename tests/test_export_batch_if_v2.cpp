@@ -99,9 +99,14 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
   // 4. 初始化哈希表并插入数据
   HashTable<K, V> table;
   table.init(options);
+  EXPECT_EQ(table.size(), 0);
 
   K* device_keys = nullptr;
   V* device_values = nullptr;
+
+  DeviceData<K, V, S> device_data;
+  size_t keynum = config.key_num > 0 ? config.key_num : 1024;
+  device_data.malloc(keynum, DIM);.
 
   if (!config.test_empty_table) {
     // 生成测试数据
@@ -111,31 +116,13 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
                                          host_values.data(), config.key_num);
 
     // 分配设备内存并复制数据
-    ASSERT_EQ(
-        aclrtMalloc(reinterpret_cast<void**>(&device_keys),
-                    config.key_num * sizeof(K), ACL_MEM_MALLOC_HUGE_FIRST),
-        ACL_ERROR_NONE);
-    ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&device_values),
-                          config.key_num * DIM * sizeof(V),
-                          ACL_MEM_MALLOC_HUGE_FIRST),
-              ACL_ERROR_NONE);
-
-    ASSERT_EQ(
-        aclrtMemcpy(device_keys, config.key_num * sizeof(K), host_keys.data(),
-                    config.key_num * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE),
-        ACL_ERROR_NONE);
-    ASSERT_EQ(aclrtMemcpy(device_values, config.key_num * DIM * sizeof(V),
-                          host_values.data(), config.key_num * DIM * sizeof(V),
-                          ACL_MEMCPY_HOST_TO_DEVICE),
-              ACL_ERROR_NONE);
+    device_data.copy_keys(host_keys, config.key_num);
+    device_data.copy_values(host_values, config.key_num, DIM);
 
     // 插入数据
-    aclrtStream stream = nullptr;
-    ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
     table.insert_or_assign(config.key_num, device_keys, device_values, nullptr,
-                           stream);
-    ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
-    ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
+                           device_data.stream);
+    ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   }
 
   // 5. 准备导出缓冲区
@@ -143,9 +130,6 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
   K* device_export_keys = nullptr;
   V* device_export_values = nullptr;
   S* device_export_scores = nullptr;
-
-  aclrtStream stream = nullptr;
-  ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&device_export_keys),
                         scan_len * sizeof(K), ACL_MEM_MALLOC_HUGE_FIRST),
@@ -187,15 +171,15 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
     table.template export_batch_if_v2<ExportIfPredFunctorV2<K, V, S>>(
         pred, scan_len, config.offset, device_export_count,
         device_export_keys, device_export_values,
-        config.use_scores ? device_export_scores : nullptr, stream);
+        config.use_scores ? device_export_scores : nullptr, device_data.stream);
   } else if (config.functor_version == FunctorVersion::V1) {
     table.template export_batch_if<ExportIfPredFunctor>(
         pattern, threshold, scan_len, config.offset, device_export_count,
         device_export_keys, device_export_values,
-        config.use_scores ? device_export_scores : nullptr, stream);
+        config.use_scores ? device_export_scores : nullptr, device_data.stream);
     }
   
-  ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMemcpy(&export_count, sizeof(size_t), device_export_count,
                         sizeof(size_t), ACL_MEMCPY_DEVICE_TO_HOST),
             ACL_ERROR_NONE);
@@ -203,9 +187,9 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
   ASSERT_EQ(aclrtFree(device_export_count), ACL_ERROR_NONE);
 
  if (config.test_empty_table) {
-    ASSERT_EQ(export_count, 0);
+    ASSERT_EQ(export_count, table.size(device_data.stream));
   } else {
-    ASSERT_LE(export_count, config.key_num);
+    ASSERT_LE(export_count, table.size(device_data.stream));
     ASSERT_GE(export_count, 0);
   }
 
@@ -242,18 +226,11 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
   }
 
   // 8. 清理资源
-  if (device_keys != nullptr) {
-    ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
-  }
-  if (device_values != nullptr) {
-    ASSERT_EQ(aclrtFree(device_values), ACL_ERROR_NONE);
-  }
   ASSERT_EQ(aclrtFree(device_export_keys), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_export_values), ACL_ERROR_NONE);
   if (config.use_scores) {
     ASSERT_EQ(aclrtFree(device_export_scores), ACL_ERROR_NONE);
   }
-  ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
 }
 
 // 辅助宏：简化测试调用
