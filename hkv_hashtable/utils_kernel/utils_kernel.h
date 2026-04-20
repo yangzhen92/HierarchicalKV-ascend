@@ -86,6 +86,7 @@ __global__ __vector__ void read_value_kernel(
   uint64_t cur_block_idx = GetBlockIdx();
   uint64_t core_start_idx = 0;
   uint64_t core_move_count = 0;
+  constexpr uint32_t BUFFER_NUM = 2;
   if (cur_block_idx < former_num) {
     core_start_idx = cur_block_idx * former_core_move_num;
     core_move_count = former_core_move_num;
@@ -97,7 +98,7 @@ __global__ __vector__ void read_value_kernel(
 
   TPipe pipe;
   TQueBind<TPosition::VECIN, TPosition::VECOUT, 0> move_queue;
-  pipe.InitBuffer(move_queue, DOUBLE_BUFFER, tile_size * sizeof(V));
+  pipe.InitBuffer(move_queue, BUFFER_NUM, tile_size * sizeof(V));
 
   GlobalTensor<V> src_values_gm;
   GlobalTensor<V> dst_values_gm;
