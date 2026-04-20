@@ -37,16 +37,11 @@
 
 #include <vector>
 
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
-
 using K = uint64_t;
 using V = float;
 using S = uint64_t;
 using EvictStrategy = npu::hkv::EvictStrategy;
 using TableOptions = npu::hkv::HashTableOptions;
-
-static uint32_t g_core_num_aiv = 0;
 
 // 表头各列宽度（与 print_w 参数一致，便于对齐 Markdown 风格输出）
 void print_title() {
@@ -202,13 +197,13 @@ void test_main(double load_factor, double missed_ratio) {
     test_find(capacities_hbm[i], dim_hbm[i], max_hbm_for_vectors_mb_hbm[i], load_factor, 256, missed_ratio);
     test_find(capacities_hbm[i], dim_hbm[i], max_hbm_for_vectors_mb_hbm[i], load_factor, 128, missed_ratio);
   }
-
-  // TODO: hybrid mode
-  // test_find(CAPACITY, 8, 1 * 1024UL, load_factor, 256, missed_ratio);
-  // test_find(CAPACITY, 8, 1 * 1024UL, load_factor, 128, missed_ratio);
-  // TODO: pure HMEM mode
-  // test_find(CAPACITY, 8, 0, load_factor, 256, missed_ratio);
-  // test_find(CAPACITY, 8, 0, load_factor, 128, missed_ratio);
+  constexpr size_t CAPACITY = 100000000UL;
+  // hybrid mode
+  test_find(CAPACITY, 8, 1 * 1024UL, load_factor, 256, missed_ratio);
+  test_find(CAPACITY, 8, 1 * 1024UL, load_factor, 128, missed_ratio);
+  // pure HMEM mode
+  test_find(CAPACITY, 8, 0, load_factor, 256, missed_ratio);
+  test_find(CAPACITY, 8, 0, load_factor, 128, missed_ratio);
 }
 
 void query_memory() {
@@ -227,15 +222,6 @@ void query_memory() {
 }
 
 int main() {
-  const char* socVersion = TOSTRING(SOC_VERSION);
-  auto ascendc_platform =
-      platform_ascendc::PlatformAscendCManager::GetInstance(socVersion);
-  HKV_CHECK(ascendc_platform != nullptr,
-            "Get ascendc platform info failed, please check SOC_VERSION!");
-  g_core_num_aiv = ascendc_platform->GetCoreNumAiv();
-  std::cout << "Soc version: " << socVersion
-            << " aiv_num: " << g_core_num_aiv << std::endl;
-
   NPU_CHECK(aclInit(nullptr));
   auto device_id_env = std::getenv("HKV_TEST_DEVICE");
   int32_t device_id = 0;
@@ -247,8 +233,13 @@ int main() {
               << std::endl;
   }
   NPU_CHECK(aclrtSetDevice(device_id));
-  std::cout << "aclrtGetSocName:" << aclrtGetSocName()
-            << " device_id:" << device_id << std::endl;
+  auto ascendc_platform =
+      platform_ascendc::PlatformAscendCManager::GetInstance();
+  HKV_CHECK(ascendc_platform != nullptr,
+            "Get ascendc platform info failed!");
+  std::cout << "Soc version:" << aclrtGetSocName()
+            << " device_id:" << device_id
+            << " aiv_num: " << ascendc_platform->GetCoreNumAiv() << std::endl;
   query_memory();
 
   // 第一维：表装载率 λ（init 后键数 / capacity）；第二维：find 未命中比例 missed_ratio
