@@ -93,7 +93,7 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
       .dim = DIM,
       .io_by_cpu = false,
   };
-  if (config.use_fast_mode) {
+  if (!config.use_fast_mode) {
     options.max_hbm_for_vectors = init_capacity * sizeof(V) / 2;
   }
 
