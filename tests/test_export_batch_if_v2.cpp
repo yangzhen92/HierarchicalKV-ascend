@@ -107,7 +107,7 @@ void run_export_batch_if_v2_test(const ExportTestConfig& config) {
 
   DeviceData<K, V, S> device_data;
   size_t keynum = config.key_num > 0 ? config.key_num : 1024;
-  device_data.malloc(keynum, DIM);.
+  device_data.malloc(keynum, DIM);
 
   if (!config.test_empty_table) {
     // 生成测试数据
