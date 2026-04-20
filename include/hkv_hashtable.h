@@ -2298,7 +2298,6 @@ class HashTable : public HashTableBase<K, V, S> {
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
       auto temp_storage{dev_ws.get<uint8_t*>(0)};
       value_type** d_src_values{reinterpret_cast<value_type**>(temp_storage)};
-      //NPU_CHECK(aclrtMemsetAsync(d_src_values, size_all, 0, size_all, stream));
       dump_kernel_hybrid<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
           d_table_, table_->buckets, keys, d_src_values, scores, offset, n,
           d_counter, table_->dim);
@@ -2396,12 +2395,32 @@ class HashTable : public HashTableBase<K, V, S> {
     if ((offset >= table_->capacity) || (n == 0)) {
       return;
     }
-    DISPATCH_GROUP_SIZE(
-        value_move_opt_.cg_size,
-        (dump_kernel_if<K, V, S, PredFunctor, GROUP_SIZE>
-         <<<block_dim_, 64 * 1024, stream>>>(
-             d_table_, table_->buckets, pattern, threshold, keys, values, scores, offset, n,
-             d_counter, value_move_opt_.size, value_move_opt_.dim)));
+
+    if (is_fast_mode()) {
+      DISPATCH_GROUP_SIZE(
+          value_move_opt_.cg_size,
+          (dump_kernel_if<K, V, S, PredFunctor, GROUP_SIZE>
+          <<<block_dim_, 64 * 1024, stream>>>(
+              d_table_, table_->buckets, pattern, threshold, keys, values, scores, offset, n,
+              d_counter, value_move_opt_.size, value_move_opt_.dim)));
+    } else {
+      size_t size_all = n * sizeof(value_type*);
+      auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
+      auto temp_storage{dev_ws.get<uint8_t*>(0)};
+      value_type** d_src_values{reinterpret_cast<value_type**>(temp_storage)};
+      dump_kernel_if_hybrid<K, V, S, PredFunctor><<<block_dim_, 64 * 1024, stream>>>(
+          d_table_, table_->buckets, pattern, threshold, keys, d_src_values, scores, offset, n,
+          d_counter, table_->dim);
+
+      uint64_t valid_ub_size = GetMixedOpUbSize();
+      uint32_t max_tile_size =
+          valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
+      HKV_CHECK(max_tile_size != 0,
+                log_format("UB size %lu is too small.", valid_ub_size));
+      export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
+          block_dim_, table_->dim, max_tile_size, values, d_counter,
+          d_src_values);
+    }
     NpuCheckError();
   }
 
