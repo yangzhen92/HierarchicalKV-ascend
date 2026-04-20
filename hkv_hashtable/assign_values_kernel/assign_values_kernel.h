@@ -172,14 +172,14 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_values_kernel_with_digest_vf(
 }
 
 template <typename K = uint64_t, typename V = float, typename S = uint64_t,
-          int32_t TILE_SIZE = 32>
+          int32_t TILE_SIZE = 32, bool IS_FAST_MODE>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_values_kernel_with_io_vf(
     __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
     uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ V* values,
     uint64_t n, uint32_t thread_all, uint32_t block_index,
-    uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
-    uint64_t capacity_divisor_shift) {
+    __gm__ V* __gm__* d_dst_values, uint32_t max_bucket_shift,
+    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift) {
   if (!buckets) {
     return;
   }
@@ -191,7 +191,6 @@ LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_values_kernel_with_io_vf(
   }
   auto lane_id = threadIdx.x % TILE_SIZE;
   const uint64_t N = n * TILE_SIZE;
-
   for (uint64_t t = block_index * blockDim.x + threadIdx.x; t < N;
        t += thread_all) {
     uint64_t key_idx = t / TILE_SIZE;
@@ -213,8 +212,12 @@ LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_values_kernel_with_io_vf(
 
     if (occupy_result == OccupyResult::REFUSED) continue;
     if (occupy_result == OccupyResult::DUPLICATE) {
-      copy_vector<V, TILE_SIZE>(values + key_idx * dim,
-                                bucket_vectors + key_pos * dim, dim, lane_id);
+      if constexpr (IS_FAST_MODE) {
+        copy_vector<V, TILE_SIZE>(values + key_idx * dim,
+                                  bucket_vectors + key_pos * dim, dim, lane_id);
+      } else {
+        d_dst_values[key_idx] = bucket_vectors + key_pos * dim;
+      }
       asc_threadfence();
     }
     if (lane_id == 0) {
@@ -223,66 +226,22 @@ LAUNCH_BOUND(THREAD_NUM_1024) inline void assign_values_kernel_with_io_vf(
   }
 }
 
-template <class K, class V, class S>
-__global__ __vector__ void assign_values_kernel(
-    __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
-    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ void* values,
-    uint64_t n, uint32_t value_size, uint32_t max_bucket_shift,
-    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
-    uint64_t n_align_warp, int32_t group_size) {
-  constexpr uint32_t thread_num = 512;
-  const uint32_t thread_all = thread_num * GetBlockNum();
-
-  DISPATCH_VALUE_SIZE(
-      value_size,
-      (asc_vf_call<assign_values_kernel_with_digest_vf<K, V, S, DTYPE>>(
-          dim3{static_cast<uint32_t>(thread_num)}, buckets, capacity,
-          bucket_max_size, dim, keys, values, n, thread_all, GetBlockIdx(),
-          max_bucket_shift, capacity_divisor_magic, capacity_divisor_shift,
-          n_align_warp, group_size)));
-}
-
-template <class K, class V, class S>
-__global__ __vector__ void assign_values_kernel_with_io(
-    __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
-    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ V* values,
-    uint64_t n, uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
-    uint64_t capacity_divisor_shift) {
-  constexpr uint32_t thread_num = 1024;
-  const uint32_t thread_all = thread_num * GetBlockNum();
-  asc_vf_call<assign_values_kernel_with_io_vf<K, V, S>>(
-      dim3{static_cast<uint32_t>(thread_num)}, buckets, capacity,
-      bucket_max_size, dim, keys, values, n, thread_all, GetBlockIdx(),
-      max_bucket_shift, capacity_divisor_magic, capacity_divisor_shift);
-}
-
 template <typename K = uint64_t, typename V = float, typename S = uint64_t>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void assign_values_kernel_lock_key_hybrid_vf(
-    __gm__ void* buckets_addr_gm, __gm__ int32_t* buckets_size_addr_gm,
-    uint64_t capacity, uint32_t bucket_max_size, uint32_t dim,
-    __gm__ void* keys_addr_gm, uint64_t n, uint32_t block_index,
-    uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
-    uint64_t capacity_divisor_shift, uint64_t n_align_warp, uint32_t thread_all,
-    __gm__ V* __gm__* d_dst_values, __gm__ K* __gm__* d_dst_keys) {
-  if (buckets_addr_gm == nullptr) {
+    __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
+    uint32_t bucket_max_size, uint32_t dim, const __gm__ K* keys, uint64_t n,
+    uint32_t block_index, uint32_t max_bucket_shift,
+    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
+    uint64_t n_align_warp, uint32_t thread_all, __gm__ V* __gm__* d_dst_values,
+    __gm__ K* __gm__* d_dst_keys) {
+  if (buckets == nullptr) {
     return;
   }
-  if (buckets_size_addr_gm == nullptr) {
-    return;
-  }
-  if (keys_addr_gm == nullptr) {
+  if (keys == nullptr) {
     return;
   }
   using BUCKET = Bucket<K, V, S>;
-
-  __gm__ Bucket<K, V, S>* __restrict__ buckets =
-      reinterpret_cast<__gm__ Bucket<K, V, S>*>(buckets_addr_gm);
-  __gm__ int32_t* __restrict__ buckets_size =
-      reinterpret_cast<__gm__ int32_t*>(buckets_size_addr_gm);
-  __gm__ const K* __restrict__ keys =
-      reinterpret_cast<__gm__ const K*>(keys_addr_gm);
-
   constexpr uint32_t STRIDE = sizeof(VecD_Comp) / sizeof(D);
 
   uint32_t key_pos = 0;
@@ -361,9 +320,43 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_values_kernel_lock_key_hybrid_vf
 }
 
 template <class K, class V, class S>
+__global__ __vector__ void assign_values_kernel(
+    __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
+    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ void* values,
+    uint64_t n, uint32_t value_size, uint32_t max_bucket_shift,
+    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
+    uint64_t n_align_warp, int32_t group_size) {
+  constexpr uint32_t thread_num = 512;
+  const uint32_t thread_all = thread_num * GetBlockNum();
+
+  DISPATCH_VALUE_SIZE(
+      value_size,
+      (asc_vf_call<assign_values_kernel_with_digest_vf<K, V, S, DTYPE>>(
+          dim3{static_cast<uint32_t>(thread_num)}, buckets, capacity,
+          bucket_max_size, dim, keys, values, n, thread_all, GetBlockIdx(),
+          max_bucket_shift, capacity_divisor_magic, capacity_divisor_shift,
+          n_align_warp, group_size)));
+}
+
+template <class K, class V, class S, bool IS_FAST_MODE>
+__global__ __vector__ void assign_values_kernel_with_io(
+    __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
+    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ V* values,
+    uint64_t n, __gm__ V* __gm__* d_dst_values, uint32_t max_bucket_shift,
+    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift) {
+  constexpr uint32_t thread_num = 1024;
+  const uint32_t thread_all = thread_num * GetBlockNum();
+  asc_vf_call<assign_values_kernel_with_io_vf<K, V, S, 32, IS_FAST_MODE>>(
+      dim3{static_cast<uint32_t>(thread_num)}, buckets, capacity,
+      bucket_max_size, dim, keys, values, n, thread_all, GetBlockIdx(),
+      d_dst_values, max_bucket_shift, capacity_divisor_magic,
+      capacity_divisor_shift);
+}
+
+template <class K, class V, class S>
 __global__ __vector__ void assign_values_kernel_lock_key_hybrid(
-    __gm__ void* buckets, __gm__ int* buckets_size, uint64_t capacity,
-    uint32_t bucket_max_size, uint32_t dim, __gm__ void* keys, uint64_t n,
+    __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
+    uint32_t bucket_max_size, uint32_t dim, const __gm__ K* keys, uint64_t n,
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
     uint64_t capacity_divisor_shift, uint64_t n_align_warp,
     __gm__ V* __gm__* d_dst_values, __gm__ K* __gm__* d_dst_keys) {
@@ -371,8 +364,8 @@ __global__ __vector__ void assign_values_kernel_lock_key_hybrid(
   const uint32_t thread_all = thread_num * GetBlockNum();
 
   asc_vf_call<assign_values_kernel_lock_key_hybrid_vf<K, V, S>>(
-      dim3{thread_num}, buckets, buckets_size, capacity, bucket_max_size, dim,
-      keys, n, GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
+      dim3{thread_num}, buckets, capacity, bucket_max_size, dim, keys, n,
+      GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
       capacity_divisor_shift, n_align_warp, thread_all, d_dst_values,
       d_dst_keys);
 }

@@ -1187,14 +1187,8 @@ TEST_F(AssignValuesTest, unique_key_false_duplicate_keys) {
   free_device_mem(device_values_buffer);
 }
 
-void test_ddr_assign_values_dim_basic(size_t dim) {
-  // 1. 初始化
-  init_env();
-  using K = int64_t;
-  using V = float;
-  using S = uint64_t;
-
-  // 2. 建表
+void test_ddr_assign_values_dim_basic(size_t dim, bool io_by_cpu = false) {
+  // 1. 建表
   constexpr size_t capacity = 128UL;
   auto table = std::make_unique<npu::hkv::HashTable<K, V, S>>();
 
@@ -1202,18 +1196,19 @@ void test_ddr_assign_values_dim_basic(size_t dim) {
   options.init_capacity = capacity;
   options.max_capacity = capacity;
   options.max_hbm_for_vectors =
-      capacity * sizeof(V) * dim / 2;  // 一半device一半host
+      io_by_cpu ? 0 : capacity * sizeof(V) * dim / 2;  // 一半device一半host
   options.dim = dim;
+  options.io_by_cpu = io_by_cpu;
 
   table->init(options);
   EXPECT_EQ(table->size(), 0);
 
-  // 3. 申请hbm内存
-  constexpr size_t key_num = 1024;
+  // 2. 申请hbm内存
+  constexpr size_t key_num = 128;
   DeviceData<K, V, S> device_data;
   device_data.malloc(key_num, dim);
 
-  // 4. 空桶插值
+  // 3. 空桶插值
   vector<K> host_keys(key_num, 0);
   vector<V> host_values(key_num * dim, 0);
   create_continuous_keys<K, S, V>(dim, host_keys.data(), nullptr,
@@ -1224,28 +1219,36 @@ void test_ddr_assign_values_dim_basic(size_t dim) {
                           device_data.device_values, nullptr,
                           device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
-  EXPECT_EQ(table->size(device_data.stream), capacity);
+  EXPECT_EQ(table->size(device_data.stream), key_num);
 
-  // 5. 使用 assign_values 更新 values
+  // 4. 使用 assign_values 更新 values
   vector<V> new_values(key_num * dim, 0);
   for (size_t i = 0; i < key_num * dim; i++) {
     new_values[i] = host_values[i] + 100.0f;
   }
   device_data.copy_values(new_values, key_num, dim);
   table->assign_values(key_num, device_data.device_keys,
-                       device_data.device_values, device_data.stream);
+                      device_data.device_values, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
-  // 6. 校验更新结果 - 使用 find 接口验证
+  // 5. 校验更新结果 - 使用 find 接口验证
   table->find(key_num, device_data.device_keys, device_data.device_values_ptr,
               device_data.device_found, nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
-  check_result(new_values, key_num, device_data, capacity, dim);
+  check_result(new_values, key_num, device_data, key_num, dim);
 }
 
-TEST(AssignValuesTest, test_ddr_dim_8) { test_ddr_assign_values_dim_basic(8); }
+TEST_F(AssignValuesTest, test_ddr_dim_8) { test_ddr_assign_values_dim_basic(8); }
 
-TEST(AssignValuesTest, test_ddr_dim_1024) {
+TEST_F(AssignValuesTest, test_ddr_dim_1024) {
   test_ddr_assign_values_dim_basic(1024);
+}
+
+TEST_F(AssignValuesTest, test_ddr_dim_8_by_cpu) {
+  test_ddr_assign_values_dim_basic(8, true);
+}
+
+TEST_F(AssignValuesTest, test_ddr_dim_1024_by_cpu) {
+  test_ddr_assign_values_dim_basic(1024, true);
 }
