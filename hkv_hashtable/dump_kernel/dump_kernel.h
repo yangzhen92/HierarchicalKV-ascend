@@ -279,7 +279,7 @@
 
    TPipe pipe;
    TQueBind<TPosition::VECIN, TPosition::VECOUT, 0> move_queue;
-   pipe.InitBuffer(move_queue, BUFFER_NUM, tile_size * sizeof(V));
+   pipe.InitBuffer(move_queue, DOUBLE_BUFFER, tile_size * sizeof(V));
 
    GlobalTensor<V> src_values_gm;
    GlobalTensor<V> dst_values_gm;
