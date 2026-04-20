@@ -1477,7 +1477,7 @@ class HashTable : public HashTableBase<K, V, S> {
                 d_dst_values, d_accum_or_assigns);
 
         auto tiling =
-            GetValueMoveTiling(n, block_dim_, table_->dim, sizeof(value_type), TRIPLE_BUFFER * DOUBLE_BUFFER);
+            GetValueMoveTiling(n, block_dim_, table_->dim, sizeof(value_type), true, TRIPLE_BUFFER * DOUBLE_BUFFER);
         write_with_accum_kernel<V><<<block_dim_, tiling.valid_ub_size, stream>>>(
             tiling.former_num, tiling.former_core_move_num,
             tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
