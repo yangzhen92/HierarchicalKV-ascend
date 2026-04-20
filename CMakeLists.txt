@@ -19,7 +19,7 @@ target_include_directories(hkv_includes INTERFACE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-add_compile_options(-std=c++17 -D_GLIBCXX_USE_CXX11_ABI=0)
+add_compile_options(-std=c++17)
 
 set_source_files_properties(
   ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
@@ -47,6 +47,7 @@ target_link_libraries(hkv_demo PRIVATE
   hkv_includes
   opapi
   nnopbase
+  pthread
 )
 
 add_executable(hkv_benchmark
@@ -72,6 +73,7 @@ target_link_libraries(hkv_benchmark PRIVATE
   hkv_includes
   opapi
   nnopbase
+  pthread
 )
 
 add_executable(hkv_benchmark_find_miss
@@ -96,6 +98,7 @@ target_link_libraries(hkv_benchmark_find_miss PRIVATE
   hkv_includes
   opapi
   nnopbase
+  pthread
 )
 
 if(ENABLE_TEST STREQUAL 1)
