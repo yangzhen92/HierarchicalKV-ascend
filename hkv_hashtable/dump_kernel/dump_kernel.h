@@ -268,7 +268,6 @@
    uint64_t cur_block_idx = GetBlockIdx();
    uint64_t core_start_idx = 0;
    uint64_t core_move_count = 0;
-   constexpr uint32_t BUFFER_NUM = 2;
    if (cur_block_idx < former_num) {
      core_start_idx = cur_block_idx * former_core_move_num;
      core_move_count = former_core_move_num;
