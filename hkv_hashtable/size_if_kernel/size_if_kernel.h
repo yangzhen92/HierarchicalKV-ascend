@@ -23,6 +23,7 @@
 #include "../../include/utils.h"
 #include "kernel_operator.h"
 #include "simt_api/device_warp_functions.h"
+#include <simt_api/common_functions.h>
 
 namespace npu {
 namespace hkv {
