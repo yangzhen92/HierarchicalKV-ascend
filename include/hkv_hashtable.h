@@ -2569,10 +2569,12 @@ class HashTable : public HashTableBase<K, V, S> {
   }
 
   /**
-   * @brief Returns the number of keys if meet PredFunctor.
+   * @brief Returns the number of keys that match the predicate.
    *
+   * @param pattern The pattern to match against keys.
+   * @param threshold The threshold to match against scores.
+   * @param d_counter Device pointer to store the count result.
    * @param stream The CANN stream that is used to execute the operation.
-   * @return The table size match condiction of PredFunctor.
    */
   template <template <typename, typename> class PredFunctor>
   void size_if(const key_type& pattern, const score_type& threshold,
@@ -2581,7 +2583,15 @@ class HashTable : public HashTableBase<K, V, S> {
     if (options_.api_lock) {
       lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
     }
-    std::cout << "[Unsupport size_if yet]\n";
+
+    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0,
+                               sizeof(size_type), stream));
+
+    size_if_kernel<K, V, S, PredFunctor><<<block_dim_, 0, stream>>>(
+        table_->buckets, table_->capacity, table_->bucket_max_size,
+        table_->max_bucket_shift, table_->capacity_divisor_magic,
+        table_->capacity_divisor_shift, pattern, threshold, d_counter);
+    
     NpuCheckError();
   }
 
