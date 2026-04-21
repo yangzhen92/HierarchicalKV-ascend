@@ -2298,7 +2298,7 @@ class HashTable : public HashTableBase<K, V, S> {
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
       auto temp_storage{dev_ws.get<uint8_t*>(0)};
       value_type** d_src_values{reinterpret_cast<value_type**>(temp_storage)};
-      dump_kernel_hybrid<K, V, S><<<block_dim_, 16 * 1024, stream>>>(
+      dump_kernel_hybrid<K, V, S><<<block_dim_, DYNAMIC_UB_SIZE, stream>>>(
           d_table_, table_->buckets, keys, d_src_values, scores, offset, n,
           d_counter, table_->dim);
 
@@ -2408,7 +2408,7 @@ class HashTable : public HashTableBase<K, V, S> {
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
       auto temp_storage{dev_ws.get<uint8_t*>(0)};
       value_type** d_src_values{reinterpret_cast<value_type**>(temp_storage)};
-      dump_kernel_if_hybrid<K, V, S, PredFunctor><<<block_dim_, 16 * 1024, stream>>>(
+      dump_kernel_if_hybrid<K, V, S, PredFunctor><<<block_dim_, DYNAMIC_UB_SIZE, stream>>>(
           d_table_, table_->buckets, pattern, threshold, keys, d_src_values, scores, offset, n,
           d_counter, table_->dim);
 
@@ -2481,7 +2481,7 @@ class HashTable : public HashTableBase<K, V, S> {
       auto temp_storage{dev_ws.get<uint8_t*>(0)};
       value_type** d_src_values{reinterpret_cast<value_type**>(temp_storage)};
       dump_kernel_if_v2_hybrid<K, V, S, PredFunctor>
-          <<<block_dim_, 16 * 1024, stream>>>(
+          <<<block_dim_, DYNAMIC_UB_SIZE, stream>>>(
               pred, d_table_, table_->buckets, keys, d_src_values, scores,
               offset, n, d_counter, table_->dim);
 
