@@ -2482,7 +2482,7 @@ class HashTable : public HashTableBase<K, V, S> {
       value_type** d_src_values{reinterpret_cast<value_type**>(temp_storage)};
       int32_t cg_size = GetCGSize(options_.dim, n);
       DISPATCH_GROUP_SIZE(
-          cg_size, (dump_kernel_if_v2_hybrid<K, V, S, PredFunctor>
+          cg_size, (dump_kernel_if_v2_hybrid<K, V, S, PredFunctor, GROUP_SIZE>
                     <<<block_dim_, 16 * 1024, stream>>>(
                         pred, d_table_, table_->buckets, keys, d_src_values,
                         scores, offset, n, d_counter, table_->dim)));
