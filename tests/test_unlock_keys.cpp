@@ -93,7 +93,7 @@ class UnlockKeysTest : public ::testing::Test {
 };
 
 // 用例1: 边界测试 - 空查询 (n=0)
-TEST_F(UnlockKeysTest, unlock0key) {
+TEST_F(UnlockKeysTest, Unlock0key) {
   constexpr size_t dim = DEFAULT_DIM;
   constexpr size_t key_num = 0;  // 边界值
 
@@ -118,7 +118,7 @@ TEST_F(UnlockKeysTest, unlock0key) {
 }
 
 // 用例1: 边界测试 - 非空n=1
-TEST_F(UnlockKeysTest, unlock1key) {
+TEST_F(UnlockKeysTest, Unlock1key) {
   constexpr size_t dim = DEFAULT_DIM;
   constexpr size_t key_num = 1;  // 边界值
 
@@ -155,7 +155,7 @@ TEST_F(UnlockKeysTest, unlock1key) {
 }
 
 // 用例1: 边界测试 - 非空n=2
-TEST_F(UnlockKeysTest, unlock2key) {
+TEST_F(UnlockKeysTest, Unlock2key) {
   constexpr size_t dim = DEFAULT_DIM;
   constexpr size_t key_num = 2;  // 边界值
 

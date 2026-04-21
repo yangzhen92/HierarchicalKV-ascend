@@ -94,7 +94,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void lock_keys_kernel_vf(
           if (cmp_result == 0) {
             break;
           }
-          uint32_t index = (Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+          uint32_t index = (Simt::ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
           cmp_result &= (cmp_result - 1);
           possible_pos = pos_cur + index;
 
