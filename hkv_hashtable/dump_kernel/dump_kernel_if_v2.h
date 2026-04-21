@@ -177,8 +177,7 @@
    if ((!table) || (!buckets) || (!d_key) || (!dst_val) || (!d_dump_counter)) {
      return;
    }
-   
-   PredFunctor<K, S> pred;
+
    const size_t bucket_max_size{table->bucket_max_size};
    size_t tid{blockIdx * blockDim.x + threadIdx.x};
    for (; tid < search_length; tid += total_thread_num) {
