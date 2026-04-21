@@ -1645,8 +1645,8 @@ class HashTable : public HashTableBase<K, V, S> {
           "small.");
     }
 
-    lock_keys_kernel<K, V, S><<<block_dim_, 0, stream>>>(
-        table_->buckets, table_->buckets_num, options_.max_bucket_size,
+    lock_keys_kernel<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
+        table_->buckets, table_->buckets_num, table_->bucket_max_size,
         options_.dim, const_cast<key_type*>(keys),
         static_cast<void*>(locked_key_ptrs),
         static_cast<void*>(success),

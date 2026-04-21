@@ -147,7 +147,6 @@ TEST_F(UnlockKeysTest, unlock1key) {
             ACL_MEMCPY_DEVICE_TO_HOST), ACL_ERROR_NONE);
 
   ASSERT_EQ(*host_success, false);
-  // ASSERT_EQ(*success, true);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
   
@@ -188,7 +187,6 @@ TEST_F(UnlockKeysTest, unlock2key) {
             ACL_MEMCPY_DEVICE_TO_HOST), ACL_ERROR_NONE);
 
   ASSERT_EQ(*host_success, true);
-  // ASSERT_EQ(*success, true);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
   

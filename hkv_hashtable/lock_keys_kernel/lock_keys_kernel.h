@@ -27,40 +27,23 @@ namespace npu {
 namespace hkv {
 using namespace AscendC;
 
-template <typename K = uint64_t, typename V = float, typename S = uint64_t,
-          typename VecV = int32_t, int32_t Strategy = 4>
+template <typename K = uint64_t, typename V = float, typename S = uint64_t, int32_t Strategy = -1>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void lock_keys_kernel_vf(
     __gm__ Bucket<K, V, S>* buckets_gm, uint64_t buckets_num,
     uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys_gm,
     __gm__ void* locked_keys_ptrs_gm, __gm__ void* succeed_gm,
-    __gm__ const S* scores_gm, S global_epoch, uint64_t n,
+    __gm__ const S* scores_gm, S cur_score, S global_epoch, uint64_t n,
     uint64_t thread_all, uint32_t block_index,
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
     uint64_t capacity_divisor_shift) {
-  if (!buckets_gm) {
-    return;
-  }
-  if (!keys_gm) {
-    return;
-  }
-  if (!locked_keys_ptrs_gm) {
+  if (!buckets_gm && !keys_gm && !locked_keys_ptrs_gm && !succeed_gm) {
     return;
   }
 
   using BUCKET = Bucket<K, V, S>;
   using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
-
   constexpr uint32_t STRIDE = sizeof(VecD_Comp) / sizeof(D);
-
-  __gm__ Bucket<K, V, S>* __restrict__ buckets =
-      reinterpret_cast<__gm__ Bucket<K, V, S>*>(buckets_gm);
-  __gm__ const K* __restrict__ keys =
-      reinterpret_cast<__gm__ const K*>(keys_gm);
-  __gm__ K* __gm__* __restrict__ locked_keys_ptrs =
-      reinterpret_cast<__gm__ K* __gm__*>(locked_keys_ptrs_gm);
-  __gm__ bool* __restrict__ succeed =
-      succeed_gm ? reinterpret_cast<__gm__ bool*>(succeed_gm) : nullptr;
 
   uint32_t key_pos = 0;
   K key = static_cast<K>(EMPTY_KEY);
@@ -68,13 +51,13 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void lock_keys_kernel_vf(
   __gm__ K* bucket_keys_ptr = nullptr;
   uint64_t bkt_idx = 0;
 
-  for (uint64_t kv_idx = block_index * blockDim.x + threadIdx.x;
-       kv_idx < n; kv_idx += thread_all) {
+  for (uint64_t kv_idx = block_index * blockDim.x + threadIdx.x; kv_idx < n; kv_idx += thread_all) {
     OccupyResult occupy_result{OccupyResult::INITIAL};
     VecD_Comp target_digests{0};
     bool found_ = false;
 
     key = keys[kv_idx];
+    score = ScoreFunctor::desired_when_missed(scores_gm, kv_idx, global_epoch, cur_score);
 
     if (IS_RESERVED_KEY<K>(key)) {
       occupy_result = OccupyResult::ILLEGAL;
@@ -82,39 +65,36 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void lock_keys_kernel_vf(
       // 1. 计算key的hash值 && 定位key
       const K hashed_key = Murmur3HashDevice(key);
       target_digests = digests_from_hashed<K>(hashed_key);
-      uint64_t global_idx = get_global_idx(hashed_key, capacity_divisor_magic,
-                                            capacity_divisor_shift,
+      uint64_t global_idx = get_global_idx(hashed_key, capacity_divisor_magic, capacity_divisor_shift,
                                             buckets_num * bucket_capacity);
-      key_pos = get_start_position(global_idx, bucket_capacity);
-      bkt_idx = global_idx / bucket_capacity;
+      key_pos = global_idx & (bucket_capacity - 1);
+      bkt_idx = global_idx >> max_bucket_shift;
 
       __gm__ Bucket<K, V, S>* bucket = buckets + bkt_idx;
       bucket_keys_ptr = bucket->keys_;
 
       // 2. 遍历桶查找key
-      for (uint32_t offset = 0; offset < bucket_capacity + STRIDE;
-           offset += STRIDE) {
+      for (uint32_t offset = 0; offset < bucket_capacity + STRIDE; offset += STRIDE) {
         if (occupy_result != OccupyResult::INITIAL) {
           break;
         }
         uint32_t pos_cur = align_to<STRIDE>(key_pos);
         pos_cur = (pos_cur + offset) & (bucket_capacity - 1);
 
-        __gm__ D* digests_ptr =
-            BUCKET::digests(bucket_keys_ptr, bucket_capacity, pos_cur);
-        VecD_Comp probe_digests =
-            *reinterpret_cast<__gm__ VecD_Comp*>(digests_ptr);
+        __gm__ D* digests_ptr = BUCKET::digests(bucket_keys_ptr, bucket_capacity, pos_cur);
+        VecD_Comp probe_digests = *reinterpret_cast<__gm__ VecD_Comp*>(digests_ptr);
 
-        // 2.1 遍历digest，4个比较
+        // 2.1 向量化比较，检查是否与目标摘要匹配。按字节进行向量比较，如果相等，将结果中对应字节设置为0xff
         uint32_t possible_pos = 0;
         uint32_t cmp_result = vcmpeq4(probe_digests, target_digests);
         cmp_result &= 0x01010101;
+
+        // 处理匹配的摘要
         do {
           if (cmp_result == 0) {
             break;
           }
-          uint32_t index =
-              (Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+          uint32_t index = (Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
           cmp_result &= (cmp_result - 1);
           possible_pos = pos_cur + index;
 
@@ -159,7 +139,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void lock_keys_kernel_vf(
   }
 }
 
-template <typename K, typename V, typename S>
+template <typename K, typename V, typename S, int Strategy = -1>
 __global__ __vector__ void lock_keys_kernel(
     __gm__ Bucket<K, V, S>* buckets, uint64_t buckets_num,
     uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys,
@@ -170,11 +150,14 @@ __global__ __vector__ void lock_keys_kernel(
   const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
 
   uint64_t cur_score =
-      static_cast<uint64_t>(GetSystemCycle());
+      (Strategy == npu::hkv::EvictStrategyInternal::kLru ||
+       Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
+          ? static_cast<uint64_t>(GetSystemCycle())
+          : 0;
 
-  Simt::VF_CALL<lock_keys_kernel_vf<K, V, S, int32_t, 4>>(
+  Simt::VF_CALL<lock_keys_kernel_vf<K, V, S, int32_t, Strategy>>(
       Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets, buckets_num,
-      bucket_capacity, dim, keys, locked_keys_ptrs, succeed, scores,
+      bucket_capacity, dim, keys, locked_keys_ptrs, succeed, scores, cur_score,
       static_cast<S>(global_epoch), n, thread_all, GetBlockIdx(),
       max_bucket_shift, capacity_divisor_magic, capacity_divisor_shift);
 }
