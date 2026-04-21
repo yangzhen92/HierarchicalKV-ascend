@@ -58,6 +58,7 @@
 #include "../hkv_hashtable/assign_kernel/assign_kernel.h"
 #include "../hkv_hashtable/accum_or_assign_kernel/accum_or_assign_kernel.h"
 #include "../hkv_hashtable/accum_or_assign_kernel/accum_or_assign_kernel_hybrid.h"
+#include "../hkv_hashtable/size_if_kernel/size_if_kernel.h"
 #include "aclnn_helper.h"
 #include "aclnnop/aclnn_reduce_sum.h"
 #include "group_lock.h"
