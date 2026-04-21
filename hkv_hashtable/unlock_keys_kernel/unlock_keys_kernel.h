@@ -79,8 +79,8 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void unlock_keys_kernel_vf(
 
 template <typename K>
 __global__ __vector__ void unlock_keys_kernel(
-    uint64_t n, __gm__ void* locked_key_ptrs,
-    __gm__ const K* keys, __gm__ void* succeededs) {
+    uint64_t n, __gm__ K* __gm__* locked_key_ptrs,
+    __gm__ const K* keys, __gm__ bool* succeededs) {
   const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
 
   Simt::VF_CALL<unlock_keys_kernel_vf<K>>(
