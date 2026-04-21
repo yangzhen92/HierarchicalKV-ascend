@@ -36,7 +36,7 @@ using namespace test_util;
  */
 template <class K, class S>
 struct ExportIfPredFunctor {
-  __forceinline__ __device__ bool operator()(const K& key, const S& score,
+  __forceinline__ __simt_vf__ bool operator()(const K& key, const S& score,
                                              const K& pattern,
                                              const S& threshold) {
     return score < threshold;
@@ -48,7 +48,7 @@ struct ExportIfPredFunctor {
  */
 template <class K, class S>
 struct ScoreGtePredFunctor {
-  __forceinline__ __device__ bool operator()(const K& key, const S& score,
+  __forceinline__ __simt_vf__ bool operator()(const K& key, const S& score,
                                              const K& pattern,
                                              const S& threshold) {
     return score >= threshold;
@@ -60,7 +60,7 @@ struct ScoreGtePredFunctor {
  */
 template <class K, class S>
 struct KeyMatchPredFunctor {
-  __forceinline__ __device__ bool operator()(const K& key, const S& score,
+  __forceinline__ __simt_vf__ bool operator()(const K& key, const S& score,
                                              const K& pattern,
                                              const S& threshold) {
     return (key & pattern) == pattern;
