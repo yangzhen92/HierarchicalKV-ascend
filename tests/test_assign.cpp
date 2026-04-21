@@ -17,8 +17,10 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <random>
+#include <set>
 #include <unordered_map>
 #include <vector>
 #include "acl/acl.h"
@@ -1021,6 +1023,140 @@ TEST_F(AssignTest, unique_key_false_lru_scores_nullptr) {
   free_device_mem(device_values_ptr);
   free_device_mem(device_found);
   free_device_mem(device_buf);
+}
+
+void test_repeat_key_assign_basic(size_t dim, size_t hbm_for_values,
+                                  bool io_by_cpu) {
+  constexpr size_t key_num = 1UL * 1024;
+  constexpr size_t repeat_num = 10;
+  constexpr size_t unique_key_num = (key_num + repeat_num - 1) / repeat_num;
+
+  using LocalKey = int64_t;
+  using Table = npu::hkv::HashTable<LocalKey, V, S, EvictStrategy::kLfu>;
+  auto table = std::make_unique<Table>();
+  npu::hkv::HashTableOptions options{
+      .init_capacity = DEFAULT_CAPACITY,
+      .max_capacity = DEFAULT_CAPACITY,
+      .max_hbm_for_vectors = hbm_for_values,
+      .dim = dim,
+      .io_by_cpu = io_by_cpu,
+  };
+  table->init(options);
+  EXPECT_EQ(table->size(), 0);
+
+  DeviceData<LocalKey, V, S> device_data;
+  device_data.malloc(key_num, dim);
+
+  vector<LocalKey> host_keys(key_num, 0);
+  vector<V> host_insert_values(key_num * dim, 0);
+  vector<S> host_insert_scores(key_num, 0);
+  create_continuous_keys<LocalKey, S, V>(dim, host_keys.data(),
+                                         host_insert_scores.data(),
+                                         host_insert_values.data(), key_num);
+  for (size_t i = 0; i < key_num; i++) {
+    host_keys[i] = static_cast<LocalKey>(i / repeat_num);
+    host_insert_scores[i] = static_cast<S>(100 + i);
+  }
+  device_data.copy_keys(host_keys, key_num);
+  device_data.copy_values(host_insert_values, key_num, dim);
+  device_data.copy_scores(host_insert_scores, key_num);
+  table->insert_or_assign(key_num, device_data.device_keys,
+                          device_data.device_values, device_data.device_scores,
+                          device_data.stream, false);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  EXPECT_EQ(table->size(device_data.stream), unique_key_num);
+
+  vector<V> host_assign_values(key_num * dim, 0);
+  vector<S> host_assign_scores(key_num, 0);
+  for (size_t i = 0; i < key_num; i++) {
+    host_assign_scores[i] = static_cast<S>(5000 + i);
+    for (size_t j = 0; j < dim; j++) {
+      host_assign_values[i * dim + j] = 2000.0f + static_cast<V>(host_keys[i]) +
+                                        static_cast<V>(j) * 0.1f;
+    }
+  }
+  device_data.copy_values(host_assign_values, key_num, dim);
+  device_data.copy_scores(host_assign_scores, key_num);
+  table->assign(key_num, device_data.device_keys, device_data.device_values,
+                device_data.device_scores, device_data.stream, false);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+
+  DeviceData<LocalKey, V, S> find_data;
+  find_data.malloc(key_num, dim);
+  table->find(key_num, device_data.device_keys, find_data.device_values_ptr,
+              find_data.device_found, find_data.device_scores, find_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(find_data.stream), ACL_ERROR_NONE);
+
+  auto host_found = std::make_unique<bool[]>(key_num);
+  ASSERT_EQ(aclrtMemcpy(host_found.get(), key_num * sizeof(bool),
+                        find_data.device_found, key_num * sizeof(bool),
+                        ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
+  vector<V*> found_values(key_num, nullptr);
+  ASSERT_EQ(aclrtMemcpy(found_values.data(), key_num * sizeof(V*),
+                        find_data.device_values_ptr, key_num * sizeof(V*),
+                        ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
+  vector<S> found_scores(key_num, 0);
+  ASSERT_EQ(aclrtMemcpy(found_scores.data(), key_num * sizeof(S),
+                        find_data.device_scores, key_num * sizeof(S),
+                        ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
+
+  set<LocalKey> checked_keys;
+  for (size_t i = 0; i < key_num; i++) {
+    if (!host_found[i] || checked_keys.find(host_keys[i]) != checked_keys.end()) {
+      continue;
+    }
+    checked_keys.insert(host_keys[i]);
+
+    vector<V> real_values(dim, 0);
+    ASSERT_EQ(aclrtMemcpy(real_values.data(), dim * find_data.each_value_size,
+                          found_values[i], dim * find_data.each_value_size,
+                          ACL_MEMCPY_DEVICE_TO_HOST),
+              ACL_ERROR_NONE);
+
+    bool value_matched = false;
+    size_t search_start = (i / repeat_num) * repeat_num;
+    S score_floor = std::numeric_limits<S>::max();
+    for (size_t j = search_start; j < search_start + repeat_num && j < key_num;
+         j++) {
+      if (host_keys[j] != host_keys[i]) {
+        continue;
+      }
+      vector<V> candidate_values(host_assign_values.begin() + j * dim,
+                                 host_assign_values.begin() + j * dim + dim);
+      if (candidate_values == real_values) {
+        value_matched = true;
+      }
+      score_floor = std::min(score_floor, host_insert_scores[j]);
+    }
+    ASSERT_TRUE(value_matched) << "key: " << host_keys[i] << " value mismatch";
+    EXPECT_GE(found_scores[i], score_floor)
+        << "key: " << host_keys[i] << " score should not decrease";
+  }
+  EXPECT_EQ(checked_keys.size(), unique_key_num);
+
+  table->clear(find_data.stream);
+  EXPECT_EQ(table->size(find_data.stream), 0);
+}
+
+TEST_F(AssignTest, test_repeat_key_with_pure_hbm) {
+  constexpr size_t hbm = numeric_limits<size_t>::max();
+  test_repeat_key_assign_basic(20480, hbm, false);
+}
+
+TEST_F(AssignTest, test_repeat_key_with_ddr) {
+  constexpr size_t hbm = 4UL << 30;
+  test_repeat_key_assign_basic(20480, hbm, false);
+}
+
+TEST_F(AssignTest, test_repeat_key_with_pure_ddr) {
+  test_repeat_key_assign_basic(DEFAULT_DIM, 0, false);
+}
+
+TEST_F(AssignTest, test_repeat_key_with_io_by_cpu) {
+  test_repeat_key_assign_basic(DEFAULT_DIM, 0, true);
 }
 
 void test_ddr_assign_dim_basic(size_t dim, bool io_by_cpu = false) {
