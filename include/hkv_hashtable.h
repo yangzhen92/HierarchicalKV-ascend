@@ -1766,7 +1766,7 @@ class HashTable : public HashTableBase<K, V, S> {
 
         auto tiling =
           GetValueMoveTiling(n, block_dim_, table_->dim, sizeof(value_type), false);
-        write_kernel_unlock<K, V><<<block_dim_, tiling.valid_ub_size, stream>>>(
+        write_kernel<K, V, true><<<block_dim_, tiling.valid_ub_size, stream>>>(
           tiling.former_num, tiling.former_core_move_num,
           tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
           table_->dim, const_cast<key_type*>(keys),
@@ -1931,7 +1931,7 @@ class HashTable : public HashTableBase<K, V, S> {
 
         auto tiling =
           GetValueMoveTiling(n, block_dim_, table_->dim, sizeof(value_type), false);
-        write_kernel_unlock<K, V><<<block_dim_, tiling.valid_ub_size, stream>>>(
+        write_kernel<K, V, true><<<block_dim_, tiling.valid_ub_size, stream>>>(
           tiling.former_num, tiling.former_core_move_num,
           tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
           table_->dim, const_cast<key_type*>(keys),
