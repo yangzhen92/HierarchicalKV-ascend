@@ -39,7 +39,7 @@ struct ExportTestConfig {
   size_t offset;          // 导出偏移量
   bool use_scores;        // 是否使用分数
   FunctorVersion functor_version;  // 导出函数版本
-  bool use_fast_mode;
+  bool use_fast_mode;     // 是否使用纯hbm模式
 };
 
 template <class K, class S>
