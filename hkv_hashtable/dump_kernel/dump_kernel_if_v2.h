@@ -165,7 +165,7 @@
            GetBlockIdx())));
  }
 
- template <class K, class V, class S, class PredFunctor, int32_t GROUP_SIZE>
+ template <class K, class V, class S, class PredFunctor, int32_t GROUP_SIZE = 32>
  __simt_vf__ __aicore__
  LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_kernel_if_v2_hybrid_vf(
      PredFunctor pred, __gm__ Table<K, V, S>* table,
@@ -195,7 +195,7 @@
 
      const int key_idx{static_cast<int>((tid + offset) % bucket_max_size)};
      const K key{bucket_keys_ptr[key_idx]};
-     const __gm__ V* value_ptrs = &bucket_values_ptr[key_idx * dim_in];
+     __gm__ V* value_ptrs = &bucket_values_ptr[key_idx * dim_in];
      S score{bucket_scores_ptr[key_idx]};
      bool match = pred.template operator()<GROUP_SIZE>(key, value_ptrs, score);
      if (match) {
@@ -222,7 +222,7 @@
    }
  }
 
- template <class K, class V, class S, class PredFunctor, int32_t GROUP_SIZE>
+ template <class K, class V, class S, class PredFunctor, int32_t GROUP_SIZE = 32>
  __global__ __vector__ void dump_kernel_if_v2_hybrid(
      PredFunctor pred, __gm__ Table<K, V, S>* table,
      __gm__ Bucket<K, V, S>* buckets, __gm__ K* keys,
