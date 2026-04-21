@@ -18,6 +18,7 @@
 #define ASCENDC_LOCK_KEYS_KERNEL_H_
 
 #include <cstdint>
+#include <simt_api/common_functions.h>
 #include "../../include/score_functor.h"
 #include "../../include/types.h"
 #include "../../include/utils.h"
@@ -155,8 +156,8 @@ __global__ __vector__ void lock_keys_kernel(
           ? static_cast<uint64_t>(GetSystemCycle())
           : 0;
 
-  Simt::VF_CALL<lock_keys_kernel_vf<K, V, S, Strategy>>(
-      Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets, buckets_num,
+  asc_vf_call<lock_keys_kernel_vf<K, V, S, Strategy>>(
+      dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets, buckets_num,
       bucket_capacity, dim, keys, locked_keys_ptrs, succeed, scores, cur_score,
       static_cast<S>(global_epoch), n, thread_all, GetBlockIdx(),
       max_bucket_shift, capacity_divisor_magic, capacity_divisor_shift);

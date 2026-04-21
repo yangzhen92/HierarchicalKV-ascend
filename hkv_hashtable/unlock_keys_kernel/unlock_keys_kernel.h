@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include "../../include/types.h"
+#include <simt_api/common_functions.h>
 #include "kernel_operator.h"
 
 namespace npu {
@@ -83,8 +84,8 @@ __global__ __vector__ void unlock_keys_kernel(
     __gm__ const K* keys, __gm__ bool* succeededs) {
   const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
 
-  Simt::VF_CALL<unlock_keys_kernel_vf<K>>(
-      Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_512)}, n,
+  asc_vf_call<unlock_keys_kernel_vf<K>>(
+      dim3{static_cast<uint32_t>(THREAD_NUM_512)}, n,
       locked_key_ptrs, keys, succeededs, thread_all, GetBlockIdx());
 }
 
