@@ -220,17 +220,21 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_kernel_with_io_vf(
       if constexpr (IS_FAST_MODE) {
         copy_vector<V, TILE_SIZE>(values + key_idx * dim,
                                   bucket_vectors + key_pos * dim, dim, lane_id);
-      } else {
-        d_dst_values[key_idx] = bucket_vectors + key_pos * dim;
       }
-      if (lane_id == 0) {
-        ScoreFunctor::update_without_missed(bucket_keys, bucket_max_size,
-                                            key_pos, scores, key_idx,
-                                            global_epoch, system_cycle);
-      }
-      asc_threadfence();
     }
     if (lane_id == 0) {
+      if (occupy_result == OccupyResult::DUPLICATE) {
+        ScoreFunctor::update_without_missed(bucket_keys, bucket_max_size,
+          key_pos, scores, key_idx, global_epoch, system_cycle);
+        if constexpr (!IS_FAST_MODE) {
+          d_dst_values[key_idx] = bucket_vectors + key_pos * dim;
+        }
+      } else {
+        if constexpr (!IS_FAST_MODE) {
+          d_dst_values[key_idx] = nullptr;
+        }
+      }
+      asc_threadfence();
       (void)asc_atomic_exch(bucket_keys + key_pos, key);
     }
   }
