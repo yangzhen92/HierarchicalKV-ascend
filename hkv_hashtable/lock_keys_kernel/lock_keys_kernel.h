@@ -105,7 +105,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void lock_keys_kernel_vf(
             // 使用原子交换尝试锁定
             K expected_key = key;
             K desired_key = static_cast<K>(LOCKED_KEY);
-            K original_key = Simt::AtomicCas(current_key_ptr, expected_key, desired_key);
+            K original_key = asc_atomic_cas(current_key_ptr, expected_key, desired_key);
             if (original_key == key) {
               // 锁定成功
               occupy_result = OccupyResult::DUPLICATE;
