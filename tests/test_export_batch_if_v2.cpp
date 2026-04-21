@@ -256,6 +256,18 @@ TEST(test_export_batch_if_v2, test_export_batch_if_v2_offset) {
   RUN_EXPORT_BATCH_IF_V2_TEST(int64_t, double, uint64_t, 16, config);
 }
 
+TEST(test_export_batch_if_v2, test_export_batch_if_v2_hybrid_basic) {
+  ExportTestConfig config = {1024, false, 0, false, FunctorVersion::V2, false};
+  RUN_EXPORT_BATCH_IF_V2_TEST(uint64_t, float, uint64_t, 8, config);
+  RUN_EXPORT_BATCH_IF_V2_TEST(int64_t, double, uint64_t, 16, config);
+}
+
+TEST(test_export_batch_if_v2, test_export_batch_if_v2_hybrid_full_key_num) {
+  ExportTestConfig config = {128 * 1024, false, 0, false, FunctorVersion::V2, false};
+  RUN_EXPORT_BATCH_IF_V2_TEST(uint64_t, float, uint64_t, 8, config);
+  RUN_EXPORT_BATCH_IF_V2_TEST(int64_t, double, uint64_t, 16, config);
+}
+
 TEST(test_export_batch_if, test_export_batch_if_basic) {
   ExportTestConfig config = {1024, false, 0, false, FunctorVersion::V1, true};
   RUN_EXPORT_BATCH_IF_V2_TEST(uint64_t, float, uint64_t, 8, config);
