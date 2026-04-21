@@ -1682,8 +1682,7 @@ class HashTable : public HashTableBase<K, V, S> {
     }
 
     unlock_keys_kernel<K><<<block_dim_, 0, stream>>>(
-        n, static_cast<void*>(locked_key_ptrs),
-        const_cast<key_type*>(keys), static_cast<void*>(success));
+        n, locked_key_ptrs, const_cast<key_type*>(keys), success);
     NpuCheckError();
   }
 

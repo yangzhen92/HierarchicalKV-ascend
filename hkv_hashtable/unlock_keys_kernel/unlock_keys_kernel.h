@@ -39,23 +39,11 @@ using namespace AscendC;
 template <typename K = uint64_t>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void unlock_keys_kernel_vf(
-    uint64_t n, __gm__ void* locked_key_ptrs_gm,
-    __gm__ const K* keys_gm, __gm__ void* succeededs_gm,
+    uint64_t n, __gm__ K* __gm__* locked_key_ptrs,
+    __gm__ const K* keys, __gm__ bool* succeededs,
     uint64_t thread_all, uint32_t block_index) {
-  if (!locked_key_ptrs_gm) {
+  if (!locked_key_ptrs && !keys) {
     return;
-  }
-  if (!keys_gm) {
-    return;
-  }
-
-  __gm__ K* __gm__* __restrict__ locked_key_ptrs =
-      reinterpret_cast<__gm__ K* __gm__*>(locked_key_ptrs_gm);
-  __gm__ const K* __restrict__ keys =
-      reinterpret_cast<__gm__ const K*>(keys_gm);
-  __gm__ bool* __restrict__ succeededs = nullptr;
-  if (succeededs_gm) {
-    succeededs = reinterpret_cast<__gm__ bool*>(succeededs_gm);
   }
 
   for (uint64_t kv_idx = block_index * blockDim.x + threadIdx.x;
