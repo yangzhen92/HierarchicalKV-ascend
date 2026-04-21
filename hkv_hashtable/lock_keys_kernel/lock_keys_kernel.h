@@ -30,14 +30,14 @@ using namespace AscendC;
 template <typename K = uint64_t, typename V = float, typename S = uint64_t, int32_t Strategy = -1>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void lock_keys_kernel_vf(
-    __gm__ Bucket<K, V, S>* buckets_gm, uint64_t buckets_num,
-    uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys_gm,
-    __gm__ void* locked_keys_ptrs_gm, __gm__ void* succeed_gm,
-    __gm__ const S* scores_gm, S cur_score, S global_epoch, uint64_t n,
+    __gm__ Bucket<K, V, S>* buckets, uint64_t buckets_num,
+    uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys,
+    __gm__ K* __gm__* locked_keys_ptrs, __gm__ bool* succeed,
+    __gm__ const S* scores, S cur_score, S global_epoch, uint64_t n,
     uint64_t thread_all, uint32_t block_index,
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
     uint64_t capacity_divisor_shift) {
-  if (!buckets_gm && !keys_gm && !locked_keys_ptrs_gm && !succeed_gm) {
+  if (!buckets && !keys && !locked_keys_ptrs && !succeed) {
     return;
   }
 
@@ -57,7 +57,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void lock_keys_kernel_vf(
     bool found_ = false;
 
     key = keys[kv_idx];
-    score = ScoreFunctor::desired_when_missed(scores_gm, kv_idx, global_epoch, cur_score);
+    score = ScoreFunctor::desired_when_missed(scores, kv_idx, global_epoch, cur_score);
 
     if (IS_RESERVED_KEY<K>(key)) {
       occupy_result = OccupyResult::ILLEGAL;
@@ -111,7 +111,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void lock_keys_kernel_vf(
               occupy_result = OccupyResult::DUPLICATE;
               key_pos = possible_pos;
               // 更新score
-              ScoreFunctor::update_with_digest(bucket_keys_ptr, key_pos, scores_gm,
+              ScoreFunctor::update_with_digest(bucket_keys_ptr, key_pos, scores,
                                                 static_cast<int32_t>(kv_idx), score,
                                                 bucket_capacity,
                                                 get_digest<K>(key), false);
@@ -143,7 +143,7 @@ template <typename K, typename V, typename S, int Strategy = -1>
 __global__ __vector__ void lock_keys_kernel(
     __gm__ Bucket<K, V, S>* buckets, uint64_t buckets_num,
     uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys,
-    __gm__ void* locked_keys_ptrs, __gm__ void* succeed,
+    __gm__ K* __gm__* locked_keys_ptrs, __gm__ bool* succeed,
     __gm__ const S* scores, uint64_t global_epoch, uint64_t n,
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
     uint64_t capacity_divisor_shift) {
@@ -155,7 +155,7 @@ __global__ __vector__ void lock_keys_kernel(
           ? static_cast<uint64_t>(GetSystemCycle())
           : 0;
 
-  Simt::VF_CALL<lock_keys_kernel_vf<K, V, S, int32_t, Strategy>>(
+  Simt::VF_CALL<lock_keys_kernel_vf<K, V, S, Strategy>>(
       Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets, buckets_num,
       bucket_capacity, dim, keys, locked_keys_ptrs, succeed, scores, cur_score,
       static_cast<S>(global_epoch), n, thread_all, GetBlockIdx(),

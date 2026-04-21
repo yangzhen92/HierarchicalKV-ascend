@@ -58,7 +58,7 @@
 #include "../hkv_hashtable/assign_kernel/assign_kernel.h"
 #include "../hkv_hashtable/accum_or_assign_kernel/accum_or_assign_kernel.h"
 #include "../hkv_hashtable/lock_keys_kernel/lock_keys_kernel.h"
-#include "../hkv_hashtable/lock_keys_kernel/unlock_keys_kernel.h"
+#include "../hkv_hashtable/unlock_keys_kernel/unlock_keys_kernel.h"
 #include "../hkv_hashtable/accum_or_assign_kernel/accum_or_assign_kernel_hybrid.h"
 #include "aclnn_helper.h"
 #include "aclnnop/aclnn_reduce_sum.h"
@@ -1647,9 +1647,7 @@ class HashTable : public HashTableBase<K, V, S> {
 
     lock_keys_kernel<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
         table_->buckets, table_->buckets_num, table_->bucket_max_size,
-        options_.dim, const_cast<key_type*>(keys),
-        static_cast<void*>(locked_key_ptrs),
-        static_cast<void*>(success),
+        options_.dim, const_cast<key_type*>(keys), locked_key_ptrs, success,
         scores, global_epoch_, n, table_->max_bucket_shift,
         table_->capacity_divisor_magic, table_->capacity_divisor_shift);
     NpuCheckError();
