@@ -1545,9 +1545,10 @@ class HashTable : public HashTableBase<K, V, S> {
         find_or_insert_kernel<K, V, S, evict_strategy>
             <<<block_dim_, 0, stream>>>(
                 table_->buckets, table_->buckets_size, table_->capacity,
-                table_->bucket_max_size, table_->dim, keys, values, scores, n,
-                global_epoch_, table_->max_bucket_shift,
-                table_->capacity_divisor_magic, table_->capacity_divisor_shift);
+                table_->bucket_max_size, value_move_opt_.dim, keys, values,
+                scores, n, global_epoch_, value_move_opt_.size,
+                table_->max_bucket_shift, table_->capacity_divisor_magic,
+                table_->capacity_divisor_shift, value_move_opt_.cg_size);
       } else {
         std::cout << "[Unsupport find_or_insert yet]\n";
       }
