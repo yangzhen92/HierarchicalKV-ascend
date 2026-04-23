@@ -43,11 +43,11 @@
      __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size, uint64_t buckets_num,
      uint32_t bucket_max_size, uint32_t dim, __gm__ const K* keys,
      __gm__ V* values, __gm__ S* scores, uint64_t n,
-     __gm__ bool* founds, uint64_t global_epoch, uint64_t cur_score,
+     uint64_t global_epoch, uint64_t cur_score,
      uint32_t blockIdx, uint64_t thread_all, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
      uint64_t capacity, uint32_t cg_size) {
-   if ((!buckets) || (!buckets_size) || (!keys) || (!values) || (!founds)) {
+   if ((!buckets) || (!buckets_size) || (!keys) || (!values)) {
      return;
    }
 
@@ -82,8 +82,6 @@
        key = keys[kv_idx];
        if (IS_RESERVED_KEY<K>(key)) {
          occupy_result = OccupyResult::ILLEGAL;
-         founds[kv_idx] = false;
-         values[kv_idx] = 0;
        } else {
          score = ScoreFunctor::desired_when_missed(scores, kv_idx, global_epoch,
                                                    cur_score);
@@ -304,7 +302,7 @@
        __gm__ K* key_address = BUCKET::keys(bucket_keys, key_pos);
        *key_address = key;
      }
-     founds[kv_idx] = occupy_result == OccupyResult::DUPLICATE;
+    //  founds[kv_idx] = occupy_result == OccupyResult::DUPLICATE;
    }
  }
 
@@ -396,7 +394,7 @@
  __global__ __vector__ void find_or_insert_kernel(
      __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size, uint64_t buckets_num,
      uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys, __gm__ V* values,
-      __gm__ S* scores, uint64_t n, __gm__ bool* founds,
+      __gm__ S* scores, uint64_t n,
      uint64_t global_epoch, uint32_t value_size, uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
      uint64_t capacity_divisor_shift, uint64_t capacity, uint32_t cg_size) {
  
@@ -411,7 +409,7 @@
      (asc_vf_call<find_or_insert_kernel_vf<K, V, S, DTYPE, Strategy>>(
                dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets,
                buckets_size, buckets_num, bucket_capacity, dim, keys, values,
-               scores, n, founds, global_epoch, cur_score,
+               scores, n, global_epoch, cur_score,
                GetBlockIdx(), thread_all, max_bucket_shift, capacity_divisor_magic,
                capacity_divisor_shift, capacity, cg_size)));
  }
