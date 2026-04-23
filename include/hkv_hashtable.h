@@ -1526,12 +1526,34 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
 
+    while (!reach_max_capacity_ &&
+           fast_load_factor(n, stream) > options_.max_load_factor) {
+      reserve(capacity() * 2, stream);
+    }
+
+    if (!ignore_evict_strategy) {
+      check_evict_strategy(scores);
+    }
+
     std::unique_ptr<insert_unique_lock> lock_ptr;
     if (options_.api_lock) {
       lock_ptr = std::make_unique<insert_unique_lock>(mutex_, stream);
     }
 
-    std::cout << "[Unsupport find_or_insert yet]\n";
+    if (is_fast_mode()) {
+      if (unique_key) {
+        find_or_insert_kernel<K, V, S, evict_strategy>
+            <<<block_dim_, 0, stream>>>(
+                table_->buckets, table_->buckets_size, table_->capacity,
+                table_->bucket_max_size, table_->dim, keys, values, scores, n,
+                global_epoch_, table_->max_bucket_shift,
+                table_->capacity_divisor_magic, table_->capacity_divisor_shift);
+      } else {
+        std::cout << "[Unsupport find_or_insert yet]\n";
+      }
+    } else {
+      std::cout << "[Unsupport find_or_insert yet]\n";
+    }
 
     NpuCheckError();
   }
@@ -1598,7 +1620,7 @@ class HashTable : public HashTableBase<K, V, S> {
         keys, static_cast<void*>(values), scores, locked_key_ptrs, n, founds, global_epoch_,
         value_move_opt_.size, table_->max_bucket_shift,
         table_->capacity_divisor_magic, table_->capacity_divisor_shift,
-        n_align_warp, table_->capacity);
+        n_align_warp, table_->capacity, value_move_opt_.cg_size);
 
       NpuCheckError();
       return;
