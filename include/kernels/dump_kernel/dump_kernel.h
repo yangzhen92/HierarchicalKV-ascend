@@ -36,9 +36,6 @@
  
  template <class K, class V, class S, class VecV>
  __simt_vf__ __aicore__ LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_kernel_vf(
-     __gm__ void* table_gm, __gm__ void* buckets_gm, __gm__ void* key_gm, __gm__ void* val_gm,
-     __gm__ void* score_gm, const size_t offset, const size_t search_length, const size_t search_length_align,
-     const uint64_t total_thread_num, __gm__ void* dump_counter_gm,
      __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets, __gm__ K* d_key, __gm__ V* d_val,
      __gm__ S* d_score, const size_t offset, const size_t search_length, const size_t search_length_align,
      const uint64_t total_thread_num, __gm__ size_t* d_dump_counter,

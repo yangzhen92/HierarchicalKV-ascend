@@ -316,7 +316,6 @@ float test_one_api(std::shared_ptr<Table>& table, const API_Select api,
         NPU_CHECK(aclrtSynchronizeStream(stream));
         break;
       }
-
       case API_Select::assign_values: {
         table->assign_values(key_num_per_op_warmup, d_keys, d_vectors, stream);
         NPU_CHECK(aclrtSynchronizeStream(stream));
