@@ -49,6 +49,7 @@
 #include "kernels/assign_scores_kernel/assign_scores_kernel.h"
 #include "kernels/find_or_insert_ptr_kernel/find_or_insert_ptr_kernel_v2.h"
 #include "kernels/find_or_insert_ptr_kernel/find_or_insert_ptr_kernel.h"
+#include "kernels/find_or_insert_kernel/find_or_insert_kernel.h"
 #include "kernels/insert_or_assign_kernel/insert_or_assign_kernel.h"
 #include "tiling_helper.h"
 #include "kernels/lock_keys_kernel/lock_keys_kernel.h"
