@@ -1622,7 +1622,7 @@ class HashTable : public HashTableBase<K, V, S> {
         keys, static_cast<void*>(values), scores, locked_key_ptrs, n, founds, global_epoch_,
         value_move_opt_.size, table_->max_bucket_shift,
         table_->capacity_divisor_magic, table_->capacity_divisor_shift,
-        n_align_warp, table_->capacity, value_move_opt_.cg_size);
+        n_align_warp, table_->capacity);
 
       NpuCheckError();
       return;
