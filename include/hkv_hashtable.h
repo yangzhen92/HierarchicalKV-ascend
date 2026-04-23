@@ -31,33 +31,36 @@
 #include <shared_mutex>
 #include <string>
 #include <type_traits>
-#include "../hkv_hashtable/dump_kernel/dump_kernel.h"
-#include "../hkv_hashtable/dump_kernel/dump_kernel_if.h"
-#include "../hkv_hashtable/dump_kernel/dump_kernel_if_v2.h"
-#include "../hkv_hashtable/rehash_kernel/rehash_kernel.h"
-#include "../hkv_hashtable/clear_kernel/clear_kernel.h"
-#include "../hkv_hashtable/find_and_update_kernel/find_and_update_kernel_with_filter.h"
-#include "../hkv_hashtable/find_and_update_kernel/find_and_update_kernel.h"
-#include "../hkv_hashtable/find_ptr_kernel/find_ptr_with_digest_kernel.h"
-#include "../hkv_hashtable/find_ptr_kernel/find_ptr_kernel.h"
-#include "../hkv_hashtable/find_kernel/find_with_digest_kernel.h"
-#include "../hkv_hashtable/find_kernel/find_miss_with_digest_kernel.h"
-#include "../hkv_hashtable/find_kernel/find_miss_with_digest_kernel_hybrid.h"
-#include "../hkv_hashtable/utils_kernel/utils_kernel.h"
-#include "../hkv_hashtable/contains_kernel/contains_kernel.h"
-#include "../hkv_hashtable/assign_scores_kernel/assign_scores_kernel_with_filter.h"
-#include "../hkv_hashtable/assign_scores_kernel/assign_scores_kernel.h"
-#include "../hkv_hashtable/find_or_insert_ptr_kernel/find_or_insert_ptr_kernel_v2.h"
-#include "../hkv_hashtable/find_or_insert_ptr_kernel/find_or_insert_ptr_kernel.h"
-#include "../hkv_hashtable/insert_or_assign_kernel/insert_or_assign_kernel.h"
+#include "kernels/dump_kernel/dump_kernel.h"
+#include "kernels/dump_kernel/dump_kernel_if.h"
+#include "kernels/dump_kernel/dump_kernel_if_v2.h"
+#include "kernels/rehash_kernel/rehash_kernel.h"
+#include "kernels/clear_kernel/clear_kernel.h"
+#include "kernels/find_and_update_kernel/find_and_update_kernel_with_filter.h"
+#include "kernels/find_and_update_kernel/find_and_update_kernel.h"
+#include "kernels/find_ptr_kernel/find_ptr_with_digest_kernel.h"
+#include "kernels/find_ptr_kernel/find_ptr_kernel.h"
+#include "kernels/find_kernel/find_with_digest_kernel.h"
+#include "kernels/find_kernel/find_miss_with_digest_kernel.h"
+#include "kernels/find_kernel/find_miss_with_digest_kernel_hybrid.h"
+#include "kernels/utils_kernel/utils_kernel.h"
+#include "kernels/contains_kernel/contains_kernel.h"
+#include "kernels/assign_scores_kernel/assign_scores_kernel_with_filter.h"
+#include "kernels/assign_scores_kernel/assign_scores_kernel.h"
+#include "kernels/find_or_insert_ptr_kernel/find_or_insert_ptr_kernel_v2.h"
+#include "kernels/find_or_insert_ptr_kernel/find_or_insert_ptr_kernel.h"
+#include "kernels/insert_or_assign_kernel/insert_or_assign_kernel.h"
 #include "tiling_helper.h"
-#include "../hkv_hashtable/insert_and_evict_kernel/insert_and_evict_kernel.h"
-#include "../hkv_hashtable/traverse_kernel/traverse_kernel.h"
-#include "../hkv_hashtable/remove_kernel/remove_kernel.h"
-#include "../hkv_hashtable/assign_values_kernel/assign_values_kernel.h"
-#include "../hkv_hashtable/assign_kernel/assign_kernel.h"
-#include "../hkv_hashtable/accum_or_assign_kernel/accum_or_assign_kernel.h"
-#include "../hkv_hashtable/accum_or_assign_kernel/accum_or_assign_kernel_hybrid.h"
+#include "kernels/lock_keys_kernel/lock_keys_kernel.h"
+#include "kernels/unlock_keys_kernel/unlock_keys_kernel.h"
+#include "kernels/insert_and_evict_kernel/insert_and_evict_kernel.h"
+#include "kernels/traverse_kernel/traverse_kernel.h"
+#include "kernels/remove_kernel/remove_kernel.h"
+#include "kernels/assign_values_kernel/assign_values_kernel.h"
+#include "kernels/assign_kernel/assign_kernel.h"
+#include "kernels/size_if_kernel/size_if_kernel.h"
+#include "kernels/accum_or_assign_kernel/accum_or_assign_kernel.h"
+#include "kernels/accum_or_assign_kernel/accum_or_assign_kernel_hybrid.h"
 #include "aclnn_helper.h"
 #include "aclnnop/aclnn_reduce_sum.h"
 #include "group_lock.h"
@@ -1658,7 +1661,18 @@ class HashTable : public HashTableBase<K, V, S> {
       lock_ptr = std::make_unique<insert_unique_lock>(mutex_, stream);
     }
 
-    std::cout << "[Unsupport lock_keys yet]\n";
+    constexpr uint32_t MinBucketCapacityFilter = sizeof(VecD_Load) / sizeof(D);
+    if (options_.max_bucket_size < MinBucketCapacityFilter) {
+      throw std::runtime_error(
+          "Not support lock_keys API because the bucket capacity is too "
+          "small.");
+    }
+
+    lock_keys_kernel<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
+        table_->buckets, table_->buckets_num, table_->bucket_max_size,
+        options_.dim, const_cast<key_type*>(keys), locked_key_ptrs, success,
+        scores, global_epoch_, n, table_->max_bucket_shift,
+        table_->capacity_divisor_magic, table_->capacity_divisor_shift);
     NpuCheckError();
   }
 
@@ -1690,7 +1704,9 @@ class HashTable : public HashTableBase<K, V, S> {
       lock_ptr = std::make_unique<insert_unique_lock>(mutex_, stream);
     }
 
-    std::cout << "[Unsupport unlock_keys yet]\n";
+    unlock_keys_kernel<K><<<block_dim_, 0, stream>>>(
+        n, locked_key_ptrs, const_cast<key_type*>(keys), success);
+    NpuCheckError();
   }
 
   /**
@@ -1725,9 +1741,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
-
     check_evict_strategy(scores);
-
     std::unique_ptr<update_shared_lock> lock_ptr;
     if (options_.api_lock) {
       lock_ptr = std::make_unique<update_shared_lock>(mutex_, stream);
@@ -1743,13 +1757,75 @@ class HashTable : public HashTableBase<K, V, S> {
           table_->max_bucket_shift, table_->capacity_divisor_magic,
           table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
       } else {
-        assign_kernel_with_io<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
+        assign_kernel_with_io<K, V, S, evict_strategy, true><<<block_dim_, 0, stream>>>(
           table_->buckets, table_->capacity, table_->bucket_max_size, static_cast<uint32_t>(options_.dim),
-          keys, values, scores, n, global_epoch_, table_->max_bucket_shift, table_->capacity_divisor_magic,
+          keys, values, scores, n, nullptr, global_epoch_, table_->max_bucket_shift, table_->capacity_divisor_magic,
           table_->capacity_divisor_shift);
       }
     } else {
-      throw std::runtime_error("[assign] Only supported in pure HBM mode.");
+      bool filter_condition = unique_key && !options_.io_by_cpu;
+      if (filter_condition) {
+        uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+        size_t size_all = n * sizeof(value_type*) + n * sizeof(key_type*);
+        auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
+        auto temp_storage{dev_ws.get<uint8_t*>(0)};
+        value_type** d_dst_values{reinterpret_cast<value_type**>(temp_storage)};
+        key_type** d_dst_keys{
+          reinterpret_cast<key_type**>(temp_storage + n * sizeof(value_type*))};
+
+        assign_kernel_lock_key_hybrid<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
+          table_->buckets,
+          table_->capacity, table_->bucket_max_size, table_->dim,
+          keys, scores, n, global_epoch_, table_->max_bucket_shift,
+          table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+          n_align_warp, d_dst_values, d_dst_keys);
+
+        auto tiling =
+          GetValueMoveTiling(n, block_dim_, table_->dim, sizeof(value_type), false);
+        write_kernel<K, V, true><<<block_dim_, tiling.valid_ub_size, stream>>>(
+          tiling.former_num, tiling.former_core_move_num,
+          tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
+          table_->dim, const_cast<key_type*>(keys),
+          const_cast<value_type*>(values), n, d_dst_values, d_dst_keys);
+      } else {
+        size_t dst_ptr_size = n * sizeof(value_type*);
+        auto dev_ws{dev_mem_pool_->get_workspace<1>(dst_ptr_size, stream)};
+        auto temp_storage{dev_ws.get<uint8_t*>(0)};
+        value_type** d_dst_values{reinterpret_cast<value_type**>(temp_storage)};
+        NPU_CHECK(aclrtMemsetAsync(temp_storage, dst_ptr_size, 0, dst_ptr_size,
+                                   stream));
+
+        assign_kernel_with_io<K, V, S, evict_strategy, false><<<block_dim_, 0, stream>>>(
+          table_->buckets, table_->capacity, table_->bucket_max_size, static_cast<uint32_t>(options_.dim),
+          keys, values, scores, n, d_dst_values, global_epoch_, table_->max_bucket_shift, table_->capacity_divisor_magic,
+          table_->capacity_divisor_shift);
+        if (options_.io_by_cpu) {
+          size_t value_size = n * table_->dim * sizeof(value_type);
+
+          size_t host_size_all = value_size + dst_ptr_size;
+          auto host_ws{host_mem_pool_->get_workspace<1>(host_size_all, stream)};
+          auto host_storage{host_ws.get<uint8_t*>(0)};
+          value_type* h_values{reinterpret_cast<value_type*>(host_storage)};
+          value_type** h_dst_values{reinterpret_cast<value_type**>(
+            host_storage + n * table_->dim * sizeof(value_type))};
+          NPU_CHECK(aclrtMemcpyAsync(h_values, value_size, values, value_size,
+                                     ACL_MEMCPY_DEVICE_TO_HOST, stream));
+          NPU_CHECK(aclrtMemcpyAsync(h_dst_values, dst_ptr_size, d_dst_values,
+                                     dst_ptr_size, ACL_MEMCPY_DEVICE_TO_HOST,
+                                     stream));
+          NPU_CHECK(aclrtSynchronizeStream(stream));
+          write_by_cpu<V>(h_dst_values, h_values, table_->dim, n);
+        } else {
+          auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
+                                           sizeof(value_type), false);
+          write_kernel<K, V, false>
+              <<<block_dim_, tiling.valid_ub_size, stream>>>(
+                  tiling.former_num, tiling.former_core_move_num,
+                  tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
+                  table_->dim, const_cast<key_type*>(keys),
+                  const_cast<value_type*>(values), n, d_dst_values, nullptr);
+        }
+      }
     }
     NpuCheckError();
   }
@@ -1848,18 +1924,81 @@ class HashTable : public HashTableBase<K, V, S> {
       if (unique_key && options_.max_bucket_size >= MinBucketCapacityFilter) {
         uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
         assign_values_kernel<K, V, S><<<block_dim_, 0, stream>>>(
-        table_->buckets, table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
-        const_cast<key_type*>(keys), static_cast<void*>(const_cast<value_type*>(values)),
-        n, value_move_opt_.size, table_->max_bucket_shift, table_->capacity_divisor_magic,
-        table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
+          table_->buckets, table_->capacity, table_->bucket_max_size, value_move_opt_.dim,
+          const_cast<key_type*>(keys), static_cast<void*>(const_cast<value_type*>(values)),
+          n, value_move_opt_.size, table_->max_bucket_shift, table_->capacity_divisor_magic,
+          table_->capacity_divisor_shift, n_align_warp, value_move_opt_.cg_size);
       } else {
-        assign_values_kernel_with_io<K, V, S><<<block_dim_, 0, stream>>>(
-        table_->buckets, table_->capacity, table_->bucket_max_size, static_cast<uint32_t>(options_.dim),
-        const_cast<key_type*>(keys), const_cast<value_type*>(values),
-        n, table_->max_bucket_shift, table_->capacity_divisor_magic, table_->capacity_divisor_shift);
+        assign_values_kernel_with_io<K, V, S, true><<<block_dim_, 0, stream>>>(
+          table_->buckets, table_->capacity, table_->bucket_max_size,
+          static_cast<uint32_t>(options_.dim), const_cast<key_type*>(keys), const_cast<value_type*>(values),
+          n, nullptr, table_->max_bucket_shift, table_->capacity_divisor_magic, table_->capacity_divisor_shift);
       }
     } else {
-      throw std::runtime_error("[assign_values] Only supported in pure HBM mode.");
+      bool filter_condition = unique_key && !options_.io_by_cpu;
+      if (filter_condition) {
+        uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+        size_t size_all = n * sizeof(value_type*) + n * sizeof(key_type*);
+        auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
+        auto temp_storage{dev_ws.get<uint8_t*>(0)};
+        value_type** d_dst_values{reinterpret_cast<value_type**>(temp_storage)};
+        key_type** d_dst_keys{
+          reinterpret_cast<key_type**>(temp_storage + n * sizeof(value_type*))};
+
+        assign_values_kernel_lock_key_hybrid<K, V, S><<<block_dim_, 0, stream>>>(
+          table_->buckets, 
+          table_->capacity, table_->bucket_max_size, table_->dim,
+          keys, n, table_->max_bucket_shift,
+          table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+          n_align_warp, d_dst_values, d_dst_keys);
+
+        auto tiling =
+          GetValueMoveTiling(n, block_dim_, table_->dim, sizeof(value_type), false);
+        write_kernel<K, V, true><<<block_dim_, tiling.valid_ub_size, stream>>>(
+          tiling.former_num, tiling.former_core_move_num,
+          tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
+          table_->dim, const_cast<key_type*>(keys),
+          const_cast<value_type*>(values), n, d_dst_values, d_dst_keys);
+      } else {
+        size_t dst_ptr_size = n * sizeof(value_type*);
+        auto dev_ws{dev_mem_pool_->get_workspace<1>(dst_ptr_size, stream)};
+        auto temp_storage{dev_ws.get<uint8_t*>(0)};
+        value_type** d_dst_values{reinterpret_cast<value_type**>(temp_storage)};
+        NPU_CHECK(aclrtMemsetAsync(temp_storage, dst_ptr_size, 0, dst_ptr_size,
+                                   stream));
+
+        assign_values_kernel_with_io<K, V, S, false><<<block_dim_, 0, stream>>>(
+          table_->buckets, table_->capacity, table_->bucket_max_size, static_cast<uint32_t>(options_.dim),
+          const_cast<key_type*>(keys), const_cast<value_type*>(values),
+          n, d_dst_values, table_->max_bucket_shift, table_->capacity_divisor_magic,
+          table_->capacity_divisor_shift);
+        if (options_.io_by_cpu) {
+          size_t value_size = n * table_->dim * sizeof(value_type);
+
+          size_t host_size_all = value_size + dst_ptr_size;
+          auto host_ws{host_mem_pool_->get_workspace<1>(host_size_all, stream)};
+          auto host_storage{host_ws.get<uint8_t*>(0)};
+          value_type* h_values{reinterpret_cast<value_type*>(host_storage)};
+          value_type** h_dst_values{reinterpret_cast<value_type**>(
+              host_storage + n * table_->dim * sizeof(value_type))};
+          NPU_CHECK(aclrtMemcpyAsync(h_values, value_size, values, value_size,
+                                     ACL_MEMCPY_DEVICE_TO_HOST, stream));
+          NPU_CHECK(aclrtMemcpyAsync(h_dst_values, dst_ptr_size, d_dst_values,
+                                     dst_ptr_size, ACL_MEMCPY_DEVICE_TO_HOST,
+                                     stream));
+          NPU_CHECK(aclrtSynchronizeStream(stream));
+          write_by_cpu<V>(h_dst_values, h_values, table_->dim, n);
+        } else {
+          auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
+                                           sizeof(value_type), false);
+          write_kernel<K, V, false>
+              <<<block_dim_, tiling.valid_ub_size, stream>>>(
+                  tiling.former_num, tiling.former_core_move_num,
+                  tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
+                  table_->dim, const_cast<key_type*>(keys),
+                  const_cast<value_type*>(values), n, d_dst_values, nullptr);
+        }
+      }
     }
     NpuCheckError();
   }
@@ -2320,8 +2459,7 @@ class HashTable : public HashTableBase<K, V, S> {
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
       auto temp_storage{dev_ws.get<uint8_t*>(0)};
       value_type** d_src_values{reinterpret_cast<value_type**>(temp_storage)};
-      //NPU_CHECK(aclrtMemsetAsync(d_src_values, size_all, 0, size_all, stream));
-      dump_kernel_hybrid<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
+      dump_kernel_hybrid<K, V, S><<<block_dim_, DYNAMIC_UB_SIZE, stream>>>(
           d_table_, table_->buckets, keys, d_src_values, scores, offset, n,
           d_counter, table_->dim);
 
@@ -2418,12 +2556,32 @@ class HashTable : public HashTableBase<K, V, S> {
     if ((offset >= table_->capacity) || (n == 0)) {
       return;
     }
-    DISPATCH_GROUP_SIZE(
-        value_move_opt_.cg_size,
-        (dump_kernel_if<K, V, S, PredFunctor, GROUP_SIZE>
-         <<<block_dim_, 64 * 1024, stream>>>(
-             d_table_, table_->buckets, pattern, threshold, keys, values, scores, offset, n,
-             d_counter, value_move_opt_.size, value_move_opt_.dim)));
+
+    if (is_fast_mode()) {
+      DISPATCH_GROUP_SIZE(
+          value_move_opt_.cg_size,
+          (dump_kernel_if<K, V, S, PredFunctor, GROUP_SIZE>
+          <<<block_dim_, 64 * 1024, stream>>>(
+              d_table_, table_->buckets, pattern, threshold, keys, values, scores, offset, n,
+              d_counter, value_move_opt_.size, value_move_opt_.dim)));
+    } else {
+      size_t size_all = n * sizeof(value_type*);
+      auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
+      auto temp_storage{dev_ws.get<uint8_t*>(0)};
+      value_type** d_src_values{reinterpret_cast<value_type**>(temp_storage)};
+      dump_kernel_if_hybrid<K, V, S, PredFunctor><<<block_dim_, DYNAMIC_UB_SIZE, stream>>>(
+          d_table_, table_->buckets, pattern, threshold, keys, d_src_values, scores, offset, n,
+          d_counter, table_->dim);
+
+      uint64_t valid_ub_size = GetMixedOpUbSize();
+      uint32_t max_tile_size =
+          valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
+      HKV_CHECK(max_tile_size != 0,
+                log_format("UB size %lu is too small.", valid_ub_size));
+      export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
+          block_dim_, table_->dim, max_tile_size, values, d_counter,
+          d_src_values);
+    }
     NpuCheckError();
   }
 
@@ -2471,13 +2629,32 @@ class HashTable : public HashTableBase<K, V, S> {
     if ((offset >= table_->capacity) || (n == 0)) {
       return;
     }
-    size_type n_align = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
-    DISPATCH_GROUP_SIZE(
-        value_move_opt_.cg_size,
-        (dump_kernel_if_v2<K, V, S, PredFunctor, GROUP_SIZE>
-         <<<block_dim_, 64 * 1024, stream>>>(
-             pred, d_table_, table_->buckets, keys, values, scores, offset, n,
-             n_align, d_counter, value_move_opt_.size, value_move_opt_.dim)));
+    if (is_fast_mode()) {
+      DISPATCH_GROUP_SIZE(
+          value_move_opt_.cg_size,
+          (dump_kernel_if_v2<K, V, S, PredFunctor, GROUP_SIZE>
+           <<<block_dim_, 64 * 1024, stream>>>(
+               pred, d_table_, table_->buckets, keys, values, scores, offset, n,
+               d_counter, value_move_opt_.size, value_move_opt_.dim)));
+    } else {
+      size_t size_all = n * sizeof(value_type*);
+      auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
+      auto temp_storage{dev_ws.get<uint8_t*>(0)};
+      value_type** d_src_values{reinterpret_cast<value_type**>(temp_storage)};
+      dump_kernel_if_v2_hybrid<K, V, S, PredFunctor>
+          <<<block_dim_, DYNAMIC_UB_SIZE, stream>>>(
+              pred, d_table_, table_->buckets, keys, d_src_values, scores,
+              offset, n, d_counter, table_->dim);
+
+      uint64_t valid_ub_size = GetMixedOpUbSize();
+      uint32_t max_tile_size =
+          valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
+      HKV_CHECK(max_tile_size != 0,
+                log_format("UB size %lu is too small.", valid_ub_size));
+      export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
+          block_dim_, table_->dim, max_tile_size, values, d_counter,
+          d_src_values);
+    }
     NpuCheckError();
   }
 
@@ -2569,10 +2746,12 @@ class HashTable : public HashTableBase<K, V, S> {
   }
 
   /**
-   * @brief Returns the number of keys if meet PredFunctor.
+   * @brief Returns the number of keys that match the predicate.
    *
+   * @param pattern The pattern to match against keys.
+   * @param threshold The threshold to match against scores.
+   * @param d_counter Device pointer to store the count result.
    * @param stream The CANN stream that is used to execute the operation.
-   * @return The table size match condiction of PredFunctor.
    */
   template <template <typename, typename> class PredFunctor>
   void size_if(const key_type& pattern, const score_type& threshold,
@@ -2581,7 +2760,15 @@ class HashTable : public HashTableBase<K, V, S> {
     if (options_.api_lock) {
       lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
     }
-    std::cout << "[Unsupport size_if yet]\n";
+
+    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0,
+                               sizeof(size_type), stream));
+
+    size_if_kernel<K, V, S, PredFunctor><<<block_dim_, 0, stream>>>(
+        table_->buckets, table_->capacity, table_->bucket_max_size,
+        table_->max_bucket_shift, table_->capacity_divisor_magic,
+        table_->capacity_divisor_shift, pattern, threshold, d_counter);
+    
     NpuCheckError();
   }
 
