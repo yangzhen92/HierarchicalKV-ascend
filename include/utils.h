@@ -25,10 +25,10 @@
 #include <exception>
 #include <limits>
 #include <string>
-#include "cuda2npu.h"
 #include "kernel_operator.h"
 #include <acl/acl.h>
-#include "../hkv_hashtable/utils_kernel/utils_kernel.h"
+#include <thread>
+#include "kernels/utils_kernel/utils_kernel.h"
 #include "debug.h"
 
 namespace npu {
@@ -59,7 +59,7 @@ inline uint64_t Murmur3HashHost(const uint64_t& key) {
 }
 
 #if defined(__CCE__)
-__inline__ __device__ uint64_t Murmur3HashDevice(uint64_t const& key) {
+__inline__ __simt_callee__ uint64_t Murmur3HashDevice(uint64_t const& key) {
   uint64_t k = key;
   k ^= k >> 33;
   k *= UINT64_C(0xff51afd7ed558ccd);
@@ -72,10 +72,9 @@ __inline__ __device__ uint64_t Murmur3HashDevice(uint64_t const& key) {
 
 #if defined(__CCE__)
 /* 本函数原公式为：global_idx = hashed_key % capacity
- * 现由快除法计算出div_res = hashed_key / capacity，再由global_idx = hashed_key - div_res * capacity
- * uint64_t快除法：
- * r = x / y，如果y的值固定，则除法可以等效替换为如下公式
- * 预计算部分（host）：
+ * 现由快除法计算出div_res = hashed_key / capacity，再由global_idx = hashed_key
+ * - div_res * capacity uint64_t快除法： r = x /
+ * y，如果y的值固定，则除法可以等效替换为如下公式 预计算部分（host）：
  * 1. shift = ceil(log2(y))
  * 2. magic = ceil(2 ^ (64 + shift) / y)
  * 运行时计算部分（本函数内）：
@@ -83,7 +82,7 @@ __inline__ __device__ uint64_t Murmur3HashDevice(uint64_t const& key) {
  * 4. t = ((x - q) >> 1) + q
  * 5. r = t >> (shift - 1)
  */
-__inline__ __device__ uint64_t get_global_idx(
+__inline__ __simt_callee__ uint64_t get_global_idx(
     const uint64_t& hashed_key, const uint64_t& capacity_divisor_magic,
     const uint64_t& capacity_divisor_shift, const uint64_t& capacity) {
 #ifdef FORBID_QUICK_DIV
@@ -134,10 +133,46 @@ static inline bool is_on_device(const void* ptr) {
 
 #if defined(__CCE__)
 template <typename T>
-__forceinline__ __device__ T ldg_l2nc_l1c(__gm__ T* ptr) {
-  return __ldg<LD_L2CacheType::L2_CACHE_HINT_NOTALLOC_CLEAN, L1CacheType::CACHEABLE>(ptr);
+__forceinline__ __simt_callee__ T ldg_l2nc_l1c(__gm__ T* ptr) {
+  return __ldg<LD_L2CacheType::L2_CACHE_HINT_NOTALLOC_CLEAN,
+               L1CacheType::CACHEABLE>(ptr);
 }
 #endif
+
+template <typename V>
+void write_by_cpu(V** __restrict dst, const V* __restrict src, size_t dim,
+                  int N, int n_worker = 16) {
+  std::vector<std::thread> thds;
+  n_worker = std::max(n_worker, 1);
+
+  auto functor = [dim](V** __restrict dst, const V* __restrict src,
+                       int handled_size, int trunk_size) {
+    for (int i = handled_size; i < handled_size + trunk_size; ++i) {
+      if (dst[i] != nullptr) {
+        memcpy(dst[i], src + i * dim, sizeof(V) * dim);
+      }
+    }
+  };
+
+  int32_t trunk_size_floor = N / n_worker;
+  int32_t trunk_size_remain = N % n_worker;
+  int32_t n_worker_used = trunk_size_floor == 0 ? trunk_size_remain : n_worker;
+
+  size_t handled_size = 0;
+  for (int i = 0; i < n_worker_used; ++i) {
+    int32_t cur_trunk_size = trunk_size_floor;
+    if (trunk_size_remain != 0) {
+      cur_trunk_size++;
+      trunk_size_remain--;
+    }
+    thds.emplace_back(functor, dst, src, handled_size, cur_trunk_size);
+    handled_size += cur_trunk_size;
+  }
+
+  for (int i = 0; i < n_worker_used; i++) {
+    thds[i].join();
+  }
+}
 
 }  // namespace hkv
 }  // namespace npu
