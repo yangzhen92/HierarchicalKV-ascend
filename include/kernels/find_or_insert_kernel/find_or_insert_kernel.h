@@ -46,7 +46,7 @@
      __gm__ bool* founds, uint64_t global_epoch, uint64_t cur_score,
      uint32_t blockIdx, uint64_t thread_all, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
-     uint64_t n_align_warp, uint64_t capacity, uint32_t cg_size) {
+     uint64_t capacity, uint32_t cg_size) {
    if ((!buckets) || (!buckets_size) || (!keys) || (!values) || (!founds)) {
      return;
    }
@@ -65,6 +65,7 @@
   //  __gm__ S* __restrict__ scores = reinterpret_cast<__gm__ S*>(scores_gm);
    S score = static_cast<S>(EMPTY_SCORE);
    constexpr uint32_t STRIDE = sizeof(VecD_Comp) / sizeof(D);
+   const size_t n_align_warp = ((n + warpSize - 1) / warpSize) * warpSize;
  
    uint32_t key_pos = 0;
    K key = 0;
@@ -397,7 +398,7 @@
      uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys, __gm__ V* values,
       __gm__ S* scores, uint64_t n, __gm__ bool* founds,
      uint64_t global_epoch, uint32_t value_size, uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
-     uint64_t capacity_divisor_shift, uint64_t n_align_warp, uint64_t capacity, uint32_t cg_size) {
+     uint64_t capacity_divisor_shift, uint64_t capacity, uint32_t cg_size) {
  
    const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
    uint64_t cur_score = (Strategy == npu::hkv::EvictStrategyInternal::kLru ||
@@ -412,7 +413,7 @@
                buckets_size, buckets_num, bucket_capacity, dim, keys, values,
                scores, n, founds, global_epoch, cur_score,
                GetBlockIdx(), thread_all, max_bucket_shift, capacity_divisor_magic,
-               capacity_divisor_shift, n_align_warp, capacity, cg_size)));
+               capacity_divisor_shift, capacity, cg_size)));
  }
 
 template <class K, class V, class S, int Strategy = -1>
