@@ -35,16 +35,18 @@
  namespace npu {
  namespace hkv {
  using namespace AscendC;
- 
- template <typename K = uint64_t, typename V = float, typename S = uint64_t, typename VecV = int32_t,
-           int Strategy = -1, int32_t EVICT_GROUP_SIZE = 16>
+
+ template <typename K = uint64_t, typename V = float, typename S = uint64_t,
+           typename VecV = int32_t, int Strategy = -1,
+           int32_t EVICT_GROUP_SIZE = 16>
  __simt_vf__ __aicore__
  LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_kernel_vf(
-     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size, uint64_t buckets_num,
-     uint32_t bucket_max_size, uint32_t dim, __gm__ const K* keys,
-     __gm__ V* values, __gm__ S* scores, uint64_t n,
-     uint64_t global_epoch, uint64_t cur_score,
-     uint32_t blockIdx, uint64_t thread_all, uint32_t max_bucket_shift,
+     __gm__ Bucket<K, V, S>* __restrict__ buckets,
+     __gm__ int32_t* __restrict__ buckets_size, uint64_t buckets_num,
+     uint32_t bucket_max_size, uint32_t dim, __gm__ const K* __restrict__ keys,
+     __gm__ V* __restrict__ values, __gm__ S* __restrict__ scores, uint64_t n,
+     uint64_t global_epoch, uint64_t cur_score, uint32_t blockIdx,
+     uint64_t thread_all, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
      uint64_t capacity, uint32_t cg_size) {
    if ((!buckets) || (!buckets_size) || (!keys) || (!values)) {
