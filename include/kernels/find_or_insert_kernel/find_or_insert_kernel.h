@@ -25,11 +25,11 @@
  
  #include <kernel_operator.h>
  #include <cstdint>
- #include "../../include/types.h"
- #include "../../include/utils.h"
- #include "../../include/score_functor.h"
- #include "../../include/simt_vf_dispatcher.h"
- #include "../../include/find_utils.h" 
+ #include "types.h"
+ #include "utils.h"
+ #include "score_functor.h"
+ #include "simt_vf_dispatcher.h"
+ #include "find_utils.h" 
  #include "simt_api/asc_simt.h"
  
  namespace npu {
