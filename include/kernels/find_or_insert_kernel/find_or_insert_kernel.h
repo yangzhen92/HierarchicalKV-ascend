@@ -72,7 +72,7 @@
    uint32_t key_pos = 0;
    K key = 0;
    __gm__ K* bucket_keys = nullptr;
-   __gm__ VecV* bucket_values = nullptr;
+   uint64_t bucket_values = 0;
    __gm__ S* bucket_scores = nullptr;
    __gm__ int32_t* bucket_size = nullptr;
    for (uint64_t kv_idx = blockIdx * blockDim.x + threadIdx.x;
@@ -100,7 +100,7 @@
          int32_t cur_bucket_size = *bucket_size;
          __gm__ Bucket<K, V, S>* bucket = buckets + bkt_idx;
          bucket_keys = bucket->keys_;
-         bucket_values = reinterpret_cast<__gm__ uint64_t>(bucket->vectors);
+         bucket_values = reinterpret_cast<uint64_t>(bucket->vectors);
          bucket_scores = bucket->scores_;
  
          // 3. 遍历桶，找key/空位
