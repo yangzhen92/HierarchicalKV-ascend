@@ -428,7 +428,7 @@ __global__ __vector__ void find_or_insert_non_unique_kernel(
                            ? static_cast<uint64_t>(GetSystemCycle())
                            : 0;
 
-  asc_vf_call<find_or_insert_kernel_non_unique_vf<K, V, S, Strategy>>(
+  asc_vf_call<find_or_insert_non_unique_kernel_vf<K, V, S, Strategy>>(
       dim3{static_cast<uint32_t>(THREAD_NUM_512)}, table, buckets,
       bucket_max_size, buckets_num, dim, keys, vectors, scores,
       static_cast<S>(cur_score), found, static_cast<S>(global_epoch), n,
