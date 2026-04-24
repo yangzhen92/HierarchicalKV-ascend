@@ -62,7 +62,7 @@
   //      reinterpret_cast<__gm__ int32_t*>(buckets_size_gm);
   //  __gm__ const K* __restrict__ keys =
   //      reinterpret_cast<__gm__ const K*>(keys_gm);
-  //  __gm__ VecV* __restrict__ values = reinterpret_cast<__gm__ VecV*>(values_gm);
+   __gm__ VecV* __restrict__ values_vecv = reinterpret_cast<__gm__ VecV*>(values);
   //  __gm__ bool* __restrict__ founds = reinterpret_cast<__gm__ bool*>(founds_gm);
   //  __gm__ S* __restrict__ scores = reinterpret_cast<__gm__ S*>(scores_gm);
    S score = static_cast<S>(EMPTY_SCORE);
@@ -288,13 +288,24 @@
          auto bucket_value_start = key_pos_sync * dim;
         //  __gm__ VecV* bucket_values_vec =
         //      reinterpret_cast<__gm__ VecV*>(bucket_values_sync);
+        if (res_sync == OccupyResult::DUPLICATE) {
+          __gm__ VecV* bucket_values_vec =
+              reinterpret_cast<__gm__ VecV*>(bucket_values_sync);
+          for (uint32_t j = cg_rank_id; j < dim; j += cg_size) {
+            __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+                  L1CacheType::NON_CACHEABLE>(
+                values_vecv + value_start + j,
+                bucket_values_vec[bucket_value_start + j]);
+          }
+        } else {
           for (uint32_t j = cg_rank_id; j < dim; j += cg_size) {
             __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
                 L1CacheType::NON_CACHEABLE>(
               reinterpret_cast<__gm__ VecV*>(bucket_values_sync) +
                   bucket_value_start + j,
-              values[value_start + j]);
+              values_vecv[value_start + j]);
           }
+        }
        }
      }
 
@@ -441,4 +452,4 @@ __global__ __vector__ void find_or_insert_non_unique_kernel(
  }  // namespace hkv
  }  // namespace npu
  
- #endif  // ASCENDC_FIND_OR_INSERT_PTR_KERNEL_V2_H_
+ #endif  // ASCENDC_FIND_OR_INSERT_KERNEL_H_
