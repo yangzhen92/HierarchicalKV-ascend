@@ -274,7 +274,7 @@
      }
  
      // 5. 抢占成功，写入value
-     auto cg_rank_id = threadIdx.x % cg_size;
+     cg_rank_id = threadIdx.x % cg_size;
      for (int i = 0; i < cg_size; i++) {
        int32_t res_sync = __shfl(occupy_result, i, cg_size);
        if ((res_sync != OccupyResult::REFUSED) &&
