@@ -623,8 +623,4 @@ TEST(test_find_or_insert, basic_function) {
                        nullptr, mixed_device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(mixed_device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table.size(mixed_device_data.stream), key_num + 1024); // 增加1024个新键
-
-  // 8. 释放内存
-  device_data.free();
-  mixed_device_data.free();
 }
