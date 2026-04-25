@@ -570,7 +570,7 @@ void print_title_a() {
        << "| find_or_insert* "
        << "| find_and_update "
        << "|   find* "
-       << "| export_batch "
+       << "| find_or_insert "
        << "| assign "
        << "| assign_scores "
        << "| assign_values ";
@@ -823,7 +823,7 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
         API_Select::find_or_insert_ptr,
         API_Select::find_and_update,
         API_Select::find_ptr,
-        API_Select::export_batch,
+        API_Select::find_or_insert,
         API_Select::assign,
         API_Select::assign_scores,
         API_Select::assign_values,
@@ -831,6 +831,7 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
         API_Select::contains,
       };
       std::vector<API_Select> apis_b{
+        API_Select::export_batch,
         API_Select::export_batch_if_v2,
         API_Select::export_batch_if,
       };
