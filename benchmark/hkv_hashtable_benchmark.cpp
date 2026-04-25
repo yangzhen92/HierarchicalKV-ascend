@@ -592,8 +592,8 @@ void print_title_a() {
        << "|----------------:"
        //<< "|   find* "
        << "|--------:"
-       //<< "| export_batch "
-       << "|-------------:"
+       //<< "| find_or_insert "
+       << "|---------------:"
        //<< "| assign "
        << "|-------:"
        //<< "| assign_scores "
@@ -612,12 +612,15 @@ void print_title_a() {
 void print_title_b() {
   cout << endl
        << "|    \u03BB "
+       << "| export_batch "
        << "| export_batch_if_v2 "
        << "| export_batch_if ";
   cout << "|\n";
 
   //<< "| load_factor "
   cout << "|-----:"
+       //<< "| export_batch "
+       << "|-------------:"
        //<< "| export_batch_if_v2 "
        << "|-------------------:"
        //<< "| export_batch_if "
