@@ -590,7 +590,50 @@ TEST(test_find_or_insert, basic_function) {
 
   // 6. 校验结果
   // 6.1 检查值是否被更新
-  check_result(new_host_values, key_num, device_data);
+  vector<V> host_founds(key_num * dim, 0);
+  ASSERT_EQ(
+      aclrtMemcpy(host_founds.data(), key_num * each_value_size * dim,
+                  device_data.device_values, key_num * each_value_size * dim,
+                  ACL_MEMCPY_DEVICE_TO_HOST),
+      ACL_ERROR_NONE);
+  
+  // 按比特位比较 new_host_values 和 host_founds
+  bool values_match = true;
+  size_t mismatch_count = 0;
+  constexpr size_t max_mismatches = 10; // 最多显示10个不匹配
+  
+  for (size_t i = 0; i < key_num; i++) {
+    for (size_t j = 0; j < dim; j++) {
+      size_t idx = i * dim + j;
+      
+      // 按字节比较
+      if (memcmp(&new_host_values[idx], &host_founds[idx], sizeof(V)) != 0) {
+        if (mismatch_count < max_mismatches) {
+          // 打印不匹配的详细信息
+          printf("MISMATCH at [%zu][%zu]:\n", i, j);
+          printf("  expected: ");
+          for (size_t b = 0; b < sizeof(V); b++) {
+            printf("%02X ", ((unsigned char*)&new_host_values[idx])[b]);
+          }
+          printf("(%f)\n", new_host_values[idx]);
+          
+          printf("  actual:   ");
+          for (size_t b = 0; b < sizeof(V); b++) {
+            printf("%02X ", ((unsigned char*)&host_founds[idx])[b]);
+          }
+          printf("(%f)\n", host_founds[idx]);
+        }
+        values_match = false;
+        mismatch_count++;
+      }
+    }
+  }
+  
+  if (values_match) {
+    printf("All values match exactly at bit level!\n");
+  } else {
+    printf("Total mismatches: %zu (showing first %zu)\n", mismatch_count, max_mismatches);
+  }
 
   // 7. 测试混合场景（部分新键，部分旧键）
   constexpr size_t mixed_key_num = 2 * 1024;
