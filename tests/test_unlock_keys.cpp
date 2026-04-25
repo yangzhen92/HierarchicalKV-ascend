@@ -48,7 +48,6 @@ class UnlockKeysTest : public ::testing::Test {
     ASSERT_GT(free_mem, DEFAULT_HBM_FOR_VALUES);
   }
 
-  // 辅助函数：创建和初始化哈希表
   template<typename TableType>
   void InitTable(TableType& table, size_t dim, size_t init_capacity,
                  size_t hbm_for_values) {
@@ -62,7 +61,6 @@ class UnlockKeysTest : public ::testing::Test {
     table.init(options);
   }
 
-  // 辅助函数：验证查询结果
   void VerifyFindResults(const vector<bool>& host_found,
                          const vector<void*>& real_values_ptr,
                          const vector<V>& expected_values,
@@ -74,7 +72,6 @@ class UnlockKeysTest : public ::testing::Test {
         ASSERT_NE(real_values_ptr[i], nullptr);
         found_num++;
 
-        // 验证值内容
         vector<V> real_values(dim, 0);
         ASSERT_EQ(aclrtMemcpy(real_values.data(), dim * sizeof(V),
                               real_values_ptr[i], dim * sizeof(V),
@@ -92,10 +89,9 @@ class UnlockKeysTest : public ::testing::Test {
   }
 };
 
-// 用例1: 边界测试 - 空查询 (n=0)
 TEST_F(UnlockKeysTest, Unlock0key) {
   constexpr size_t dim = DEFAULT_DIM;
-  constexpr size_t key_num = 0;  // 边界值
+  constexpr size_t key_num = 0;
 
   HashTable<K, V> table;
   InitTable(table, dim, DEFAULT_INIT_CAPACITY, DEFAULT_HBM_FOR_VALUES);
@@ -107,20 +103,17 @@ TEST_F(UnlockKeysTest, Unlock0key) {
   aclrtStream stream = nullptr;
   ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
-  // 调用find，n=0应该直接返回，不执行任何操作
-  table.unlock_keys(key_num, locked_key_ptrs, keys, success);
+  // locked_key_ptrs为空，不执行任何操作
+  table.unlock_keys(key_num, locked_key_ptrs, keys, success, stream);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
-
   ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
   
-  // 验证：函数正常返回，无崩溃
   SUCCEED();
 }
 
-// 用例1: 边界测试 - 非空n=1
-TEST_F(UnlockKeysTest, Unlock1key) {
+TEST_F(UnlockKeysTest, Unlock1keyFail) {
   constexpr size_t dim = DEFAULT_DIM;
-  constexpr size_t key_num = 1;  // 边界值
+  constexpr size_t key_num = 1;
 
   HashTable<K, V> table;
   InitTable(table, dim, DEFAULT_INIT_CAPACITY, DEFAULT_HBM_FOR_VALUES);
@@ -132,32 +125,39 @@ TEST_F(UnlockKeysTest, Unlock1key) {
             ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&keys), key_num * sizeof(K), ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemset(keys, key_num * sizeof(K), 0, key_num * sizeof(K)), ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemcpy(locked_key_ptrs, key_num * sizeof(K*), &keys, key_num * sizeof(K*), ACL_MEMCPY_HOST_TO_DEVICE),
+            ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&success), key_num * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemset(success, key_num * sizeof(bool), 0, key_num * sizeof(bool)), ACL_ERROR_NONE);
 
   aclrtStream stream = nullptr;
   ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
-  // 调用find，n=0应该直接返回，不执行任何操作
-  table.unlock_keys(key_num, locked_key_ptrs, keys, success);
+  // 无效key，解锁失败
+  table.unlock_keys(key_num, locked_key_ptrs, keys, success, stream);
+  ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
 
   bool* host_success = nullptr;
   ASSERT_EQ(aclrtMallocHost(reinterpret_cast<void**>(&host_success), key_num * sizeof(bool)), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMemcpy(host_success, key_num * sizeof(bool), success, key_num * sizeof(bool),
             ACL_MEMCPY_DEVICE_TO_HOST), ACL_ERROR_NONE);
 
-  ASSERT_EQ(*host_success, false);
-  ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
+  ASSERT_FALSE(*host_success);
+
+  aclrtFreeHost(host_success);
+  aclrtFree(locked_key_ptrs);
+  aclrtFree(keys);
+  aclrtFree(success);
   
-  // 验证：函数正常返回，无崩溃
   SUCCEED();
 }
 
-// 用例1: 边界测试 - 非空n=2
-TEST_F(UnlockKeysTest, Unlock2key) {
+TEST_F(UnlockKeysTest, Unlock1keySuccess) {
   constexpr size_t dim = DEFAULT_DIM;
-  constexpr size_t key_num = 2;  // 边界值
+  constexpr size_t key_num = 1;
 
   HashTable<K, V> table;
   InitTable(table, dim, DEFAULT_INIT_CAPACITY, DEFAULT_HBM_FOR_VALUES);
@@ -167,29 +167,35 @@ TEST_F(UnlockKeysTest, Unlock2key) {
   bool* success = nullptr;
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&locked_key_ptrs), key_num * sizeof(K*), ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
-  K* locked_keys = *locked_key_ptrs;
-  ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&locked_keys), key_num * sizeof(K), ACL_MEM_MALLOC_HUGE_FIRST),
-            ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&keys), key_num * sizeof(K), ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
+  K lock_key = static_cast<K>(LOCKED_KEY);
+  ASSERT_EQ(aclrtMemcpy(keys, key_num * sizeof(K), &lock_key, sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE),
+            ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemcpy(locked_key_ptrs, key_num * sizeof(K*), &keys, key_num * sizeof(K*), ACL_MEMCPY_HOST_TO_DEVICE),
             ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&success), key_num * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemset(success, key_num * sizeof(bool), 0, key_num * sizeof(bool)), ACL_ERROR_NONE);
 
   aclrtStream stream = nullptr;
   ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
-  // 调用find，n=0应该直接返回，不执行任何操作
-  table.unlock_keys(key_num, locked_key_ptrs, keys, success);
+  // 有效key，解锁成功
+  table.unlock_keys(key_num, locked_key_ptrs, keys, success, stream);
+  ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
 
   bool* host_success = nullptr;
   ASSERT_EQ(aclrtMallocHost(reinterpret_cast<void**>(&host_success), key_num * sizeof(bool)), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMemcpy(host_success, key_num * sizeof(bool), success, key_num * sizeof(bool),
             ACL_MEMCPY_DEVICE_TO_HOST), ACL_ERROR_NONE);
+  ASSERT_TRUE(*host_success);
 
-  ASSERT_EQ(*host_success, true);
-  ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
+  aclrtFreeHost(host_success);
+  aclrtFree(locked_key_ptrs);
+  aclrtFree(keys);
+  aclrtFree(success);
   
-  // 验证：函数正常返回，无崩溃
   SUCCEED();
 }
