@@ -55,16 +55,8 @@
 
    using BUCKET = Bucket<K, V, S>;
    using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
- 
-  //  __gm__ Bucket<K, V, S>* __restrict__ buckets =
-  //      reinterpret_cast<__gm__ Bucket<K, V, S>*>(buckets_gm);
-  //  __gm__ int32_t* __restrict__ buckets_size =
-  //      reinterpret_cast<__gm__ int32_t*>(buckets_size_gm);
-  //  __gm__ const K* __restrict__ keys =
-  //      reinterpret_cast<__gm__ const K*>(keys_gm);
+
    __gm__ VecV* __restrict__ values_vecv = reinterpret_cast<__gm__ VecV*>(values);
-  //  __gm__ bool* __restrict__ founds = reinterpret_cast<__gm__ bool*>(founds_gm);
-  //  __gm__ S* __restrict__ scores = reinterpret_cast<__gm__ S*>(scores_gm);
    S score = static_cast<S>(EMPTY_SCORE);
    constexpr uint32_t STRIDE = sizeof(VecD_Comp) / sizeof(D);
    const size_t n_align_warp = ((n + warpSize - 1) / warpSize) * warpSize;
@@ -286,8 +278,6 @@
          uint64_t bucket_values_sync = __shfl(bucket_values, i, cg_size);
          auto value_start = kv_idx_sync * dim;
          auto bucket_value_start = key_pos_sync * dim;
-        //  __gm__ VecV* bucket_values_vec =
-        //      reinterpret_cast<__gm__ VecV*>(bucket_values_sync);
         if (res_sync == OccupyResult::DUPLICATE) {
           __gm__ VecV* bucket_values_vec =
               reinterpret_cast<__gm__ VecV*>(bucket_values_sync);
@@ -311,11 +301,9 @@
 
      if ((occupy_result != OccupyResult::REFUSED) &&
          (occupy_result != OccupyResult::ILLEGAL)) {
-      //  values[kv_idx] = bucket_values + key_pos * dim;
        __gm__ K* key_address = BUCKET::keys(bucket_keys, key_pos);
        *key_address = key;
      }
-    //  founds[kv_idx] = occupy_result == OccupyResult::DUPLICATE;
    }
  }
 
