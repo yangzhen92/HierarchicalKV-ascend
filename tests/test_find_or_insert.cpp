@@ -643,15 +643,15 @@ TEST(test_find_or_insert, basic_function) {
   
   // 前1024个是旧键，后1024个是新键
   for (size_t i = 0; i < 1024; i++) {
-    mixed_host_keys[i] = i; // 旧键
+    mixed_host_keys[i] = i + 1; // 旧键
     for (size_t j = 0; j < dim; j++) {
-      mixed_host_values[i * dim + j] = i + 200; // 新值
+      mixed_host_values[i * dim + j] = i + 201; // 新值
     }
   }
   for (size_t i = 1024; i < mixed_key_num; i++) {
-    mixed_host_keys[i] = i + 10000; // 新键
+    mixed_host_keys[i] = i + 10001; // 新键
     for (size_t j = 0; j < dim; j++) {
-      mixed_host_values[i * dim + j] = i;
+      mixed_host_values[i * dim + j] = i + 201; // 新值
     }
   }
   
