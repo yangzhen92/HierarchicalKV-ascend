@@ -573,11 +573,11 @@ TEST(test_find_or_insert, basic_function) {
   EXPECT_EQ(table.size(device_data.stream), key_num);
 
   // 5. 第二次调用（查找已有键）
-  // 5.1 准备新的values数据
+  // 5.1 准备新的values数据，但是理论上find_or_insert后的value值都和new_host_values不一样
   vector<V> new_host_values(key_num * dim, 0);
   for (size_t i = 0; i < key_num; i++) {
     for (size_t j = 0; j < dim; j++) {
-      new_host_values[i * dim + j] = i * 0.0002; // 新值
+      new_host_values[i * dim + j] = i * 0.00002; // 新值
     }
   }
   device_data.copy_values(new_host_values, key_num, dim);
@@ -607,15 +607,15 @@ TEST(test_find_or_insert, basic_function) {
       size_t idx = i * dim + j;
       
       // 按字节比较
-      if (memcmp(&new_host_values[idx], &host_founds[idx], sizeof(V)) != 0) {
+      if (memcmp(&host_values[idx], &host_founds[idx], sizeof(V)) != 0) {
         if (mismatch_count < max_mismatches) {
           // 打印不匹配的详细信息
           printf("MISMATCH at [%zu][%zu]:\n", i, j);
           printf("  expected: ");
           for (size_t b = 0; b < sizeof(V); b++) {
-            printf("%02X ", ((unsigned char*)&new_host_values[idx])[b]);
+            printf("%02X ", ((unsigned char*)&host_values[idx])[b]);
           }
-          printf("(%f)\n", new_host_values[idx]);
+          printf("(%f)\n", host_values[idx]);
           
           printf("  actual:   ");
           for (size_t b = 0; b < sizeof(V); b++) {
