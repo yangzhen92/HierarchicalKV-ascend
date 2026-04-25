@@ -42,6 +42,7 @@
 #include "aclrtlaunch_find_or_insert_ptr_kernel_v2.h"
 #include "aclrtlaunch_find_ptr_kernel.h"
 #include "aclrtlaunch_find_ptr_with_digest_kernel.h"
+#include "aclrtlaunch_find_with_digest_kernel.h"
 #include "aclrtlaunch_get_bucket_others_address_kernel.h"
 #include "aclrtlaunch_host_nano_kernel.h"
 #include "aclrtlaunch_insert_or_assign_kernel.h"
@@ -1617,7 +1618,20 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
 
-    std::cout << "[Unsupport find yet]\n";
+    if (!is_fast_mode()) {
+      std::cout << "[Unsupport find in non-fast mode yet]\n";
+      NpuCheckError();
+      return;
+    }
+
+    uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+    ACLRT_LAUNCH_KERNEL(find_with_digest_kernel)(
+        block_dim_, stream, table_->buckets, table_->capacity,
+        table_->buckets_num, table_->bucket_max_size, value_move_opt_.dim,
+        const_cast<key_type*>(keys), values, scores, founds, n,
+        global_epoch_, value_move_opt_.size, table_->max_bucket_shift,
+        table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+        n_align_warp, value_move_opt_.cg_size);
 
     NpuCheckError();
   }
