@@ -726,7 +726,7 @@ void test_main(std::vector<API_Select>& apis, const size_t dim,
           break;
         }
         case API_Select::find_or_insert: {
-          std::cout << rep(10);
+          std::cout << rep(9);
           break;
         }
         case API_Select::find: {
