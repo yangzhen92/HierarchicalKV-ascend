@@ -600,8 +600,7 @@ TEST(test_find_or_insert, basic_function) {
   for (size_t i = 0; i < key_num; i++) {
     for (size_t j = 0; j < dim; j++) {
       size_t idx = i * dim + j;
-      bool cmp = memcmp(&host_values[idx], &host_founds[idx], sizeof(V));
-      ASSERT_EQ(cmp, 0);
+      ASSERT_EQ(host_values[idx], host_founds[idx]);
     }
   }
 
