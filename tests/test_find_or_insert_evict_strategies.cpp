@@ -517,7 +517,7 @@ void test_find_or_insert_with_strategy(const char* strategy_name) {
   // 5.1 验证值相同
   size_t verify_success = 0;
   for (size_t i = 0; i < key_num; i++) {
-    vector<V> expect_values(dim, i);
+    vector<V> expect_values(dim, i * 0.00001);
     vector<V> real_values(dim, 0);
     ASSERT_EQ(aclrtMemcpy(real_values.data(), dim * each_value_size, 
                           device_values_second + i * dim, dim * each_value_size, 
