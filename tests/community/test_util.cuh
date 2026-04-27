@@ -1,0 +1,689 @@
+/*
+ * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (C) 2026. Huawei Technologies Co., Ltd. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/*
+ * Source references:
+ * - E:\hkv\code\nv\HierarchicalKV-master\HierarchicalKV-master\tests\test_util.cuh
+ * - E:\hkv\code\hkv\HierarchicalKV-ascend\tests\common\test_util.h
+ */
+
+#pragma once
+
+#include <assert.h>
+#include <gtest/gtest.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <algorithm>
+#include <cstring>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <random>
+#include <string>
+#include <thread>
+#include <unordered_map>
+#include <unordered_set>
+#include "hkv_hashtable.h"
+#include "kernels/utils_kernel/utils_kernel.h"
+
+#define UNEQUAL_EXPR(expr1, expr2)                             \
+  {                                                            \
+    std::cout << __FILE__ << ":" << __LINE__ << ":Unequal\n"   \
+              << "\t\t" << #expr1 << " != " << #expr2 << "\n"; \
+  }
+
+#define HKV_EXPECT_TRUE(cond, msg)                                       \
+  if ((cond) == false) {                                                 \
+    fprintf(stderr, "[ERROR] %s at %s : %d\n", msg, __FILE__, __LINE__); \
+    exit(-1);                                                            \
+  }
+
+namespace test_util {
+
+constexpr size_t DEFAULT_DIM = 8;
+constexpr size_t DEFAULT_CAPACITY = 128UL * 1024;
+
+template <class K, class S>
+void create_random_keys(K* h_keys, S* h_scores, int KEY_NUM,
+                        int freq_range = 1000) {
+  std::unordered_set<K> numbers;
+  std::random_device rd;
+  std::mt19937_64 eng(rd());
+  std::uniform_int_distribution<K> distr;
+  int i = 0;
+
+  while (numbers.size() < KEY_NUM) {
+    numbers.insert(distr(eng));
+  }
+  for (const K num : numbers) {
+    h_keys[i] = num;
+    h_scores[i] = num % freq_range;
+    i++;
+  }
+}
+
+template <class K, class S, class V, size_t DIM = 16>
+void create_random_keys(K* h_keys, S* h_scores, V* h_vectors, size_t KEY_NUM,
+                        size_t range = std::numeric_limits<uint64_t>::max()) {
+  std::unordered_set<K> numbers;
+  std::random_device rd;
+  std::mt19937_64 eng(rd());
+  std::uniform_int_distribution<K> distr;
+  int i = 0;
+
+  while (numbers.size() < KEY_NUM) {
+    numbers.insert(distr(eng) % range);
+  }
+  for (const K num : numbers) {
+    h_keys[i] = num;
+    if (h_scores != nullptr) {
+      h_scores[i] = num;
+    }
+    if (h_vectors != nullptr) {
+      for (size_t j = 0; j < DIM; j++) {
+        h_vectors[i * DIM + j] = static_cast<float>(num * 0.00001);
+      }
+    }
+    i++;
+  }
+}
+
+template <class K>
+void create_random_bools(bool* bools, int KEY_NUM, float true_ratio = 0.6) {
+  std::random_device rd;
+  std::mt19937_64 eng(rd());
+  std::uniform_int_distribution<K> distr;
+
+  for (int i = 0; i < KEY_NUM; i++) {
+    K bound = 1000 * true_ratio;
+    bools[i] = (distr(eng) % 1000 < bound);
+  }
+}
+
+template <class K, class S, class V>
+void create_random_keys(size_t dim, K* h_keys, S* h_scores, V* h_vectors,
+                        int KEY_NUM,
+                        size_t range = std::numeric_limits<uint64_t>::max()) {
+  std::unordered_set<K> numbers;
+  std::random_device rd;
+  std::mt19937_64 eng(rd());
+  std::uniform_int_distribution<K> distr;
+  int i = 0;
+
+  while (numbers.size() < KEY_NUM) {
+    numbers.insert(distr(eng) % range);
+  }
+  for (const K num : numbers) {
+    h_keys[i] = num;
+    if (h_scores != nullptr) {
+      h_scores[i] = num;
+    }
+    if (h_vectors != nullptr) {
+      for (size_t j = 0; j < dim; j++) {
+        h_vectors[i * dim + j] = static_cast<V>(num * 0.00001);
+      }
+    }
+    i++;
+  }
+}
+
+template <class K, class S, class V>
+void create_random_keys_advanced(
+    size_t dim, K* h_keys, S* h_scores, V* h_vectors, int KEY_NUM,
+    size_t range = std::numeric_limits<uint64_t>::max(), int freq_range = 10) {
+  std::unordered_set<K> numbers;
+  std::random_device rd;
+  std::mt19937_64 eng(rd());
+  std::uniform_int_distribution<K> distr;
+  int i = 0;
+
+  while (numbers.size() < KEY_NUM) {
+    numbers.insert(distr(eng) % range);
+  }
+  for (const K num : numbers) {
+    h_keys[i] = num;
+    if (h_scores != nullptr) {
+      h_scores[i] = num % freq_range;
+    }
+    if (h_vectors != nullptr) {
+      for (size_t j = 0; j < dim; j++) {
+        h_vectors[i * dim + j] = static_cast<float>(num * 0.00001);
+      }
+    }
+    i++;
+  }
+}
+
+template <class K, class S, class V>
+void create_random_keys_advanced(
+    size_t dim, K* h_keys, K* pre_h_keys, S* h_scores, V* h_vectors,
+    int KEY_NUM, size_t range = std::numeric_limits<uint64_t>::max(),
+    int freq_range = 10, float repeat_rate = 0.9) {
+  std::unordered_set<K> numbers;
+  std::random_device rd;
+  std::mt19937_64 eng(rd());
+  std::uniform_int_distribution<K> distr;
+  std::mt19937_64 eng_switch(rd());
+  std::uniform_int_distribution<K> distr_switch;
+  int i = 0;
+  int pre_pos = 0;
+
+  while (numbers.size() < KEY_NUM) {
+    bool repeated = static_cast<K>(distr_switch(eng_switch) % 100000) <
+                    static_cast<K>(repeat_rate * 100000);
+    if (repeated) {
+      numbers.insert(pre_h_keys[pre_pos++]);
+    } else {
+      numbers.insert(distr(eng) % range);
+    }
+  }
+  for (const K num : numbers) {
+    h_keys[i] = num;
+    if (h_scores != nullptr) {
+      h_scores[i] = num % freq_range;
+    }
+    if (h_vectors != nullptr) {
+      for (size_t j = 0; j < dim; j++) {
+        h_vectors[i * dim + j] = static_cast<float>(num * 0.00001);
+      }
+    }
+    i++;
+  }
+}
+
+inline uint64_t Murmur3HashHost(const uint64_t& key) {
+  uint64_t k = key;
+  k ^= k >> 33;
+  k *= UINT64_C(0xff51afd7ed558ccd);
+  k ^= k >> 33;
+  k *= UINT64_C(0xc4ceb9fe1a85ec53);
+  k ^= k >> 33;
+  return k;
+}
+
+template <class K, class S, class V, size_t DIM = 16>
+void create_continuous_keys(K* h_keys, S* h_scores, V* h_vectors, int KEY_NUM,
+                            K start = 1) {
+  for (K i = 0; i < KEY_NUM; i++) {
+    h_keys[i] = start + static_cast<K>(i);
+    if (h_scores != nullptr) {
+      h_scores[i] = h_keys[i];
+    }
+    if (h_vectors != nullptr) {
+      for (size_t j = 0; j < DIM; j++) {
+        h_vectors[i * DIM + j] = static_cast<V>(h_keys[i] * 0.00001);
+      }
+    }
+  }
+}
+
+template <class K, class S, class V>
+void create_continuous_keys(size_t dim, K* h_keys, S* h_scores, V* h_vectors,
+                            int KEY_NUM, K start = 1) {
+  for (K i = 0; i < KEY_NUM; i++) {
+    h_keys[i] = start + static_cast<K>(i);
+    if (h_scores != nullptr) {
+      h_scores[i] = h_keys[i];
+    }
+    if (h_vectors != nullptr) {
+      for (size_t j = 0; j < dim; j++) {
+        h_vectors[i * dim + j] = static_cast<V>(h_keys[i] * 0.00001);
+      }
+    }
+  }
+}
+
+template <class K, class S, class V, size_t DIM = 16>
+void create_keys_in_one_buckets(K* h_keys, S* h_scores, V* h_vectors,
+                                int KEY_NUM, int capacity,
+                                int bucket_max_size = 128, int bucket_idx = 0,
+                                K min = 0,
+                                K max = static_cast<K>(0xFFFFFFFFFFFFFFFD)) {
+  std::unordered_set<K> numbers;
+  std::random_device rd;
+  std::mt19937_64 eng(rd());
+  std::uniform_int_distribution<K> distr;
+  K candidate;
+  K hashed_key;
+  size_t global_idx;
+  size_t bkt_idx;
+  int i = 0;
+
+  while (numbers.size() < KEY_NUM) {
+    candidate = (distr(eng) % (max - min)) + min;
+    hashed_key = Murmur3HashHost(candidate);
+    global_idx = hashed_key & (capacity - 1);
+    bkt_idx = global_idx / bucket_max_size;
+    if (bkt_idx == bucket_idx) {
+      numbers.insert(candidate);
+    }
+  }
+  for (const K num : numbers) {
+    h_keys[i] = num;
+    if (h_scores != nullptr) {
+      h_scores[i] = num;
+    }
+    for (size_t j = 0; j < DIM; j++) {
+      *(h_vectors + i * DIM + j) = static_cast<float>(num * 0.00001);
+    }
+    i++;
+  }
+}
+
+template <class K, class S, class V, size_t DIM = 16>
+void create_keys_in_one_buckets_lfu(K* h_keys, S* h_scores, V* h_vectors,
+                                    int KEY_NUM, int capacity,
+                                    int bucket_max_size = 128,
+                                    int bucket_idx = 0, K min = 0,
+                                    K max = static_cast<K>(0xFFFFFFFFFFFFFFFD),
+                                    int freq_range = 1000) {
+  std::unordered_set<K> numbers;
+  std::random_device rd;
+  std::mt19937_64 eng(rd());
+  std::uniform_int_distribution<K> distr;
+  K candidate;
+  K hashed_key;
+  size_t global_idx;
+  size_t bkt_idx;
+  int i = 0;
+
+  while (numbers.size() < KEY_NUM) {
+    candidate = (distr(eng) % (max - min)) + min;
+    hashed_key = Murmur3HashHost(candidate);
+    global_idx = hashed_key & (capacity - 1);
+    bkt_idx = global_idx / bucket_max_size;
+    if (bkt_idx == bucket_idx) {
+      numbers.insert(candidate);
+    }
+  }
+  for (const K num : numbers) {
+    h_keys[i] = num;
+    if (h_scores != nullptr) {
+      h_scores[i] = num % freq_range;
+    }
+    for (size_t j = 0; j < DIM; j++) {
+      *(h_vectors + i * DIM + j) = static_cast<float>(num * 0.00001);
+    }
+    i++;
+  }
+}
+
+template <class S>
+S make_expected_score_for_epochlfu(S global_epoch, S original_score) {
+  bool if_overflow = (original_score >= static_cast<S>(0xFFFFFFFF));
+  return ((global_epoch << 32) | (if_overflow ? (static_cast<S>(0xFFFFFFFF))
+                                              : original_score & 0xFFFFFFFF));
+}
+
+template <typename T, size_t DIM>
+struct ValueArray {
+ public:
+  T data[DIM];
+
+  T sum() const {
+    T s = 0;
+    for (size_t i = 0; i < DIM; ++i) {
+      s += data[i];
+    }
+    return s;
+  }
+
+  T operator[](size_t i) const { return data[i]; }
+};
+
+template <typename T>
+struct HostAndDeviceBuffer {
+ public:
+  void Alloc(size_t n, aclrtStream stream = 0) {
+    Free(stream);
+    HKV_EXPECT_TRUE((aclrtMalloc(reinterpret_cast<void**>(&d_data),
+                                 n * sizeof(T), ACL_MEM_MALLOC_HUGE_FIRST) ==
+                     ACL_ERROR_NONE),
+                    "aclrtMalloc failed");
+    h_data = static_cast<T*>(std::malloc(n * sizeof(T)));
+    HKV_EXPECT_TRUE((h_data != nullptr), "malloc failed");
+    size_ = n;
+    ToZeros(stream);
+  }
+
+  ~HostAndDeviceBuffer() { Free(); }
+
+  void Free(aclrtStream stream = 0) {
+    if (d_data != nullptr) {
+      if (stream != nullptr) {
+        HKV_EXPECT_TRUE((aclrtSynchronizeStream(stream) == ACL_ERROR_NONE),
+                        "aclrtSynchronizeStream failed");
+      }
+      HKV_EXPECT_TRUE((aclrtFree(d_data) == ACL_ERROR_NONE), "aclrtFree failed");
+      d_data = nullptr;
+    }
+    if (h_data != nullptr) {
+      std::free(h_data);
+      h_data = nullptr;
+    }
+    size_ = 0;
+  }
+
+  void SetFromHost(const T* data, size_t n, aclrtStream stream = 0) {
+    HKV_EXPECT_TRUE((n <= size_), "SetFromHost size exceeds allocation");
+    std::memcpy(h_data, data, n * sizeof(T));
+    SyncData(true, stream);
+  }
+
+  void SetFromDevice(const T* data, size_t n, aclrtStream stream = 0) {
+    HKV_EXPECT_TRUE((n <= size_), "SetFromDevice size exceeds allocation");
+    HKV_EXPECT_TRUE(
+        (aclrtMemcpyAsync(d_data, n * sizeof(T), data, n * sizeof(T),
+                          ACL_MEMCPY_DEVICE_TO_DEVICE, stream) ==
+         ACL_ERROR_NONE),
+        "aclrtMemcpyAsync device to device failed");
+    HKV_EXPECT_TRUE(
+        (aclrtMemcpyAsync(h_data, n * sizeof(T), data, n * sizeof(T),
+                          ACL_MEMCPY_DEVICE_TO_HOST, stream) ==
+         ACL_ERROR_NONE),
+        "aclrtMemcpyAsync device to host failed");
+  }
+
+  bool SetValueInRange(T start, T skip, size_t stripe,
+                       aclrtStream stream = 0) {
+    if (h_data == nullptr || skip == 0 || stripe == 0 || size_ % stripe != 0) {
+      return false;
+    }
+
+    const size_t stripe_num = size_ / stripe;
+    for (size_t i = 0; i < stripe_num; ++i) {
+      const T value = start + static_cast<T>(i) * skip;
+      for (size_t j = 0; j < stripe; ++j) {
+        h_data[i * stripe + j] = value;
+      }
+    }
+    SyncData(true, stream);
+    return true;
+  }
+
+  void ToZeros(aclrtStream stream = 0) {
+    if (d_data != nullptr) {
+      HKV_EXPECT_TRUE((aclrtMemset(d_data, size_ * sizeof(T), 0,
+                                   size_ * sizeof(T)) == ACL_ERROR_NONE),
+                      "aclrtMemset failed");
+    }
+    if (h_data != nullptr) {
+      std::memset(h_data, 0, size_ * sizeof(T));
+    }
+    if (stream != nullptr) {
+      HKV_EXPECT_TRUE((aclrtSynchronizeStream(stream) == ACL_ERROR_NONE),
+                      "aclrtSynchronizeStream failed");
+    }
+  }
+
+  void ToConst(const T val, aclrtStream stream = 0) {
+    for (size_t i = 0; i < size_; ++i) {
+      h_data[i] = val;
+    }
+    SyncData(true, stream);
+  }
+
+  void SyncData(bool h2d, aclrtStream stream = 0) {
+    if (size_ == 0 || h_data == nullptr || d_data == nullptr) {
+      return;
+    }
+    if (h2d) {
+      HKV_EXPECT_TRUE(
+          (aclrtMemcpyAsync(d_data, size_ * sizeof(T), h_data, size_ * sizeof(T),
+                            ACL_MEMCPY_HOST_TO_DEVICE, stream) ==
+           ACL_ERROR_NONE),
+          "aclrtMemcpyAsync host to device failed");
+    } else {
+      HKV_EXPECT_TRUE(
+          (aclrtMemcpyAsync(h_data, size_ * sizeof(T), d_data, size_ * sizeof(T),
+                            ACL_MEMCPY_DEVICE_TO_HOST, stream) ==
+           ACL_ERROR_NONE),
+          "aclrtMemcpyAsync device to host failed");
+    }
+  }
+
+ public:
+  T* h_data = nullptr;
+  T* d_data = nullptr;
+  size_t size_ = 0;
+};
+
+template <typename K, typename V, typename S>
+struct KVMSBuffer {
+ public:
+  KVMSBuffer() : len_(0), dim_(0) {}
+
+  void Reserve(size_t n, size_t dim, aclrtStream stream = 0) {
+    keys.Alloc(n, stream);
+    values.Alloc(n * dim, stream);
+    scores.Alloc(n, stream);
+    status.Alloc(n, stream);
+    len_ = n;
+    dim_ = dim;
+  }
+
+  ~KVMSBuffer() { Free(); }
+
+  void Free(aclrtStream stream = 0) {
+    keys.Free(stream);
+    values.Free(stream);
+    scores.Free(stream);
+    status.Free(stream);
+    len_ = 0;
+    dim_ = 0;
+  }
+
+  size_t len() const { return len_; }
+  size_t dim() const { return dim_; }
+
+  void ToRange(size_t start, size_t skip = 1, aclrtStream stream = 0) {
+    HKV_EXPECT_TRUE(
+        keys.SetValueInRange(static_cast<K>(start), static_cast<K>(skip), 1,
+                             stream),
+        "keys SetValueInRange failed");
+    HKV_EXPECT_TRUE(values.SetValueInRange(static_cast<V>(start),
+                                           static_cast<V>(skip), dim_, stream),
+                    "values SetValueInRange failed");
+    status.ToZeros(stream);
+  }
+
+  void ToZeros(aclrtStream stream = 0) {
+    keys.ToZeros(stream);
+    values.ToZeros(stream);
+    scores.ToZeros(stream);
+    status.ToZeros(stream);
+  }
+
+  void Setscore(const S score, aclrtStream stream = 0) {
+    scores.ToConst(score, stream);
+  }
+
+  K* keys_ptr(bool on_device = true) {
+    return on_device ? keys.d_data : keys.h_data;
+  }
+
+  V* values_ptr(bool on_device = true) {
+    return on_device ? values.d_data : values.h_data;
+  }
+
+  S* scores_ptr(bool on_device = true) {
+    return on_device ? scores.d_data : scores.h_data;
+  }
+
+  bool* status_ptr(bool on_device = true) {
+    return on_device ? status.d_data : status.h_data;
+  }
+
+  void SyncData(bool h2d, aclrtStream stream = 0) {
+    keys.SyncData(h2d, stream);
+    values.SyncData(h2d, stream);
+    scores.SyncData(h2d, stream);
+    status.SyncData(h2d, stream);
+  }
+
+  void CopyFrom(KVMSBuffer<K, V, S>& src, aclrtStream stream = 0) {
+    HKV_EXPECT_TRUE((src.len() == len_), "CopyFrom len mismatch");
+    HKV_EXPECT_TRUE((src.dim() == dim_), "CopyFrom dim mismatch");
+    std::memcpy(keys_ptr(false), src.keys_ptr(false), sizeof(K) * len());
+    std::memcpy(scores_ptr(false), src.scores_ptr(false), sizeof(S) * len());
+    std::memcpy(values_ptr(false), src.values_ptr(false),
+                sizeof(V) * len() * dim());
+    keys.SyncData(true, stream);
+    values.SyncData(true, stream);
+    scores.SyncData(true, stream);
+    status.SyncData(true, stream);
+  }
+
+ public:
+  HostAndDeviceBuffer<K> keys;
+  HostAndDeviceBuffer<V> values;
+  HostAndDeviceBuffer<S> scores;
+  HostAndDeviceBuffer<bool> status;
+  size_t len_;
+  size_t dim_;
+};
+
+template <class V>
+void read_from_ptr(V** __restrict src, V* __restrict dst, const size_t dim,
+                   size_t n, aclrtStream stream) {
+  const size_t block_size = 1024;
+  const size_t N = n * dim;
+  const size_t grid_size = (N - 1) / block_size + 1;
+  HKV_EXPECT_TRUE((grid_size <= 65535), "Pointer is already assigned.");
+  npu::hkv::read_from_ptr_kernel<V>
+      <<<grid_size, 0, stream>>>(reinterpret_cast<void*>(src), dst, dim, N);
+}
+
+inline void init_env() {
+  static bool init_flag = false;
+  if (!init_flag) {
+    HKV_EXPECT_TRUE((aclInit(nullptr) == ACL_ERROR_NONE), "aclInit failed!");
+    auto device_id_env = std::getenv("HKV_TEST_DEVICE");
+    int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
+    HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
+                    "aclrtSetDevice failed");
+    init_flag = true;
+  }
+}
+
+inline uint32_t round_up8(const uint32_t x) {
+  constexpr uint32_t round_size = 8;
+  if (x % round_size != 0) {
+    return (x / round_size + 1) * round_size;
+  }
+  return x;
+}
+
+template <typename K, typename V, typename S,
+          int Strategy = npu::hkv::EvictStrategy::kLru>
+std::unique_ptr<npu::hkv::HashTable<K, V, S, Strategy>> get_table(
+    size_t dim, size_t capacity, size_t num_of_buckets_per_alloc) {
+  using Table = npu::hkv::HashTable<K, V, S, Strategy>;
+  auto table = std::make_unique<Table>();
+
+  size_t total_mem = 0;
+  size_t free_mem = 0;
+  constexpr size_t hbm_for_values = 4UL << 30;
+  EXPECT_EQ(aclrtGetMemInfo(ACL_HBM_MEM, &free_mem, &total_mem),
+            ACL_ERROR_NONE);
+  EXPECT_GT(free_mem, hbm_for_values)
+      << "free HBM is not enough free:" << free_mem
+      << "need:" << hbm_for_values;
+
+  npu::hkv::HashTableOptions options{
+      .init_capacity = capacity,
+      .max_capacity = capacity,
+      .max_hbm_for_vectors = hbm_for_values,
+      .dim = dim,
+      .io_by_cpu = false,
+      .num_of_buckets_per_alloc = num_of_buckets_per_alloc,
+  };
+
+  table->init(options);
+
+  return table;
+}
+
+template <typename K, typename V, typename S>
+std::unique_ptr<npu::hkv::HashTable<K, V, S>> get_default_table() {
+  return get_table<K, V, S>(DEFAULT_DIM, DEFAULT_CAPACITY, 1);
+}
+
+// 辅助函数：使用 key 初始化 values
+template <class K, class V>
+void init_value_using_key(K* h_keys, V* h_vectors, const size_t key_num,
+                          size_t dim) {
+  for (size_t i = 0; i < key_num; i++) {
+    for (size_t j = 0; j < dim; j++) {
+      h_vectors[i * dim + j] = static_cast<V>(h_keys[i] * 0.00001);
+    }
+  }
+}
+
+// 辅助函数：验证两个 bool 数组是否完全相等
+inline bool allEqualGpu(const bool* d_array1, const bool* d_array2,
+                        size_t size, aclrtStream stream) {
+  std::vector<char> h_array1(size);
+  std::vector<char> h_array2(size);
+
+  HKV_EXPECT_TRUE(
+      (aclrtMemcpy(h_array1.data(), size * sizeof(char), const_cast<bool*>(d_array1),
+                   size * sizeof(char), ACL_MEMCPY_DEVICE_TO_HOST) == ACL_ERROR_NONE),
+      "aclrtMemcpy device to host failed");
+
+  HKV_EXPECT_TRUE(
+      (aclrtMemcpy(h_array2.data(), size * sizeof(char), const_cast<bool*>(d_array2),
+                   size * sizeof(char), ACL_MEMCPY_DEVICE_TO_HOST) == ACL_ERROR_NONE),
+      "aclrtMemcpy device to host failed");
+
+  HKV_EXPECT_TRUE((aclrtSynchronizeStream(stream) == ACL_ERROR_NONE),
+                  "aclrtSynchronizeStream failed");
+
+  for (size_t i = 0; i < size; i++) {
+    if (h_array1[i] != h_array2[i]) {
+      std::cout << "Mismatch at index " << i << ": " << (int)h_array1[i]
+                << " != " << (int)h_array2[i] << std::endl;
+      return false;
+    }
+  }
+  return true;
+}
+
+// 辅助函数：验证 bool 数组是否全为 true
+inline bool allTrueGpu(const bool* d_array, size_t size, aclrtStream stream) {
+  std::vector<char> h_array(size);
+
+  HKV_EXPECT_TRUE(
+      (aclrtMemcpy(h_array.data(), size * sizeof(char), const_cast<bool*>(d_array),
+                   size * sizeof(char), ACL_MEMCPY_DEVICE_TO_HOST) == ACL_ERROR_NONE),
+      "aclrtMemcpy device to host failed");
+
+  HKV_EXPECT_TRUE((aclrtSynchronizeStream(stream) == ACL_ERROR_NONE),
+                  "aclrtSynchronizeStream failed");
+
+  for (size_t i = 0; i < size; i++) {
+    if (!h_array[i]) {
+      std::cout << "False found at index " << i << std::endl;
+      return false;
+    }
+  }
+  return true;
+}
+}  // namespace test_util
+
+namespace community_test_util = test_util;
