@@ -452,19 +452,19 @@ void test_find_or_insert_with_strategy(const char* strategy_name) {
   // 4. 第一次插入
   create_continuous_keys<K, S, V, dim>(host_keys.data(), host_scores.data(), 
                                        host_values.data(), key_num);
-  device_data.copy_keys(host_keys.data(), key_num);
-  device_data.copy_values(host_values.data(), key_num , dim);
-  device_data.copy_scores(host_scores.data(), key_num);
+  device_data.copy_keys(host_keys, key_num);
+  device_data.copy_values(host_values, key_num , dim);
+  device_data.copy_scores(host_scores, key_num);
 
   // 对于 LFU 和 EpochLFU 策略，需要传递 scores
   S* scores_param = nullptr;
   if (table.evict_strategy == EvictStrategy::kLfu || 
       table.evict_strategy == EvictStrategy::kEpochLfu ||
       table.evict_strategy == EvictStrategy::kCustomized) {
-    ASSERT_EQ(aclrtMemcpy(device_scores, key_num * sizeof(S), host_scores.data(),
+    ASSERT_EQ(aclrtMemcpy(device_data.device_scores, key_num * sizeof(S), host_scores.data(),
                           key_num * sizeof(S), ACL_MEMCPY_HOST_TO_DEVICE),
               ACL_ERROR_NONE);
-    scores_param = device_scores;
+    scores_param = device_data.device_scores;
   }
 
   // 4.2 下发算子（第一次插入）
@@ -487,7 +487,7 @@ void test_find_or_insert_with_strategy(const char* strategy_name) {
                           key_num * dim * sizeof(V), ACL_MEM_MALLOC_HUGE_FIRST),
               ACL_ERROR_NONE);
     
-    table.find(key_num, device_keys, device_values_first, device_scores_first, device_data.stream);
+    table.find(key_num, device_data.device_keys, device_values_first, device_data.device_found, device_scores_first, device_data.stream);
     ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
     
     host_scores_first.resize(key_num, 0);
@@ -540,8 +540,8 @@ void test_find_or_insert_with_strategy(const char* strategy_name) {
             ACL_ERROR_NONE);
   
   // 使用 find 读取 scores
-  table.find(key_num, device_keys, device_values_for_find, device_scores_output, stream);
-  ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
+  table.find(key_num, device_data.device_keys, device_values_for_find, device_data.device_found, device_scores_output, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   
   // 将 scores 拷贝回 host
   vector<S> host_scores_actual(key_num, 0);
