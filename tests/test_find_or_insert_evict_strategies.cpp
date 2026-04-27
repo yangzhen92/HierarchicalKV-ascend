@@ -28,9 +28,9 @@ using namespace std;
 using namespace npu::hkv;
 using namespace test_util;
 
-// 测试辅助函数：通用的 find_or_insert 测试逻辑
+// 测试辅助函数：通用的 find_or_insert_ptr 测试逻辑
 template<typename Table>
-void test_find_or_insert_with_strategy(const char* strategy_name) {
+void test_find_or_insert_ptr_with_strategy(const char* strategy_name) {
   // 1. 初始化
   init_env();
 
@@ -366,31 +366,31 @@ void test_find_or_insert_with_strategy(const char* strategy_name) {
 }
 
 // 测试 kLru 策略
-TEST(test_find_or_insert_evict_strategies, kLru) {
+TEST(test_find_or_insert_ptr_evict_strategies, kLru) {
   using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kLru>;
-  test_find_or_insert_with_strategy<Table>("kLru");
+  test_find_or_insert_ptr_with_strategy<Table>("kLru");
 }
 
 // 测试 kLfu 策略
-TEST(test_find_or_insert_evict_strategies, kLfu) {
+TEST(test_find_or_insert_ptr_evict_strategies, kLfu) {
   using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kLfu>;
-  test_find_or_insert_with_strategy<Table>("kLfu");
+  test_find_or_insert_ptr_with_strategy<Table>("kLfu");
 }
 
 // 测试 kEpochLru 策略
-TEST(test_find_or_insert_evict_strategies, kEpochLru) {
+TEST(test_find_or_insert_ptr_evict_strategies, kEpochLru) {
   using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kEpochLru>;
-  test_find_or_insert_with_strategy<Table>("kEpochLru");
+  test_find_or_insert_ptr_with_strategy<Table>("kEpochLru");
 }
 
 // 测试 kEpochLfu 策略
-TEST(test_find_or_insert_evict_strategies, kEpochLfu) {
+TEST(test_find_or_insert_ptr_evict_strategies, kEpochLfu) {
   using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kEpochLfu>;
-  test_find_or_insert_with_strategy<Table>("kEpochLfu");
+  test_find_or_insert_ptr_with_strategy<Table>("kEpochLfu");
 }
 
 // 测试 kCustomized 策略
-TEST(test_find_or_insert_evict_strategies, kCustomized) {
+TEST(test_find_or_insert_ptr_evict_strategies, kCustomized) {
   using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kCustomized>;
-  test_find_or_insert_with_strategy<Table>("kCustomized");
+  test_find_or_insert_ptr_with_strategy<Table>("kCustomized");
 }

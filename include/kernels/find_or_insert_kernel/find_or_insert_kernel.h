@@ -38,7 +38,7 @@
 
  template <typename K = uint64_t, typename V = float, typename S = uint64_t,
            typename VecV = int32_t, int Strategy = -1,
-           int32_t EVICT_GROUP_SIZE = 16>
+           int32_t CG_SIZE = 16, int32_t EVICT_GROUP_SIZE = 16>
  __simt_vf__ __aicore__
  LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_kernel_vf(
      __gm__ Bucket<K, V, S>* __restrict__ buckets,
@@ -48,7 +48,7 @@
      uint64_t global_epoch, uint64_t cur_score, uint32_t blockIdx,
      uint64_t thread_all, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
-     uint64_t capacity, uint32_t cg_size) {
+     uint64_t capacity) {
    if ((!buckets) || (!buckets_size) || (!keys) || (!values)) {
      return;
    }
@@ -311,14 +311,14 @@
    }
  }
 
- template <class K, class V, class S, int Strategy = -1>
+ template <class K, class V, class S, int32_t CG_SIZE = 16, int Strategy = -1>
  __global__ __vector__ void find_or_insert_kernel(
      __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
      uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys,
      __gm__ V* values, __gm__ S* scores, uint64_t n, uint64_t global_epoch,
      uint32_t value_size, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
-     uint64_t capacity, uint32_t cg_size) {
+     uint64_t capacity) {
    const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
    uint64_t cur_score = (Strategy == npu::hkv::EvictStrategyInternal::kLru ||
                          Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
@@ -327,11 +327,11 @@
 
    DISPATCH_VALUE_SIZE(
        value_size,
-       (asc_vf_call<find_or_insert_kernel_vf<K, V, S, DTYPE, Strategy>>(
+       (asc_vf_call<find_or_insert_kernel_vf<K, V, S, DTYPE, CG_SIZE, Strategy>>(
            dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets, buckets_size,
            bucket_capacity, dim, keys, values, scores, n, global_epoch,
            cur_score, GetBlockIdx(), thread_all, max_bucket_shift,
-           capacity_divisor_magic, capacity_divisor_shift, capacity, cg_size)));
+           capacity_divisor_magic, capacity_divisor_shift, capacity)));
  }
  }  // namespace hkv
  }  // namespace npu
