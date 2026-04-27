@@ -37,8 +37,8 @@
  using namespace AscendC;
 
  template <typename K = uint64_t, typename V = float, typename S = uint64_t,
-           typename VecV = int32_t, int Strategy = -1,
-           int32_t CG_SIZE = 16, int32_t EVICT_GROUP_SIZE = 16>
+           typename VecV = int32_t, int32_t CG_SIZE = 16, int Strategy = -1,
+           int32_t EVICT_GROUP_SIZE = 16>
  __simt_vf__ __aicore__
  LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_kernel_vf(
      __gm__ Bucket<K, V, S>* __restrict__ buckets,
