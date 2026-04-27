@@ -1544,7 +1544,7 @@ class HashTable : public HashTableBase<K, V, S> {
       if (unique_key) {
         DISPATCH_GROUP_SIZE(
             value_move_opt_.cg_size,
-            (find_or_insert_kernel<K, V, S, CG_SIZE, evict_strategy>
+            (find_or_insert_kernel<K, V, S, GROUP_SIZE, evict_strategy>
              <<<block_dim_, 0, stream>>>(
                  table_->buckets, table_->buckets_size,
                  options_.max_bucket_size, value_move_opt_.dim, keys, values,
