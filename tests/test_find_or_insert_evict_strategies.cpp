@@ -397,7 +397,7 @@ TEST(test_find_or_insert_ptr_evict_strategies, kCustomized) {
 }
 
 // 测试辅助函数：通用的 find_or_insert 测试逻辑
-template<typename Table>
+template<typename Table, bool is_unique>
 void test_find_or_insert_with_strategy(const char* strategy_name) {
   // 1. 初始化
   init_env();
@@ -469,9 +469,9 @@ void test_find_or_insert_with_strategy(const char* strategy_name) {
 
   // 4.2 下发算子（第一次插入）
   table.find_or_insert(key_num, device_data.device_keys, device_data.device_values,
-                       scores_param, device_data.stream);
+                       scores_param, device_data.stream, is_unique);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
-  EXPECT_EQ(table.size(), key_num);
+  EXPECT_EQ(table.size(device_data.stream), key_num);
 
   // 4.2.1 对于 LRU/EpochLRU 策略，读取第一次插入后的 scores（用于后续验证时钟递增）
   S* device_scores_first = nullptr;
@@ -510,7 +510,7 @@ void test_find_or_insert_with_strategy(const char* strategy_name) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
 
-  table.find_or_insert(key_num, device_data.device_keys, device_values_second, scores_param, device_data.stream);
+  table.find_or_insert(key_num, device_data.device_keys, device_values_second, scores_param, device_data.stream, is_unique);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table.size(device_data.stream), key_num);
 
@@ -630,29 +630,29 @@ void test_find_or_insert_with_strategy(const char* strategy_name) {
 // 测试 kLru 策略
 TEST(test_find_or_insert_evict_strategies, kLru) {
   using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kLru>;
-  test_find_or_insert_with_strategy<Table>("kLru");
+  test_find_or_insert_with_strategy<Table, true>("kLru");
 }
 
 // 测试 kLfu 策略
 TEST(test_find_or_insert_evict_strategies, kLfu) {
   using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kLfu>;
-  test_find_or_insert_with_strategy<Table>("kLfu");
+  test_find_or_insert_with_strategy<Table, true>("kLfu");
 }
 
 // 测试 kEpochLru 策略
 TEST(test_find_or_insert_evict_strategies, kEpochLru) {
   using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kEpochLru>;
-  test_find_or_insert_with_strategy<Table>("kEpochLru");
+  test_find_or_insert_with_strategy<Table, true>("kEpochLru");
 }
 
 // 测试 kEpochLfu 策略
 TEST(test_find_or_insert_evict_strategies, kEpochLfu) {
   using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kEpochLfu>;
-  test_find_or_insert_with_strategy<Table>("kEpochLfu");
+  test_find_or_insert_with_strategy<Table, true>("kEpochLfu");
 }
 
 // 测试 kCustomized 策略
 TEST(test_find_or_insert_evict_strategies, kCustomized) {
   using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kCustomized>;
-  test_find_or_insert_with_strategy<Table>("kCustomized");
+  test_find_or_insert_with_strategy<Table, true>("kCustomized");
 }
