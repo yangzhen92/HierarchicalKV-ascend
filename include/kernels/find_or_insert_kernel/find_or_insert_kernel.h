@@ -42,8 +42,8 @@
  __simt_vf__ __aicore__
  LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_kernel_vf(
      __gm__ Bucket<K, V, S>* __restrict__ buckets,
-     __gm__ int32_t* __restrict__ buckets_size, uint64_t buckets_num,
-     uint32_t bucket_max_size, uint32_t dim, __gm__ const K* __restrict__ keys,
+     __gm__ int32_t* __restrict__ buckets_size, uint32_t bucket_max_size,
+     uint32_t dim, __gm__ const K* __restrict__ keys,
      __gm__ V* __restrict__ values, __gm__ S* __restrict__ scores, uint64_t n,
      uint64_t global_epoch, uint64_t cur_score, uint32_t blockIdx,
      uint64_t thread_all, uint32_t max_bucket_shift,
@@ -301,11 +301,12 @@
          }
        }
      }
+     __threadfence();
 
      if ((occupy_result != OccupyResult::REFUSED) &&
          (occupy_result != OccupyResult::ILLEGAL)) {
-       __gm__ K* key_address = BUCKET::keys(bucket_keys, key_pos);
-       *key_address = key;
+       // key也是原子标记位，所有key的操作必须原子化
+       (void)Simt::AtomicExch(bucket_keys + key_pos, key);
      }
    }
  }
@@ -313,9 +314,9 @@
  template <class K, class V, class S, int Strategy = -1>
  __global__ __vector__ void find_or_insert_kernel(
      __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
-     uint64_t buckets_num, uint32_t bucket_capacity, uint32_t dim,
-     __gm__ const K* keys, __gm__ V* values, __gm__ S* scores, uint64_t n,
-     uint64_t global_epoch, uint32_t value_size, uint32_t max_bucket_shift,
+     uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys,
+     __gm__ V* values, __gm__ S* scores, uint64_t n, uint64_t global_epoch,
+     uint32_t value_size, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
      uint64_t capacity, uint32_t cg_size) {
    const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
@@ -328,8 +329,8 @@
        value_size,
        (asc_vf_call<find_or_insert_kernel_vf<K, V, S, DTYPE, Strategy>>(
            dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets, buckets_size,
-           buckets_num, bucket_capacity, dim, keys, values, scores, n,
-           global_epoch, cur_score, GetBlockIdx(), thread_all, max_bucket_shift,
+           bucket_capacity, dim, keys, values, scores, n, global_epoch,
+           cur_score, GetBlockIdx(), thread_all, max_bucket_shift,
            capacity_divisor_magic, capacity_divisor_shift, capacity, cg_size)));
  }
  }  // namespace hkv
