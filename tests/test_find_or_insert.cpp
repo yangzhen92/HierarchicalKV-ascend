@@ -667,3 +667,160 @@ TEST(test_find_or_insert, basic_function) {
   ASSERT_EQ(aclrtSynchronizeStream(mixed_device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table.size(mixed_device_data.stream), key_num + 1024); // 增加1024个新键
 }
+
+TEST(test_find_or_insert, non_unique_key) {
+  // 1. 初始化
+  init_env();
+
+  size_t free_mem = 0;
+  size_t total_mem = 0;
+  constexpr size_t hbm_for_values = 1UL << 30;
+  ASSERT_EQ(aclrtGetMemInfo(ACL_HBM_MEM, &free_mem, &total_mem),
+            ACL_ERROR_NONE);
+  ASSERT_GT(free_mem, hbm_for_values)
+      << "free HBM is not enough free:" << free_mem << "need:" << hbm_for_values;
+
+  constexpr size_t dim = 8;
+  constexpr size_t init_capacity = 128UL * 1024;
+  constexpr size_t key_num = 1UL * 1024;
+
+  using K = uint64_t;
+  using V = float;
+  using S = uint64_t;
+  size_t each_key_size = sizeof(K);
+  size_t each_value_size = sizeof(V);
+  size_t each_score_size = sizeof(S);
+
+  // 2. 建表
+  HashTableOptions options{
+      .init_capacity = init_capacity,
+      .max_capacity = init_capacity,
+      .max_hbm_for_vectors = hbm_for_values,
+      .dim = dim,
+      .io_by_cpu = false,
+  };
+  using Table = HashTable<K, V>;
+
+  Table table;
+  table.init(options);
+  EXPECT_EQ(table.size(), 0);
+
+  // 3. 数据准备
+  // 3.1 host数据
+  vector<K> host_keys(key_num, 0);
+  vector<V> host_values(key_num * dim, 0);
+  vector<S> host_scores(key_num, 0);
+
+  // 3.2 申请hbm内存
+  DeviceData<K, V, S> device_data;
+  device_data.malloc(key_num, dim);
+
+  // 4. 第一次插值（插入新键）
+  // 4.1 生产连续值
+  create_continuous_keys<K, S, V, dim>(host_keys.data(), host_scores.data(),
+                                        host_values.data(), key_num);
+  device_data.copy_keys(host_keys, key_num);
+  device_data.copy_scores(host_scores, key_num);
+  device_data.copy_values(host_values, key_num, dim);
+
+  // 4.2 下发算子
+  table.find_or_insert(key_num, device_data.device_keys, device_data.device_values,
+                       nullptr, device_data.stream, false);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  EXPECT_EQ(table.size(device_data.stream), key_num);
+
+  // 5. 第二次调用（查找已有键）
+  // 5.1 准备新的values数据，但是理论上find_or_insert后的value值都和new_host_values不一样
+  vector<V> new_host_values(key_num * dim, 0);
+  for (size_t i = 0; i < key_num; i++) {
+    for (size_t j = 0; j < dim; j++) {
+      new_host_values[i * dim + j] = i * 0.00002; // 新值
+    }
+  }
+  device_data.copy_values(new_host_values, key_num, dim);
+
+  // 5.2 下发算子
+  table.find_or_insert(key_num, device_data.device_keys, device_data.device_values,
+                       nullptr, device_data.stream, false);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  EXPECT_EQ(table.size(device_data.stream), key_num); // 大小不变
+
+  // 6. 校验结果
+  // 6.1 检查值是否被更新
+  vector<V> host_founds(key_num * dim, 0);
+  ASSERT_EQ(
+      aclrtMemcpy(host_founds.data(), key_num * each_value_size * dim,
+                  device_data.device_values, key_num * each_value_size * dim,
+                  ACL_MEMCPY_DEVICE_TO_HOST),
+      ACL_ERROR_NONE);
+  
+  // 按比特位比较 new_host_values 和 host_founds
+  bool values_match = true;
+  size_t mismatch_count = 0;
+  constexpr size_t max_mismatches = 10; // 最多显示10个不匹配
+  
+  for (size_t i = 0; i < key_num; i++) {
+    for (size_t j = 0; j < dim; j++) {
+      size_t idx = i * dim + j;
+      
+      // 按字节比较
+      if (memcmp(&host_values[idx], &host_founds[idx], sizeof(V)) != 0) {
+        if (mismatch_count < max_mismatches) {
+          // 打印不匹配的详细信息
+          printf("MISMATCH at [%zu][%zu]:\n", i, j);
+          printf("  expected: ");
+          for (size_t b = 0; b < sizeof(V); b++) {
+            printf("%02X ", ((unsigned char*)&host_values[idx])[b]);
+          }
+          printf("(%f)\n", host_values[idx]);
+          
+          printf("  actual:   ");
+          for (size_t b = 0; b < sizeof(V); b++) {
+            printf("%02X ", ((unsigned char*)&host_founds[idx])[b]);
+          }
+          printf("(%f)\n", host_founds[idx]);
+        }
+        values_match = false;
+        mismatch_count++;
+      }
+    }
+  }
+  
+  if (values_match) {
+    printf("All values match exactly at bit level!\n");
+  } else {
+    printf("Total mismatches: %zu (showing first %zu)\n", mismatch_count, max_mismatches);
+  }
+
+  // 7. 测试混合场景（部分新键，部分旧键）
+  constexpr size_t mixed_key_num = 2 * 1024;
+  vector<K> mixed_host_keys(mixed_key_num, 0);
+  vector<V> mixed_host_values(mixed_key_num * dim, 0);
+  vector<S> mixed_host_scores(mixed_key_num, 0);
+  
+  // 前1024个是旧键，后1024个是新键
+  for (size_t i = 0; i < 1024; i++) {
+    mixed_host_keys[i] = i + 1; // 旧键
+    for (size_t j = 0; j < dim; j++) {
+      mixed_host_values[i * dim + j] = i + 201; // 新值
+    }
+  }
+  for (size_t i = 1024; i < mixed_key_num; i++) {
+    mixed_host_keys[i] = i + 10001; // 新键
+    for (size_t j = 0; j < dim; j++) {
+      mixed_host_values[i * dim + j] = i + 201; // 新值
+    }
+  }
+  
+  DeviceData<K, V, S> mixed_device_data;
+  mixed_device_data.malloc(mixed_key_num, dim);
+  mixed_device_data.copy_keys(mixed_host_keys, mixed_key_num);
+  mixed_device_data.copy_scores(mixed_host_scores, mixed_key_num);
+  mixed_device_data.copy_values(mixed_host_values, mixed_key_num, dim);
+  
+  // 下发算子
+  table.find_or_insert(mixed_key_num, mixed_device_data.device_keys, mixed_device_data.device_values,
+                       nullptr, mixed_device_data.stream, false);
+  ASSERT_EQ(aclrtSynchronizeStream(mixed_device_data.stream), ACL_ERROR_NONE);
+  EXPECT_EQ(table.size(mixed_device_data.stream), key_num + 1024); // 增加1024个新键
+}
