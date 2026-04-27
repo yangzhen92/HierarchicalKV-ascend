@@ -271,27 +271,27 @@
      }
 
      // 5. 抢占成功，写入value
-     cg_rank_id = threadIdx.x % cg_size;
-     for (int i = 0; i < cg_size; i++) {
-       int32_t res_sync = __shfl(occupy_result, i, cg_size);
+     cg_rank_id = threadIdx.x % CG_SIZE;
+     for (int i = 0; i < CG_SIZE; i++) {
+       int32_t res_sync = __shfl(occupy_result, i, CG_SIZE);
        if ((res_sync != OccupyResult::REFUSED) &&
            (res_sync != OccupyResult::ILLEGAL)) {
-         auto kv_idx_sync = __shfl(kv_idx, i, cg_size);
-         auto key_pos_sync = __shfl(key_pos, i, cg_size);
-         uint64_t bucket_values_sync = __shfl(bucket_values, i, cg_size);
+         auto kv_idx_sync = __shfl(kv_idx, i, CG_SIZE);
+         auto key_pos_sync = __shfl(key_pos, i, CG_SIZE);
+         uint64_t bucket_values_sync = __shfl(bucket_values, i, CG_SIZE);
          auto value_start = kv_idx_sync * dim;
          auto bucket_value_start = key_pos_sync * dim;
          if (res_sync == OccupyResult::DUPLICATE) {
            __gm__ VecV* bucket_values_vec =
                reinterpret_cast<__gm__ VecV*>(bucket_values_sync);
-           for (uint32_t j = cg_rank_id; j < dim; j += cg_size) {
+           for (uint32_t j = cg_rank_id; j < dim; j += CG_SIZE) {
              __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
                    L1CacheType::NON_CACHEABLE>(
                  values_vecv + value_start + j,
                  bucket_values_vec[bucket_value_start + j]);
            }
          } else {
-           for (uint32_t j = cg_rank_id; j < dim; j += cg_size) {
+           for (uint32_t j = cg_rank_id; j < dim; j += CG_SIZE) {
              __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
                    L1CacheType::NON_CACHEABLE>(
                  reinterpret_cast<__gm__ VecV*>(bucket_values_sync) +
