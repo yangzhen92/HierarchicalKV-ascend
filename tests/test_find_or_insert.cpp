@@ -771,12 +771,12 @@ TEST(test_find_or_insert, data_types_uint64_float_uint64_dim8) {
   test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 8>();
 }
 
-TEST(test_find_or_insert, data_types_int64_double_int64_dim8) {
-  test_find_or_insert_with_types_and_dim<int64_t, double, int64_t, 8>();
+TEST(test_find_or_insert, data_types_int64_double_uint64_dim8) {
+  test_find_or_insert_with_types_and_dim<int64_t, double, uint64_t, 8>();
 }
 
-TEST(test_find_or_insert, data_types_int64_float_int64_dim8) {
-  test_find_or_insert_with_types_and_dim<int64_t, float, int64_t, 8>();
+TEST(test_find_or_insert, data_types_int64_float_uint64_dim8) {
+  test_find_or_insert_with_types_and_dim<int64_t, float, uint64_t, 8>();
 }
 
 TEST(test_find_or_insert, data_types_uint64_uint16_uint64_dim8) {
