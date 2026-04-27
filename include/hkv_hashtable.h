@@ -1551,11 +1551,7 @@ class HashTable : public HashTableBase<K, V, S> {
                  scores, n, global_epoch_, value_move_opt_.size,
                  table_->max_bucket_shift, table_->capacity_divisor_magic,
                  table_->capacity_divisor_shift, table_->capacity)));
-      } else {
-        std::cout << "[Unsupport find_or_insert yet]\n";
       }
-    } else {
-      std::cout << "[Unsupport find_or_insert yet]\n";
     }
 
     NpuCheckError();
