@@ -23,6 +23,7 @@
 #include "acl/acl.h"
 #include "hkv_hashtable.h"
 #include "test_util.h"
+#include "test_device_data.h"
 
 using namespace std;
 using namespace npu::hkv;
@@ -509,9 +510,9 @@ void test_find_or_insert_with_strategy(const char* strategy_name) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
 
-  table.find_or_insert(key_num, device_keys, device_values_second, scores_param, stream);
-  ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
-  EXPECT_EQ(table.size(stream), key_num);
+  table.find_or_insert(key_num, device_data.device_keys, device_values_second, scores_param, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  EXPECT_EQ(table.size(device_data.stream), key_num);
 
   // 5.1 验证值相同
   size_t verify_success = 0;
@@ -624,11 +625,7 @@ void test_find_or_insert_with_strategy(const char* strategy_name) {
   }
 
   // 7. 释放内存
-  ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtFree(device_values), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_values_second), ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtFree(device_scores), ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
 }
 
 // 测试 kLru 策略
