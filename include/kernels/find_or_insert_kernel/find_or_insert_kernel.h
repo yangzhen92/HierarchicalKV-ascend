@@ -56,11 +56,12 @@
    using BUCKET = Bucket<K, V, S>;
    using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
 
-   __gm__ VecV* __restrict__ values_vecv = reinterpret_cast<__gm__ VecV*>(values);
+   __gm__ VecV* __restrict__ values_vecv =
+       reinterpret_cast<__gm__ VecV*>(values);
    S score = static_cast<S>(EMPTY_SCORE);
    constexpr uint32_t STRIDE = sizeof(VecD_Comp) / sizeof(D);
    const size_t n_align_warp = ((n + warpSize - 1) / warpSize) * warpSize;
- 
+
    uint32_t key_pos = 0;
    K key = 0;
    __gm__ K* bucket_keys = nullptr;
@@ -79,31 +80,32 @@
        } else {
          score = ScoreFunctor::desired_when_missed(scores, kv_idx, global_epoch,
                                                    cur_score);
- 
+
          // 2. 计算key的hash值 && 定位key
          const K hashed_key = Murmur3HashDevice(key);
          target_digests = digests_from_hashed<K>(hashed_key);
-         uint64_t global_idx = get_global_idx(hashed_key, capacity_divisor_magic,
-                                             capacity_divisor_shift, capacity);
+         uint64_t global_idx =
+             get_global_idx(hashed_key, capacity_divisor_magic,
+                            capacity_divisor_shift, capacity);
          key_pos = global_idx & (bucket_max_size - 1);
          uint64_t bkt_idx = global_idx >> (max_bucket_shift);
- 
+
          bucket_size = buckets_size + bkt_idx;
          int32_t cur_bucket_size = *bucket_size;
          __gm__ Bucket<K, V, S>* bucket = buckets + bkt_idx;
          bucket_keys = bucket->keys_;
          bucket_values = reinterpret_cast<uint64_t>(bucket->vectors);
          bucket_scores = bucket->scores_;
- 
+
          // 3. 遍历桶，找key/空位
          for (uint32_t offset = 0; offset < bucket_max_size + STRIDE;
-             offset += STRIDE) {
+              offset += STRIDE) {
            if (occupy_result != OccupyResult::INITIAL) {
              break;
            }
            uint32_t pos_cur = align_to<STRIDE>(key_pos);
            pos_cur = (pos_cur + offset) & (bucket_max_size - 1);
- 
+
            __gm__ D* digests_ptr =
                BUCKET::digests(bucket_keys, bucket_max_size, pos_cur);
            VecD_Comp probe_digests =
@@ -120,10 +122,11 @@
                  (Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
              cmp_result &= (cmp_result - 1);
              possible_pos = pos_cur + index;
- 
-             __gm__ K* current_key_ptr = BUCKET::keys(bucket_keys, possible_pos);
-             K try_key =
-                 Simt::AtomicCas(current_key_ptr, key, static_cast<K>(LOCKED_KEY));
+
+             __gm__ K* current_key_ptr =
+                 BUCKET::keys(bucket_keys, possible_pos);
+             K try_key = Simt::AtomicCas(current_key_ptr, key,
+                                         static_cast<K>(LOCKED_KEY));
              // 3.2 找到key，尝试抢占
              if (try_key == key) {
                occupy_result = OccupyResult::DUPLICATE;
@@ -156,8 +159,9 @@
              if (offset == 0 && possible_pos < key_pos) {
                continue;
              }
- 
-             __gm__ K* current_key_ptr = BUCKET::keys(bucket_keys, possible_pos);
+
+             __gm__ K* current_key_ptr =
+                 BUCKET::keys(bucket_keys, possible_pos);
              K try_key =
                  Simt::AtomicCas(current_key_ptr, static_cast<K>(EMPTY_KEY),
                                  static_cast<K>(LOCKED_KEY));
@@ -166,8 +170,8 @@
                occupy_result = OccupyResult::OCCUPIED_EMPTY;
                key_pos = possible_pos;
                ScoreFunctor::update_with_digest(bucket_keys, key_pos, scores,
-                                               kv_idx, score, bucket_max_size,
-                                               get_digest<K>(key), true);
+                                                kv_idx, score, bucket_max_size,
+                                                get_digest<K>(key), true);
                atomicAdd(bucket_size, 1);
                break;
              }
@@ -181,7 +185,7 @@
      } else {
        occupy_result = OccupyResult::ILLEGAL;
      }
- 
+
      // 前面查找会有3种结果
      // * OccupyResult::DUPLICATE 抢占key
      // * OccupyResult::OCCUPIED_EMPTY 抢占空位
@@ -231,9 +235,8 @@
            } else {
              // 4.3 分数满足，尝试准入
              __gm__ K* current_key_ptr = bucket_keys + min_pos;
-             K current_key =
-                 __ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-                       L1CacheType::NON_CACHEABLE>(current_key_ptr);
+             K current_key = __ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+                                   L1CacheType::NON_CACHEABLE>(current_key_ptr);
              if (current_key != static_cast<K>(LOCKED_KEY) &&
                  current_key != static_cast<K>(EMPTY_KEY)) {
                K try_key = Simt::AtomicCas(current_key_ptr, current_key,
@@ -266,7 +269,7 @@
          res_sync = __shfl(occupy_result, i, EVICT_GROUP_SIZE);
        }
      }
- 
+
      // 5. 抢占成功，写入value
      cg_rank_id = threadIdx.x % cg_size;
      for (int i = 0; i < cg_size; i++) {
@@ -278,24 +281,24 @@
          uint64_t bucket_values_sync = __shfl(bucket_values, i, cg_size);
          auto value_start = kv_idx_sync * dim;
          auto bucket_value_start = key_pos_sync * dim;
-        if (res_sync == OccupyResult::DUPLICATE) {
-          __gm__ VecV* bucket_values_vec =
-              reinterpret_cast<__gm__ VecV*>(bucket_values_sync);
-          for (uint32_t j = cg_rank_id; j < dim; j += cg_size) {
-            __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-                  L1CacheType::NON_CACHEABLE>(
-                values_vecv + value_start + j,
-                bucket_values_vec[bucket_value_start + j]);
-          }
-        } else {
-          for (uint32_t j = cg_rank_id; j < dim; j += cg_size) {
-            __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-                L1CacheType::NON_CACHEABLE>(
-              reinterpret_cast<__gm__ VecV*>(bucket_values_sync) +
-                  bucket_value_start + j,
-              values_vecv[value_start + j]);
-          }
-        }
+         if (res_sync == OccupyResult::DUPLICATE) {
+           __gm__ VecV* bucket_values_vec =
+               reinterpret_cast<__gm__ VecV*>(bucket_values_sync);
+           for (uint32_t j = cg_rank_id; j < dim; j += cg_size) {
+             __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+                   L1CacheType::NON_CACHEABLE>(
+                 values_vecv + value_start + j,
+                 bucket_values_vec[bucket_value_start + j]);
+           }
+         } else {
+           for (uint32_t j = cg_rank_id; j < dim; j += cg_size) {
+             __stg<ST_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+                   L1CacheType::NON_CACHEABLE>(
+                 reinterpret_cast<__gm__ VecV*>(bucket_values_sync) +
+                     bucket_value_start + j,
+                 values_vecv[value_start + j]);
+           }
+         }
        }
      }
 
@@ -307,136 +310,28 @@
    }
  }
 
- /* find or insert with the end-user specified score.
- */
- template <class K, class V, class S, int Strategy, uint32_t GROUP_SIZE = 32>
- __simt_vf__ __aicore__
- LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_non_unique_kernel_vf(
-     __gm__ const Table<K, V, S>* __restrict__ table,
-     __gm__ Bucket<K, V, S>* buckets, const size_t bucket_max_size,
-     const size_t buckets_num, const size_t dim,
-     __gm__ const K* __restrict__ keys,
-     __gm__ V * __gm__ * __restrict__ vectors, __gm__ S* __restrict__ scores,
-     S cur_score, __gm__ bool* __restrict__ found, const S global_epoch,
-     const size_t n, uint32_t blockIdx, uint64_t thread_all,
-     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
-     uint64_t capacity_divisor_shift, uint64_t capacity) {
-   if ((table == nullptr) || (buckets == nullptr) || (keys == nullptr) ||
-       (vectors == nullptr) || (found == nullptr)) {
-     return;
-   }
-
-   using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
-   auto lane_id = threadIdx.x % GROUP_SIZE;
-   const uint64_t N = n * GROUP_SIZE;
-
-   for (size_t t = (blockIdx * blockDim.x) + threadIdx.x; t < N;
-        t += thread_all) {
-     size_t key_idx = t / GROUP_SIZE;
-
-     const K find_or_insert_key = keys[key_idx];
-
-     if (IS_RESERVED_KEY<K>(find_or_insert_key)) {
-       continue;
-     }
-
-     const S find_or_insert_score = ScoreFunctor::desired_when_missed(
-         scores, key_idx, global_epoch, cur_score);
-     
-     const K hashed_key = Murmur3HashDevice(find_or_insert_key);
-     uint64_t global_idx =
-         get_global_idx(hashed_key, capacity_divisor_magic,
-                        capacity_divisor_shift, capacity);
-     uint32_t key_pos = global_idx & (bucket_max_size - 1);
-     uint64_t bkt_idx = global_idx >> max_bucket_shift;
-     __gm__ Bucket<K, V, S>* bucket = buckets + bkt_idx;
-     __gm__ K* bucket_keys = bucket->keys_;
-     __gm__ V* bucket_vectors = bucket->vectors;
-     __gm__ S* bucket_scores = bucket->scores_;
-
-     OccupyResult occupy_result{OccupyResult::INITIAL};
-     __gm__ int* buckets_size = table->buckets_size;
-     K evicted_key = static_cast<K>(EMPTY_KEY);
-     do {
-       occupy_result = find_and_lock<K, S, GROUP_SIZE>(
-           bucket_keys, bucket_scores, bucket_max_size, find_or_insert_key,
-           find_or_insert_score, key_pos, evicted_key, lane_id);
-     } while (occupy_result == OccupyResult::CONTINUE);
-
-     if (occupy_result == OccupyResult::REFUSED) {
-       vectors[key_idx] = nullptr;
-       continue;
-     }
-
-     if (lane_id == 0) {
-       if ((occupy_result == OccupyResult::OCCUPIED_EMPTY ||
-            occupy_result == OccupyResult::OCCUPIED_RECLAIMED)) {
-         atomicAdd(&(buckets_size[bkt_idx]), 1u);
-       }
-       if (occupy_result == OccupyResult::DUPLICATE) {
-         ScoreFunctor::update_score_only(bucket_keys, key_pos, scores, key_idx,
-                                         find_or_insert_score,
-                                         bucket_max_size, false);
-         vectors[key_idx] = (bucket_vectors + key_pos * dim);
-       } else {
-         ScoreFunctor::update_with_digest(bucket_keys, key_pos, scores, key_idx,
-                                         find_or_insert_score,
-                                         bucket_max_size, get_digest<K>(find_or_insert_key), true);
-         vectors[key_idx] = (bucket_vectors + key_pos * dim);
-       }
-       asc_threadfence();
-       found[key_idx] = occupy_result == OccupyResult::DUPLICATE;
-       asc_atomic_exch(bucket_keys + key_pos, find_or_insert_key);
-     }
-   }
- }
-
  template <class K, class V, class S, int Strategy = -1>
  __global__ __vector__ void find_or_insert_kernel(
-     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size, uint64_t buckets_num,
-     uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys, __gm__ V* values,
-      __gm__ S* scores, uint64_t n,
-     uint64_t global_epoch, uint32_t value_size, uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
-     uint64_t capacity_divisor_shift, uint64_t capacity, uint32_t cg_size) {
- 
+     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
+     uint64_t buckets_num, uint32_t bucket_capacity, uint32_t dim,
+     __gm__ const K* keys, __gm__ V* values, __gm__ S* scores, uint64_t n,
+     uint64_t global_epoch, uint32_t value_size, uint32_t max_bucket_shift,
+     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
+     uint64_t capacity, uint32_t cg_size) {
    const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
    uint64_t cur_score = (Strategy == npu::hkv::EvictStrategyInternal::kLru ||
                          Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
                             ? static_cast<uint64_t>(GetSystemCycle())
                             : 0;
- 
+
    DISPATCH_VALUE_SIZE(
-     value_size,
-     (asc_vf_call<find_or_insert_kernel_vf<K, V, S, DTYPE, Strategy>>(
-               dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets,
-               buckets_size, buckets_num, bucket_capacity, dim, keys, values,
-               scores, n, global_epoch, cur_score,
-               GetBlockIdx(), thread_all, max_bucket_shift, capacity_divisor_magic,
-               capacity_divisor_shift, capacity, cg_size)));
+       value_size,
+       (asc_vf_call<find_or_insert_kernel_vf<K, V, S, DTYPE, Strategy>>(
+           dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets, buckets_size,
+           buckets_num, bucket_capacity, dim, keys, values, scores, n,
+           global_epoch, cur_score, GetBlockIdx(), thread_all, max_bucket_shift,
+           capacity_divisor_magic, capacity_divisor_shift, capacity, cg_size)));
  }
-
-template <class K, class V, class S, int Strategy = -1>
-__global__ __vector__ void find_or_insert_non_unique_kernel(
-    __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
-    uint32_t bucket_max_size, uint64_t buckets_num, uint32_t dim,
-    __gm__ const K* keys, __gm__ V * __gm__ * vectors, __gm__ S* scores,
-    __gm__ bool* found, uint64_t global_epoch, uint64_t n,
-    uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
-    uint64_t capacity_divisor_shift, uint64_t capacity) {
-  const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
-  uint64_t cur_score = (Strategy == npu::hkv::EvictStrategyInternal::kLru ||
-                        Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
-                           ? static_cast<uint64_t>(GetSystemCycle())
-                           : 0;
-
-  asc_vf_call<find_or_insert_non_unique_kernel_vf<K, V, S, Strategy>>(
-      dim3{static_cast<uint32_t>(THREAD_NUM_512)}, table, buckets,
-      bucket_max_size, buckets_num, dim, keys, vectors, scores,
-      static_cast<S>(cur_score), found, static_cast<S>(global_epoch), n,
-      GetBlockIdx(), thread_all, max_bucket_shift, capacity_divisor_magic,
-      capacity_divisor_shift, capacity);
-}
-
  }  // namespace hkv
  }  // namespace npu
  
