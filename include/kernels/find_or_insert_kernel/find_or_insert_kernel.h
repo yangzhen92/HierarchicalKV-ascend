@@ -348,7 +348,7 @@
      uint64_t capacity, uint32_t bucket_max_size, uint32_t dim,
      __gm__ const K* keys, __gm__ const S* scores, S cur_score, uint64_t n,
      __gm__ V* values, __gm__ V * __gm__ * d_dst_values,
-     TransDirection* trans_dir, uint32_t thread_all, uint64_t global_epoch,
+     __gm__ TransDirection* trans_dir, uint32_t thread_all, uint64_t global_epoch,
      uint32_t block_index, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift) {
    if (buckets == nullptr || buckets_size == nullptr || keys == nullptr) {
@@ -448,7 +448,7 @@
      __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
      uint64_t capacity, uint32_t bucket_max_size, uint32_t dim,
      __gm__ const K* keys, __gm__ const S* scores, uint64_t n, __gm__ V* values,
-     __gm__ V * __gm__ * d_dst_values, TransDirection* trans_dir,
+     __gm__ V * __gm__ * d_dst_values, __gm__ TransDirection* trans_dir,
      uint64_t global_epoch, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift) {
    const uint32_t thread_all = THREAD_NUM_512 * GetBlockNum();
