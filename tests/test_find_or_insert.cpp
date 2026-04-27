@@ -725,11 +725,7 @@ void test_find_or_insert_with_types_and_dim() {
   for (size_t i = 0; i < key_num; i++) {
     for (size_t j = 0; j < dim; j++) {
       size_t idx = i * dim + j;
-      if constexpr (std::is_floating_point_v<V>) {
-        ASSERT_NEAR(host_values[idx], host_founds[idx], 1e-6);
-      } else {
-        ASSERT_EQ(host_values[idx], host_founds[idx]);
-      }
+      ASSERT_EQ(host_values[idx], host_founds[idx]);
     }
   }
 
