@@ -515,17 +515,19 @@ void test_find_or_insert_with_strategy(const char* strategy_name) {
   EXPECT_EQ(table.size(device_data.stream), key_num);
 
   // 5.1 验证值相同
-  size_t verify_success = 0;
+  vector<V> host_founds(key_num * dim, 0);
+  ASSERT_EQ(
+      aclrtMemcpy(host_founds.data(), key_num * each_value_size * dim,
+                  device_values_second, key_num * each_value_size * dim,
+                  ACL_MEMCPY_DEVICE_TO_HOST),
+      ACL_ERROR_NONE);
+  
   for (size_t i = 0; i < key_num; i++) {
-    vector<V> real_values(dim, 0);
-    ASSERT_EQ(aclrtMemcpy(real_values.data(), dim * each_value_size, 
-                          device_values_second + i * dim, dim * each_value_size, 
-                          ACL_MEMCPY_DEVICE_TO_HOST),
-              ACL_ERROR_NONE);
-    EXPECT_EQ(real_values, host_values[i * dim]);
-    verify_success++;
+    for (size_t j = 0; j < dim; j++) {
+      size_t idx = i * dim + j;
+      ASSERT_EQ(host_values[idx], host_founds[idx]);
+    }
   }
-  EXPECT_EQ(verify_success, key_num);
 
   // 6. 验证策略相关的 scores 是否正确更新
   S* device_scores_output = nullptr;
