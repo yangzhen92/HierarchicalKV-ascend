@@ -1555,7 +1555,7 @@ class HashTable : public HashTableBase<K, V, S> {
         find_or_insert_non_unique_kernel<K, V, S, true, evict_strategy>
             <<<block_dim_, 0, stream>>>(
                 table_->buckets, table_->buckets_size, table_->capacity,
-                options_.max_bucket_size, value_move_opt_.dim, keys, scores, n,
+                options_.max_bucket_size, options_.dim, keys, scores, n,
                 values, nullptr, nullptr, global_epoch_,
                 table_->max_bucket_shift, table_->capacity_divisor_magic,
                 table_->capacity_divisor_shift);
