@@ -399,16 +399,16 @@
      } while (occupy_result == OccupyResult::CONTINUE);
 
      if constexpr (!MoveV) {
-      if (lane_id == 0) {
-        if (occupy_result == OccupyResult::DUPLICATE) {
-          trans_dir[key_idx] = TransDirection::D2H;
-        } else if (occupy_result == OccupyResult::REFUSED) {
-          trans_dir[key_idx] = TransDirection::NONE;
-        } else {
-          trans_dir[key_idx] = TransDirection::H2D;
-        }
-      }
-    }
+       if (lane_id == 0) {
+         if (occupy_result == OccupyResult::DUPLICATE) {
+           trans_dir[key_idx] = TransDirection::D2H;
+         } else if (occupy_result == OccupyResult::REFUSED) {
+           trans_dir[key_idx] = TransDirection::NONE;
+         } else {
+           trans_dir[key_idx] = TransDirection::H2D;
+         }
+       }
+     }
 
      if (occupy_result == OccupyResult::REFUSED) {
        continue;
