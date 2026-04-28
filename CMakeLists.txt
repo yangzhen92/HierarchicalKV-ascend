@@ -23,17 +23,17 @@ target_link_libraries(hkv_depends INTERFACE
   m
   dl # platform依赖
 
-  # cann
-  tiling_api # platform
-  platform # fe::platform
-  opapi # aclnnApi
-  nnopbase # aclTensor
-  pthread # platform依赖
+  $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE}, sim>:runtime_camodel npu_drv>>
+  $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE}, npu>:tiling_api platform opapi nnopbase pthread>>
+  $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE}, cpu>:cpudebug_acl_stub tikicpulib::ascend950pr_9599>>
 )
 target_compile_options(hkv_depends INTERFACE
   # 该NPU架构版本号暂未正式发布，后续可能会有变更，请关注正式版本发布信息
   $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>
-  -g -O2
+  $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE}, sim>:-g -O0>>
+  $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE}, npu>:-g -O2>>
+  $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE}, cpu>:-x c++>>
+  $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE}, cpu>:-g -O2 -D_GLIBCXX_USE_CXX11_ABI=0 -Wall -Werror>>
   # 优化SIMT算子寄存器数
   -mllvm -disable-machine-licm
   # 打印寄存器使用情况
