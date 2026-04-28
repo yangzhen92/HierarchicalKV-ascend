@@ -583,7 +583,7 @@ void test_find_or_insert_with_types_and_dim() {
 
   // 5.2 下发算子
   table.find_or_insert(key_num, device_data.device_keys, device_data.device_values,
-                       nullptr, device_data.stream);
+                       nullptr, device_data.stream, is_unique);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table.size(device_data.stream), key_num); // 大小不变
 
@@ -631,7 +631,7 @@ void test_find_or_insert_with_types_and_dim() {
   
   // 下发算子
   table.find_or_insert(mixed_key_num, mixed_device_data.device_keys, mixed_device_data.device_values,
-                       nullptr, mixed_device_data.stream);
+                       nullptr, mixed_device_data.stream, is_unique);
   ASSERT_EQ(aclrtSynchronizeStream(mixed_device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table.size(mixed_device_data.stream), key_num + 1024); // 增加1024个新键
 }
