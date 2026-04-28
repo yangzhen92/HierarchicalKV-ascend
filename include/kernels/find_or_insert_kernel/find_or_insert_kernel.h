@@ -119,13 +119,13 @@
                break;
              }
              uint32_t index =
-                 (Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+                 (__ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
              cmp_result &= (cmp_result - 1);
              possible_pos = pos_cur + index;
 
              __gm__ K* current_key_ptr =
                  BUCKET::keys(bucket_keys, possible_pos);
-             K try_key = Simt::AtomicCas(current_key_ptr, key,
+             K try_key = asc_atomic_cas(current_key_ptr, key,
                                          static_cast<K>(LOCKED_KEY));
              // 3.2 找到key，尝试抢占
              if (try_key == key) {
@@ -153,7 +153,7 @@
                break;
              }
              uint32_t index =
-                 (Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+                 (__ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
              cmp_result &= (cmp_result - 1);
              possible_pos = pos_cur + index;
              if (offset == 0 && possible_pos < key_pos) {
@@ -163,7 +163,7 @@
              __gm__ K* current_key_ptr =
                  BUCKET::keys(bucket_keys, possible_pos);
              K try_key =
-                 Simt::AtomicCas(current_key_ptr, static_cast<K>(EMPTY_KEY),
+                 asc_atomic_cas(current_key_ptr, static_cast<K>(EMPTY_KEY),
                                  static_cast<K>(LOCKED_KEY));
              // 3.6 找到空位，尝试抢占
              if (try_key == static_cast<K>(EMPTY_KEY)) {
@@ -172,7 +172,7 @@
                ScoreFunctor::update_with_digest(bucket_keys, key_pos, scores,
                                                 kv_idx, score, bucket_max_size,
                                                 get_digest<K>(key), true);
-               atomicAdd(bucket_size, 1);
+               asc_atomic_add(bucket_size, 1);
                break;
              }
            } while (true);
@@ -194,14 +194,14 @@
      int32_t cg_rank_id = threadIdx.x % EVICT_GROUP_SIZE;
      // 遍历组内线程，每个线程都要有可能淘汰
      for (int32_t i = 0; i < EVICT_GROUP_SIZE; i++) {
-       int32_t res_sync = __shfl(occupy_result, i, EVICT_GROUP_SIZE);
+       int32_t res_sync = asc_shfl(occupy_result, i, EVICT_GROUP_SIZE);
        while (res_sync == OccupyResult::INITIAL) {
          S min_score = MAX_SCORE;
          uint32_t min_pos = key_pos;
          // 4.1 遍历桶，找最小值
-         uint64_t bucket_scores_sync = __shfl(
+         uint64_t bucket_scores_sync = asc_shfl(
              reinterpret_cast<uint64_t>(bucket_scores), i, EVICT_GROUP_SIZE);
-         uint64_t bucket_keys_sync = __shfl(
+         uint64_t bucket_keys_sync = asc_shfl(
              reinterpret_cast<uint64_t>(bucket_keys), i, EVICT_GROUP_SIZE);
          for (uint32_t current_pos = cg_rank_id; current_pos < bucket_max_size;
               current_pos += EVICT_GROUP_SIZE) {
@@ -220,8 +220,8 @@
          }
          // 分治法求最小值，最终所有线程获得相同的min_score和min_pos
          for (int32_t offset = EVICT_GROUP_SIZE / 2; offset > 0; offset /= 2) {
-           S other_score = __shfl_xor(min_score, offset, EVICT_GROUP_SIZE);
-           uint32_t other_pos = __shfl_xor(min_pos, offset, EVICT_GROUP_SIZE);
+           S other_score = asc_shfl_xor(min_score, offset, EVICT_GROUP_SIZE);
+           uint32_t other_pos = asc_shfl_xor(min_pos, offset, EVICT_GROUP_SIZE);
            if (other_score < min_score) {
              min_score = other_score;
              min_pos = other_pos;
@@ -239,7 +239,7 @@
                                    L1CacheType::NON_CACHEABLE>(current_key_ptr);
              if (current_key != static_cast<K>(LOCKED_KEY) &&
                  current_key != static_cast<K>(EMPTY_KEY)) {
-               K try_key = Simt::AtomicCas(current_key_ptr, current_key,
+               K try_key = asc_atomic_cas(current_key_ptr, current_key,
                                            static_cast<K>(LOCKED_KEY));
                // 4.4 抢占成功
                if (try_key == current_key) {
@@ -253,32 +253,32 @@
                        bucket_max_size, get_digest<K>(key), true);
                    if (try_key == static_cast<K>(RECLAIM_KEY)) {
                      occupy_result = OccupyResult::OCCUPIED_RECLAIMED;
-                     atomicAdd(bucket_size, 1);
+                     asc_atomic_add(bucket_size, 1);
                    } else {
                      occupy_result = OccupyResult::EVICT;
                    }
                  } else {
                    // 4.4.2 分数变大，淘汰失败，把key还原回去，重新遍历
-                   (void)Simt::AtomicExch(current_key_ptr, current_key);
+                   (void)asc_atomic_exch(current_key_ptr, current_key);
                  }
                }
                // 4.5 抢占失败，重新遍历
              }
            }
          }
-         res_sync = __shfl(occupy_result, i, EVICT_GROUP_SIZE);
+         res_sync = asc_shfl(occupy_result, i, EVICT_GROUP_SIZE);
        }
      }
 
      // 5. 抢占成功，写入value
      cg_rank_id = threadIdx.x % CG_SIZE;
      for (int i = 0; i < CG_SIZE; i++) {
-       int32_t res_sync = __shfl(occupy_result, i, CG_SIZE);
+       int32_t res_sync = asc_shfl(occupy_result, i, CG_SIZE);
        if ((res_sync != OccupyResult::REFUSED) &&
            (res_sync != OccupyResult::ILLEGAL)) {
-         auto kv_idx_sync = __shfl(kv_idx, i, CG_SIZE);
-         auto key_pos_sync = __shfl(key_pos, i, CG_SIZE);
-         uint64_t bucket_values_sync = __shfl(bucket_values, i, CG_SIZE);
+         auto kv_idx_sync = asc_shfl(kv_idx, i, CG_SIZE);
+         auto key_pos_sync = asc_shfl(key_pos, i, CG_SIZE);
+         uint64_t bucket_values_sync = asc_shfl(bucket_values, i, CG_SIZE);
          auto value_start = kv_idx_sync * dim;
          auto bucket_value_start = key_pos_sync * dim;
          if (res_sync == OccupyResult::DUPLICATE) {
@@ -301,12 +301,12 @@
          }
        }
      }
-     __threadfence();
+     asc_threadfence();
 
      if ((occupy_result != OccupyResult::REFUSED) &&
          (occupy_result != OccupyResult::ILLEGAL)) {
        // key也是原子标记位，所有key的操作必须原子化
-       (void)Simt::AtomicExch(bucket_keys + key_pos, key);
+       (void)asc_atomic_exch(bucket_keys + key_pos, key);
      }
    }
  }
