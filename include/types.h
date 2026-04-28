@@ -265,6 +265,12 @@ enum class OverrideResult {
   REFUSED,   ///< Override is refused.
 };
 
+ enum class TransDirection {
+   NONE = 0,  ///< No transfer.
+   CPOY_IN = 1,  ///< Copy from Ptr to HashTable.
+   CPOY_OUT = 2,  ///< Copy from HashTable to Ptr.
+ };
+
 /* This struct is mainly for keeping the code readable, it should be strictly
  * consistent with `EvictStrategy::EvictStrategyEnum`.
  */

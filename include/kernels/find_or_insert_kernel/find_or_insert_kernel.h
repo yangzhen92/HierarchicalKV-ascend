@@ -36,12 +36,6 @@
  namespace hkv {
  using namespace AscendC;
 
- enum class TransDirection {
-   NONE = 0,
-   H2D = 1,
-   D2H = 2,
- };
-
  template <typename K = uint64_t, typename V = float, typename S = uint64_t,
            typename VecV = int32_t, int32_t CG_SIZE = 16, int Strategy = -1,
            int32_t EVICT_GROUP_SIZE = 16>
@@ -401,11 +395,11 @@
      if constexpr (!MoveV) {
        if (lane_id == 0) {
          if (occupy_result == OccupyResult::DUPLICATE) {
-           trans_dir[key_idx] = TransDirection::D2H;
+           trans_dir[key_idx] = TransDirection::CPOY_OUT;
          } else if (occupy_result == OccupyResult::REFUSED) {
            trans_dir[key_idx] = TransDirection::NONE;
          } else {
-           trans_dir[key_idx] = TransDirection::H2D;
+           trans_dir[key_idx] = TransDirection::CPOY_IN;
          }
        }
      }
