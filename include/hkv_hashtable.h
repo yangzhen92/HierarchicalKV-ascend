@@ -1542,24 +1542,16 @@ class HashTable : public HashTableBase<K, V, S> {
 
     if (is_fast_mode()) {
       if (unique_key) {
-        find_or_insert_kernel<K, V, S, evict_strategy>
-            <<<block_dim_, 0, stream>>>(
-                table_->buckets, table_->buckets_size, options_.max_bucket_size,
-                value_move_opt_.dim, keys, values, scores, n, global_epoch_,
-                value_move_opt_.size, table_->max_bucket_shift,
-                table_->capacity_divisor_magic, table_->capacity_divisor_shift,
-                table_->capacity, value_move_opt_.cg_size);
-      } else {
-        find_or_insert_non_unique_kernel<K, V, S, true, evict_strategy>
-            <<<block_dim_, 0, stream>>>(
-                table_->buckets, table_->buckets_size, table_->capacity,
-                options_.max_bucket_size, value_move_opt_.dim, keys, scores, n,
-                values, nullptr, nullptr, global_epoch_,
-                table_->max_bucket_shift, table_->capacity_divisor_magic,
-                table_->capacity_divisor_shift);
+        DISPATCH_GROUP_SIZE(
+            value_move_opt_.cg_size,
+            (find_or_insert_kernel<K, V, S, GROUP_SIZE, evict_strategy>
+             <<<block_dim_, 0, stream>>>(
+                 table_->buckets, table_->buckets_size,
+                 options_.max_bucket_size, value_move_opt_.dim, keys, values,
+                 scores, n, global_epoch_, value_move_opt_.size,
+                 table_->max_bucket_shift, table_->capacity_divisor_magic,
+                 table_->capacity_divisor_shift, table_->capacity)));
       }
-    } else {
-      std::cout << "[Unsupport find_or_insert yet]\n";
     }
 
     NpuCheckError();
