@@ -569,6 +569,66 @@ void read_from_ptr(V** __restrict src, V* __restrict dst, const size_t dim,
       <<<grid_size, 0, stream>>>(reinterpret_cast<void*>(src), dst, dim, N);
 }
 
+}  // namespace test_util
+
+namespace npu {
+namespace hkv {
+
+using namespace AscendC;
+
+template <class V>
+__simt_vf__ __aicore__ LAUNCH_BOUND(BLOCK_SIZE) inline void
+read_or_write_ptr_kernel_vf(__gm__ void* src_addr, __gm__ V* dst_addr,
+                            __gm__ bool* read_or_write, const size_t dim,
+                            size_t N, uint32_t blockIdx,
+                            uint32_t blockNums) {
+  __gm__ V* const __gm__* src =
+      reinterpret_cast<__gm__ V* const __gm__* __restrict>(src_addr);
+  __gm__ V* dst = reinterpret_cast<__gm__ V* __restrict>(dst_addr);
+
+  const size_t tid = (blockIdx * blockDim.x) + threadIdx.x;
+  for (size_t t = tid; t < N; t += blockDim.x * blockNums) {
+    const size_t vec_index = t / dim;
+    const size_t dim_index = t % dim;
+    if (src[vec_index] == nullptr) {
+      continue;
+    }
+    if (read_or_write[vec_index]) {
+      dst[t] = src[vec_index][dim_index];
+    } else {
+      src[vec_index][dim_index] = dst[t];
+    }
+  }
+}
+
+template <class V>
+__global__ __vector__ void read_or_write_ptr_kernel(__gm__ void* src,
+                                                    __gm__ V* dst,
+                                                    __gm__ bool* read_or_write,
+                                                    const size_t dim,
+                                                    size_t N) {
+  asc_vf_call<read_or_write_ptr_kernel_vf<V>>(
+      dim3{static_cast<uint32_t>(BLOCK_SIZE)}, src, dst, read_or_write, dim, N,
+      GetBlockIdx(), GetBlockNum());
+}
+
+}  // namespace hkv
+}  // namespace npu
+
+namespace test_util {
+
+template <class V>
+void read_or_write_ptr(V** __restrict src, V* __restrict dst,
+                       bool* __restrict read_or_write, const size_t dim,
+                       size_t n, aclrtStream stream) {
+  const size_t block_size = 1024;
+  const size_t N = n * dim;
+  const size_t grid_size = (N - 1) / block_size + 1;
+  HKV_EXPECT_TRUE((grid_size <= 65535), "Pointer is already assigned.");
+  npu::hkv::read_or_write_ptr_kernel<V><<<grid_size, 0, stream>>>(
+      reinterpret_cast<void*>(src), dst, read_or_write, dim, N);
+}
+
 inline void init_env() {
   static bool init_flag = false;
   if (!init_flag) {
