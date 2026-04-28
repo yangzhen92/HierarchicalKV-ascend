@@ -354,6 +354,11 @@
    if (buckets == nullptr || buckets_size == nullptr || keys == nullptr) {
      return;
    }
+   if constexpr (!MoveV) {
+     if ((!d_dst_values) || (!trans_dir)) {
+       return;
+     }
+   }
    using BUCKET = Bucket<K, V, S>;
    using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
 
