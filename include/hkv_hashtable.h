@@ -1438,7 +1438,8 @@ class HashTable : public HashTableBase<K, V, S> {
                        const score_type* scores = nullptr,  // (n)
                        aclrtStream stream = 0,
                        bool ignore_evict_strategy = false) {
-    if constexpr (std::is_same<value_type, double>::value || std::is_same<value_type, uint16_t>::value) {
+    if constexpr (std::is_same<value_type, double>::value || std::is_same<value_type, uint16_t>::value ||
+                  std::is_same<value_type, uint32_t>::value) {
       throw std::runtime_error("[accum_or_assign] Does not support double or uint16_t value_type.");
     } else {
       if (n == 0) {
