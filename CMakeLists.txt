@@ -23,7 +23,7 @@ target_link_libraries(hkv_depends INTERFACE
   m
   dl # platform依赖
 
-  $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE}, sim>:runtime_camodel npu_drv>>
+  $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE}, sim>:runtime_camodel npu_drv tiling_api platform opapi nnopbase pthread>>
   $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE}, npu>:tiling_api platform opapi nnopbase pthread>>
   $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE}, cpu>:cpudebug_acl_stub tikicpulib::ascend950pr_9599>>
 )
