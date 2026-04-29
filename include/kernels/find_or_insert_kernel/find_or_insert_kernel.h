@@ -342,14 +342,14 @@
      uint64_t capacity, uint32_t bucket_max_size, uint32_t dim,
      __gm__ const K* keys, __gm__ const S* scores, S cur_score, uint64_t n,
      __gm__ V* values, __gm__ V * __gm__ * d_dst_values,
-     __gm__ TransDirection* trans_dir, uint32_t thread_all, uint64_t global_epoch,
+     __gm__ bool* founds, uint32_t thread_all, uint64_t global_epoch,
      uint32_t block_index, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift) {
    if (buckets == nullptr || buckets_size == nullptr || keys == nullptr) {
      return;
    }
    if constexpr (!MoveV) {
-     if ((!d_dst_values) || (!trans_dir)) {
+     if ((!d_dst_values) || (!founds)) {
        return;
      }
    }
@@ -392,18 +392,6 @@
            evicted_key, lane_id);
      } while (occupy_result == OccupyResult::CONTINUE);
 
-     if constexpr (!MoveV) {
-       if (lane_id == 0) {
-         if (occupy_result == OccupyResult::DUPLICATE) {
-           trans_dir[key_idx] = TransDirection::CPOY_OUT;
-         } else if (occupy_result == OccupyResult::REFUSED) {
-           trans_dir[key_idx] = TransDirection::NONE;
-         } else {
-           trans_dir[key_idx] = TransDirection::CPOY_IN;
-         }
-       }
-     }
-
      if (occupy_result == OccupyResult::REFUSED) {
        continue;
      }
@@ -430,6 +418,7 @@
      if (lane_id == 0) {
        if constexpr (!MoveV) {
          d_dst_values[key_idx] = bucket_vectors + key_pos * dim;
+         founds[key_idx] = occupy_result != OccupyResult::DUPLICATE;
        }
        ScoreFunctor::update_with_digest(
            bucket_keys, key_pos, scores, key_idx, score, bucket_max_size,
@@ -445,7 +434,7 @@
      __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
      uint64_t capacity, uint32_t bucket_max_size, uint32_t dim,
      __gm__ const K* keys, __gm__ const S* scores, uint64_t n, __gm__ V* values,
-     __gm__ V * __gm__ * d_dst_values, __gm__ TransDirection* trans_dir,
+     __gm__ V * __gm__ * d_dst_values, __gm__ bool* founds,
      uint64_t global_epoch, uint32_t max_bucket_shift,
      uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift) {
    const uint32_t thread_all = THREAD_NUM_512 * GetBlockNum();
@@ -457,7 +446,7 @@
    asc_vf_call<find_or_insert_non_unique_kernel_vf<K, V, S, MoveV, Strategy>>(
        dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets, buckets_size,
        capacity, bucket_max_size, dim, keys, scores, cur_score, n, values,
-       d_dst_values, trans_dir, thread_all, global_epoch, GetBlockIdx(), max_bucket_shift,
+       d_dst_values, founds, thread_all, global_epoch, GetBlockIdx(), max_bucket_shift,
        capacity_divisor_magic, capacity_divisor_shift);
  }
 
