@@ -1560,6 +1560,72 @@ class HashTable : public HashTableBase<K, V, S> {
                 table_->max_bucket_shift, table_->capacity_divisor_magic,
                 table_->capacity_divisor_shift);
       }
+    } else {
+      bool filter_condition = unique_key && !options_.io_by_cpu;
+      if (filter_condition) {
+        size_t size_all = n * sizeof(value_type*) + n * sizeof(TransDirection);
+        auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
+        auto temp_storage{dev_ws.get<uint8_t*>(0)};
+        TransDirection* d_trans_dirs{reinterpret_cast<TransDirection*>(temp_storage)};
+        value_type** d_dst_values{reinterpret_cast<value_type**>(temp_storage + n * sizeof(value_type*))};
+
+        find_or_insert_hybrid_kernel<K, V, S, true, evict_strategy>
+            <<<block_dim_, 0, stream>>>(
+                table_->buckets, table_->buckets_size, table_->capacity,
+                options_.max_bucket_size, options_.dim, keys, scores, n,
+                values, d_dst_values, d_trans_dirs, global_epoch_,
+                table_->max_bucket_shift, table_->capacity_divisor_magic,
+                table_->capacity_divisor_shift);
+
+        uint64_t valid_ub_size = GetMixedOpUbSize();
+        uint32_t max_tile_size =
+            valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
+        HKV_CHECK(max_tile_size != 0,
+                  log_format("UB size %lu is too small.", valid_ub_size));
+        find_or_insert_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
+            block_dim_, table_->dim, max_tile_size, values, d_dst_values,
+            d_trans_dirs);
+      } else { //
+        size_t size_all = n * sizeof(value_type*) + n * sizeof(TransDirection);
+        auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
+        auto temp_storage{dev_ws.get<uint8_t*>(0)};
+        TransDirection* d_trans_dirs{reinterpret_cast<TransDirection*>(temp_storage)};
+        value_type** d_dst_values{reinterpret_cast<value_type**>(temp_storage + n * sizeof(value_type*))};
+
+        find_or_insert_non_unique_kernel<K, V, S, true, evict_strategy>
+            <<<block_dim_, 0, stream>>>(
+                table_->buckets, table_->buckets_size, table_->capacity,
+                options_.max_bucket_size, options_.dim, keys, scores, n,
+                values, d_dst_values, nullptr, global_epoch_,
+                table_->max_bucket_shift, table_->capacity_divisor_magic,
+                table_->capacity_divisor_shift);
+        if (options_.io_by_cpu) {
+          size_t value_size = n * table_->dim * sizeof(value_type);
+
+          size_t host_size_all = value_size + size_all;
+          auto host_ws{host_mem_pool_->get_workspace<1>(host_size_all, stream)};
+          auto host_storage{host_ws.get<uint8_t*>(0)};
+          value_type* h_values{reinterpret_cast<value_type*>(host_storage)};
+          value_type** h_dst_values{reinterpret_cast<value_type**>(
+            host_storage + n * table_->dim * sizeof(value_type))};
+          NPU_CHECK(aclrtMemcpyAsync(h_values, value_size, values, value_size,
+                                     ACL_MEMCPY_DEVICE_TO_HOST, stream));
+          NPU_CHECK(aclrtMemcpyAsync(h_dst_values, dst_ptr_size, d_dst_values,
+                                     dst_ptr_size, ACL_MEMCPY_DEVICE_TO_HOST,
+                                     stream));
+          NPU_CHECK(aclrtSynchronizeStream(stream));
+          write_by_cpu<V>(h_dst_values, h_values, table_->dim, n);
+        } else {
+          uint64_t valid_ub_size = GetMixedOpUbSize();
+          uint32_t max_tile_size =
+              valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
+          HKV_CHECK(max_tile_size != 0,
+                    log_format("UB size %lu is too small.", valid_ub_size));
+          find_or_insert_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
+              block_dim_, table_->dim, max_tile_size, values, d_dst_values,
+              d_trans_dirs);
+        }
+      }
     }
 
     NpuCheckError();
