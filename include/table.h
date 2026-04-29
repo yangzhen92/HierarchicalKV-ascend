@@ -226,6 +226,7 @@ void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
 
     if (provider != nullptr) {
       address = provider->get_bucket_address(i);
+      HKV_CHECK(address == nullptr, "address == nullptr");
     } else {
       // Backward compatibility: use allocator when no provider
       allocator->alloc(MemoryType::Device, (void**)&(address),

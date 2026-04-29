@@ -41,7 +41,7 @@ constexpr size_t BUCKET_ALIGN_SIZE = 512;
  */
 template <class K, class V, class S>
 class BucketMemoryPoolManager : public IBucketAddressProvider {
- public:
+public:
   using key_type = K;
   using value_type = V;
   using score_type = S;
@@ -103,9 +103,18 @@ class BucketMemoryPoolManager : public IBucketAddressProvider {
 
   uint8_t* get_bucket_address(size_t bucket_index) const override {
     if (use_bucket_memory_pool_) {
+      if (bucket_index * bucket_memory_size_ > bucket_memory_pool_size_) {
+        printf("[BucketMemoryPool] OOM: bucket_index=%lu, bucket_memory_size_=%lu, "
+               "requested_offset=%lu, pool_size=%lu\n",
+               bucket_index, bucket_memory_size_,
+               bucket_index * bucket_memory_size_, bucket_memory_pool_size_);
+        return nullptr;
+      }
       return bucket_memory_pool_ + bucket_index * bucket_memory_size_;
     }
     if (block_bases_.empty() || num_of_buckets_per_alloc_ == 0) {
+      printf("[BucketMemoryPool] invalid_state: block_bases_.empty()=%d, num_of_buckets_per_alloc_=%lu\n",
+             block_bases_.empty(), num_of_buckets_per_alloc_);
       return nullptr;
     }
     size_t block_index = bucket_index / num_of_buckets_per_alloc_;
@@ -139,7 +148,19 @@ class BucketMemoryPoolManager : public IBucketAddressProvider {
     bucket_memory_pool_size_ = new_pool_size;
   }
 
- private:
+  size_t calculate_max_buckets_num() const {
+    if ((options_.init_capacity * 2) > options_.max_capacity) {
+      return 1 + ((options_.max_capacity - 1) / options_.max_bucket_size);
+    }
+    size_t max_buckets_num = 1;
+    size_t temp_capacity = options_.max_bucket_size;
+    while (temp_capacity < options_.max_capacity) {
+      max_buckets_num *= 2;
+      temp_capacity = max_buckets_num * options_.max_bucket_size;
+    }
+    return max_buckets_num;
+  }
+private:
   bool parse_key_value_pair(const std::string& pair, std::string& key,
                             std::string& value) const {
     size_t pos = pair.find('=');
@@ -250,19 +271,6 @@ class BucketMemoryPoolManager : public IBucketAddressProvider {
     return bucket_memory_size;
   }
 
-  size_t calculate_max_buckets_num() const {
-    if ((options_.init_capacity * 2) > options_.max_capacity) {
-      return 1 + ((options_.max_capacity - 1) / options_.max_bucket_size);
-    }
-    size_t max_buckets_num = 1;
-    size_t temp_capacity = options_.max_bucket_size;
-    while (temp_capacity < options_.max_capacity) {
-      max_buckets_num *= 2;
-      temp_capacity = max_buckets_num * options_.max_bucket_size;
-    }
-    return max_buckets_num;
-  }
-
   void allocate_bucket_memory_pool() {
     bucket_memory_size_ = calculate_bucket_memory_size();
     size_t max_buckets_num = calculate_max_buckets_num();
@@ -271,10 +279,12 @@ class BucketMemoryPoolManager : public IBucketAddressProvider {
                           bucket_malloc_flag_));
   }
 
+public:
   HashTableOptions options_;
-  uint8_t* bucket_memory_pool_ = nullptr;
   size_t bucket_memory_pool_size_ = 0;
   size_t bucket_memory_size_ = 0;
+private:
+  uint8_t* bucket_memory_pool_ = nullptr;
   bool use_bucket_memory_pool_ = false;
   aclrtMemMallocPolicy bucket_malloc_flag_ = ACL_MEM_MALLOC_HUGE_FIRST;
 
