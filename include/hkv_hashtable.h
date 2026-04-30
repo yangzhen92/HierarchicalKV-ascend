@@ -2930,6 +2930,12 @@ class HashTable : public HashTableBase<K, V, S> {
       reach_max_capacity_ = false;
     }
     options_.max_capacity = new_max_capacity;
+    if (bucket_memory_pool_manager_ != nullptr &&
+      bucket_memory_pool_manager_->use_pool()) {
+        bucket_memory_pool_manager_->set_max_capacity(new_max_capacity);
+        // bucket_memory_pool_manager_->options_.max_capacity = new_max_capacity;
+        bucket_memory_pool_manager_->expand_pool_for_new_max_capacity();
+    }
   }
 
   /**
