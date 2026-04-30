@@ -718,7 +718,7 @@ TEST(test_find_or_insert, dim_256_uint64_float_uint64_non_unique) {
   test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 256, false>();
 }
 
-TEST(test_find_or_insert, hash_collisions) {
+TEST(test_find_or_insert, duplicate_keys) {
   // 1. 初始化
   init_env();
 
