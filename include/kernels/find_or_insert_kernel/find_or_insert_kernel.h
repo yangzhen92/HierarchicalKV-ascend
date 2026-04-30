@@ -699,10 +699,10 @@
  __global__ __vector__ void find_or_insert_hybrid_kernel(
      __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
      uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys,
-     __gm__ V* values, __gm__ S* scores, uint64_t n, uint64_t global_epoch,
-     uint32_t value_size, uint32_t max_bucket_shift,
-     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
-     uint64_t capacity) {
+     __gm__ V* values, __gm__ S* scores, __gm__ V * __gm__ * d_dst_values,
+     __gm__ bool* founds, uint64_t n, uint64_t global_epoch,
+     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
+     uint64_t capacity_divisor_shift, uint64_t capacity) {
    const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
    uint64_t cur_score = (Strategy == npu::hkv::EvictStrategyInternal::kLru ||
                          Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
@@ -711,9 +711,9 @@
 
    asc_vf_call<find_or_insert_hybrid_kernel_vf<K, V, S, Strategy>>(
        dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets, buckets_size,
-       bucket_capacity, dim, keys, values, scores, n, global_epoch, cur_score,
-       GetBlockIdx(), thread_all, max_bucket_shift, capacity_divisor_magic,
-       capacity_divisor_shift, capacity);
+       bucket_capacity, dim, keys, values, scores, d_dst_values, founds, n,
+       global_epoch, cur_score, GetBlockIdx(), thread_all, max_bucket_shift,
+       capacity_divisor_magic, capacity_divisor_shift, capacity);
  }
 
  template <class V>
@@ -750,8 +750,8 @@
 
    dst_values_gm.SetGlobalBuffer(values);
 
-   for (uint64_t i = core_start_idx; i < core_start_idx + core_move_count;
-        i++) {
+   for (uint64_1t i = core_start_idx; i < core_start_idx + core_move_count;
+        i++) {1
      __gm__ V* src_value = d_src_values[i];
      if (src_value == nullptr) {
        continue;
@@ -769,20 +769,20 @@
        move_queue.AllocTensor<V>(move_local);
 
        if (founds[i]) {
+         // 找到 key，从 table 中读取值返回给用户
          src_values_gm.SetGlobalBuffer(src_value + tile_idx * tile_size);
          DataCopyPad(move_local, src_values_gm, copy_params, pad_params);
          move_queue.EnQue<V>(move_local);
          move_queue.DeQue<V>(move_local);
          DataCopyPad(dst_values_gm[dst_offset + tile_idx * tile_size],
                      move_local, copy_params);
-       } else if (dst_values_gm[dst_offset + tile_idx * tile_size] != nullptr) {
-         src_values_gm.SetGlobalBuffer(src_value + tile_idx * tile_size);
-         DataCopyPad(move_local,
-                     dst_values_gm[dst_offset + tile_idx * tile_size],
-                     copy_params, pad_params);
+       } else if (src_value != nullptr) {
+         // 没找到 key，把用户的值写入 table
+         src_values_gm.SetGlobalBuffer(dst_values_gm[dst_offset + tile_idx * tile_size]);
+         DataCopyPad(move_local, src_values_gm, copy_params, pad_params);
          move_queue.EnQue<V>(move_local);
          move_queue.DeQue<V>(move_local);
-         DataCopyPad(dst_values_gm, move_local, copy_params);
+         DataCopyPad(src_value + tile_idx * tile_size, move_local, copy_params);
        }
 
        move_queue.FreeTensor(move_local);

@@ -1569,13 +1569,13 @@ class HashTable : public HashTableBase<K, V, S> {
         bool* d_founds{reinterpret_cast<bool*>(temp_storage)};
         value_type** d_dst_values{reinterpret_cast<value_type**>(temp_storage + n * sizeof(value_type*))};
 
-        find_or_insert_hybrid_kernel<K, V, S, true, evict_strategy>
+        find_or_insert_hybrid_kernel<K, V, S, evict_strategy>
             <<<block_dim_, 0, stream>>>(
-                table_->buckets, table_->buckets_size, table_->capacity,
-                options_.max_bucket_size, options_.dim, keys, scores, n,
-                values, d_dst_values, d_founds, global_epoch_,
-                table_->max_bucket_shift, table_->capacity_divisor_magic,
-                table_->capacity_divisor_shift);
+                table_->buckets, table_->buckets_size, options_.max_bucket_size,
+                options_.dim, keys, values, scores, d_dst_values, d_founds, n,
+                global_epoch_, table_->max_bucket_shift,
+                table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+                table_->capacity);
 
         uint64_t valid_ub_size = GetMixedOpUbSize();
         uint32_t max_tile_size =
@@ -1583,7 +1583,7 @@ class HashTable : public HashTableBase<K, V, S> {
         HKV_CHECK(max_tile_size != 0,
                   log_format("UB size %lu is too small.", valid_ub_size));
         read_or_write_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
-            block_dim_, table_->dim, max_tile_size, values, d_dst_values,
+            block_dim_, table_->dim, max_tile_size, values, n, d_dst_values,
             d_founds);
       } else { //
         size_t size_all = n * sizeof(value_type*) + n * sizeof(bool);
@@ -1622,7 +1622,7 @@ class HashTable : public HashTableBase<K, V, S> {
           HKV_CHECK(max_tile_size != 0,
                     log_format("UB size %lu is too small.", valid_ub_size));
           read_or_write_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
-              block_dim_, table_->dim, max_tile_size, values, d_dst_values,
+              block_dim_, table_->dim, max_tile_size, values, n, d_dst_values,
               d_founds);
         }
       }
