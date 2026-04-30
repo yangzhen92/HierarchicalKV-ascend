@@ -459,7 +459,7 @@
      uint32_t dim, __gm__ const K* __restrict__ keys,
      __gm__ V* __restrict__ values, __gm__ S* __restrict__ scores,
      __gm__ V * __gm__ * __restrict__ d_dst_values,
-     __gm__ TransDirection* trans_dir, uint64_t n, uint64_t global_epoch,
+     __gm__ bool* founds, uint64_t n, uint64_t global_epoch,
      uint64_t cur_score, uint32_t blockIdx, uint64_t thread_all,
      uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
      uint64_t capacity_divisor_shift, uint64_t capacity) {
@@ -686,16 +686,11 @@
      if ((occupy_result != OccupyResult::REFUSED) &&
          (occupy_result != OccupyResult::ILLEGAL)) {
        d_dst_values[kv_idx] = bucket_values + key_pos * dim;
-       if (occupy_result == OccupyResult::DUPLICATE) {
-         trans_dir[kv_idx] = TransDirection::D2H;
-       } else {
-         trans_dir[kv_idx] = TransDirection::H2D;
-       }
+       founds[kv_idx] = occupy_result == OccupyResult::DUPLICATE;
        // key也是原子标记位，所有key的操作必须原子化
        (void)asc_atomic_exch(bucket_keys + key_pos, key);
      } else if (kv_idx < n) {
        d_dst_values[kv_idx] = nullptr;
-       trans_dir[kv_idx] = TransDirection::NONE;
      }
    }
  }
@@ -722,10 +717,10 @@
  }
 
  template <class V>
- __global__ __vector__ void find_or_insert_value_kernel(
+ __global__ __vector__ void read_or_write_value_kernel(
      uint32_t block_dim, uint32_t dim, uint32_t max_tile_size, __gm__ V* values,
      uint64_t n, __gm__ V * __gm__ * d_src_values,
-     __gm__ TransDirection* trans_dir) {
+     __gm__ bool* founds) {
    uint64_t tail_core_move_num = n / block_dim;
    uint64_t former_core_move_num = tail_core_move_num + 1;
    uint32_t former_num = n - tail_core_move_num * block_dim;
@@ -773,14 +768,14 @@
 
        move_queue.AllocTensor<V>(move_local);
 
-       if (trans_dir[i] == TransDirection::H2D) {
+       if (founds[i]) {
          src_values_gm.SetGlobalBuffer(src_value + tile_idx * tile_size);
          DataCopyPad(move_local, src_values_gm, copy_params, pad_params);
          move_queue.EnQue<V>(move_local);
          move_queue.DeQue<V>(move_local);
          DataCopyPad(dst_values_gm[dst_offset + tile_idx * tile_size],
                      move_local, copy_params);
-       } else if (trans_dir[i] == TransDirection::D2H) {
+       } else if (dst_values_gm[dst_offset + tile_idx * tile_size] != nullptr) {
          src_values_gm.SetGlobalBuffer(src_value + tile_idx * tile_size);
          DataCopyPad(move_local,
                      dst_values_gm[dst_offset + tile_idx * tile_size],
