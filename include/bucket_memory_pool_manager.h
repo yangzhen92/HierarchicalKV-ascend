@@ -41,7 +41,7 @@ constexpr size_t BUCKET_ALIGN_SIZE = 512;
  */
 template <class K, class V, class S>
 class BucketMemoryPoolManager : public IBucketAddressProvider {
- public:
+public:
   using key_type = K;
   using value_type = V;
   using score_type = S;
@@ -103,6 +103,12 @@ class BucketMemoryPoolManager : public IBucketAddressProvider {
 
   uint8_t* get_bucket_address(size_t bucket_index) const override {
     if (use_bucket_memory_pool_) {
+      if (bucket_index * bucket_memory_size_ > bucket_memory_pool_size_) {
+        printf("[BucketMemoryPool] OOM: bucket_index=%lu, bucket_memory_size_=%lu, "
+               "requested_offset=%lu, pool_size=%lu\n",
+               bucket_index, bucket_memory_size_,
+               bucket_index * bucket_memory_size_, bucket_memory_pool_size_);
+      }
       return bucket_memory_pool_ + bucket_index * bucket_memory_size_;
     }
     if (block_bases_.empty() || num_of_buckets_per_alloc_ == 0) {
@@ -139,7 +145,32 @@ class BucketMemoryPoolManager : public IBucketAddressProvider {
     bucket_memory_pool_size_ = new_pool_size;
   }
 
- private:
+  void expand_pool_for_new_max_capacity() {
+    if (!use_bucket_memory_pool_) {
+      return;
+    }
+    size_t max_buckets_num = 1;
+    size_t temp_capacity = options_.max_bucket_size;
+    while (temp_capacity < options_.max_capacity) {
+      max_buckets_num *= 2;
+      temp_capacity = max_buckets_num * options_.max_bucket_size;
+    }
+    size_t new_pool_size = bucket_memory_size_ * max_buckets_num;
+    if (new_pool_size <= bucket_memory_pool_size_) {
+      return;
+    }
+    uint8_t* new_bucket_memory_pool = nullptr;
+    NPU_CHECK(aclrtMalloc((void**)&new_bucket_memory_pool, new_pool_size,
+                          bucket_malloc_flag_));
+    if (bucket_memory_pool_ != nullptr) {
+      NPU_CHECK(aclrtMemcpy(new_bucket_memory_pool, new_pool_size,
+                            bucket_memory_pool_, bucket_memory_pool_size_,
+                            ACL_MEMCPY_DEVICE_TO_DEVICE));
+    }
+    bucket_memory_pool_ = new_bucket_memory_pool;
+    bucket_memory_pool_size_ = new_pool_size;
+  }
+private:
   bool parse_key_value_pair(const std::string& pair, std::string& key,
                             std::string& value) const {
     size_t pos = pair.find('=');
@@ -271,10 +302,12 @@ class BucketMemoryPoolManager : public IBucketAddressProvider {
                           bucket_malloc_flag_));
   }
 
+public:
   HashTableOptions options_;
-  uint8_t* bucket_memory_pool_ = nullptr;
+private:
   size_t bucket_memory_pool_size_ = 0;
   size_t bucket_memory_size_ = 0;
+  uint8_t* bucket_memory_pool_ = nullptr;
   bool use_bucket_memory_pool_ = false;
   aclrtMemMallocPolicy bucket_malloc_flag_ = ACL_MEM_MALLOC_HUGE_FIRST;
 
