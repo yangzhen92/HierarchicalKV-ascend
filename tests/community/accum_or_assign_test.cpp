@@ -79,7 +79,7 @@ struct DeviceMem {
   }
   template <typename T>
   T* as() { return reinterpret_cast<T*>(ptr); }
-  static DeviceMem Alloc(size_t bytes) {
+  static DeviceMem alloc(size_t bytes) {
     DeviceMem m;
     EXPECT_EQ(aclrtMalloc(&m.ptr, bytes, ACL_MEM_MALLOC_HUGE_FIRST),
               ACL_ERROR_NONE);
@@ -109,7 +109,7 @@ struct AccumOrAssignExportIfPredFunctor {
 };
 
 template <typename Table, size_t dim>
-void CheckAccumOrAssignValues(Table* table, const vector<K>& batch_keys,
+void check_accum_or_assign_values(Table* table, const vector<K>& batch_keys,
                               DeviceMem& d_keys, DeviceMem& d_values,
                               size_t len, aclrtStream stream) {
   unordered_set<K> current_batch(batch_keys.begin(), batch_keys.end());
@@ -119,9 +119,9 @@ void CheckAccumOrAssignValues(Table* table, const vector<K>& batch_keys,
   ACL_CHECK(aclrtSynchronizeStream(stream));
 
   size_t cap = table_size_before + len;
-  auto d_found_or_accum = DeviceMem::Alloc(len * sizeof(bool));
-  auto d_tmp_keys = DeviceMem::Alloc(cap * sizeof(K));
-  auto d_tmp_values = DeviceMem::Alloc(cap * sizeof(V) * dim);
+  auto d_found_or_accum = DeviceMem::alloc(len * sizeof(bool));
+  auto d_tmp_keys = DeviceMem::alloc(cap * sizeof(K));
+  auto d_tmp_values = DeviceMem::alloc(cap * sizeof(V) * dim);
 
   ACL_CHECK(aclrtMemset(d_found_or_accum.ptr, len * sizeof(bool), 0,
                         len * sizeof(bool)));
@@ -239,10 +239,10 @@ void test_evict_strategy_lru_basic(size_t max_hbm_for_vectors = 16) {
   vector<S> h_scores_temp(TEMP_KEY_NUM);
   vector<V> h_vectors_temp(TEMP_KEY_NUM * DIM);
 
-  auto d_keys = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
-  auto d_accum_or_assigns = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(bool));
+  auto d_keys = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
+  auto d_accum_or_assigns = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(bool));
 
   create_random_bools<K>(
       reinterpret_cast<bool*>(h_accum_or_assigns_base.data()), BASE_KEY_NUM,
@@ -461,10 +461,10 @@ void test_evict_strategy_lfu_basic(size_t max_hbm_for_vectors = 16,
   vector<S> h_scores_temp(TEMP_KEY_NUM);
   vector<V> h_vectors_temp(TEMP_KEY_NUM * DIM);
 
-  auto d_keys = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
-  auto d_accum_or_assigns = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(bool));
+  auto d_keys = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
+  auto d_accum_or_assigns = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(bool));
 
   int freq_range = 1000;
 
@@ -678,10 +678,10 @@ void test_evict_strategy_epochlru_basic(size_t max_hbm_for_vectors = 16,
   vector<K> h_keys_temp(TEMP_KEY_NUM);
   vector<S> h_scores_temp(TEMP_KEY_NUM);
   vector<V> h_vectors_temp(TEMP_KEY_NUM * DIM);
-  auto d_keys = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
-  auto d_accum_or_assigns = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(bool));
+  auto d_keys = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
+  auto d_accum_or_assigns = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(bool));
   create_random_bools<K>(reinterpret_cast<bool*>(h_accum_or_assigns_base.data()),
                          BASE_KEY_NUM, true_ratio);
   create_keys_in_one_buckets<K, S, V, DIM>(
@@ -873,10 +873,10 @@ void test_evict_strategy_epochlfu_basic(size_t max_hbm_for_vectors = 16,
   vector<K> h_keys_temp(TEMP_KEY_NUM);
   vector<S> h_scores_temp(TEMP_KEY_NUM);
   vector<V> h_vectors_temp(TEMP_KEY_NUM * DIM);
-  auto d_keys = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
-  auto d_accum_or_assigns = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(bool));
+  auto d_keys = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
+  auto d_accum_or_assigns = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(bool));
   int freq_range = 1000;
   create_random_bools<K>(reinterpret_cast<bool*>(h_accum_or_assigns_base.data()),
                          BASE_KEY_NUM, true_ratio);
@@ -1100,10 +1100,10 @@ void test_evict_strategy_customized_advanced(size_t max_hbm_for_vectors = 16,
   vector<K> h_keys_temp(TEMP_KEY_NUM);
   vector<S> h_scores_temp(TEMP_KEY_NUM);
   vector<V> h_vectors_temp(TEMP_KEY_NUM * DIM);
-  auto d_keys = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
-  auto d_accum_or_assigns = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(bool));
+  auto d_keys = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
+  auto d_accum_or_assigns = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(bool));
   create_random_bools<K>(reinterpret_cast<bool*>(h_accum_or_assigns_base.data()),
                          BASE_KEY_NUM, base_true_ratio);
   create_keys_in_one_buckets<K, S, V, DIM>(
@@ -1326,11 +1326,11 @@ void test_evict_strategy_customized_basic(size_t max_hbm_for_vectors = 16,
   vector<V> h_vectors_temp(TEMP_KEY_NUM * DIM);
   vector<uint8_t> h_found_temp(TEMP_KEY_NUM);
 
-  auto d_keys = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
-  auto d_accum_or_assigns = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(bool));
-  auto d_found = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(bool));
+  auto d_keys = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
+  auto d_accum_or_assigns = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(bool));
+  auto d_found = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(bool));
 
   create_random_bools<K>(
       reinterpret_cast<bool*>(h_accum_or_assigns_base.data()), BASE_KEY_NUM,
@@ -1583,10 +1583,10 @@ void test_evict_strategy_customized_correct_rate(
   vector<K> h_keys_temp(MAX_CAPACITY);
   vector<S> h_scores_temp(MAX_CAPACITY);
   vector<V> h_vectors_temp(MAX_CAPACITY * DIM);
-  auto d_keys = DeviceMem::Alloc(MAX_CAPACITY * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(MAX_CAPACITY * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(MAX_CAPACITY * sizeof(V) * DIM);
-  auto d_accum_or_assigns = DeviceMem::Alloc(MAX_CAPACITY * sizeof(bool));
+  auto d_keys = DeviceMem::alloc(MAX_CAPACITY * sizeof(K));
+  auto d_scores = DeviceMem::alloc(MAX_CAPACITY * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(MAX_CAPACITY * sizeof(V) * DIM);
+  auto d_accum_or_assigns = DeviceMem::alloc(MAX_CAPACITY * sizeof(bool));
   aclrtStream stream;
   ACL_CHECK(aclrtCreateStream(&stream));
   size_t global_start_key = 100000;
@@ -1692,10 +1692,10 @@ void test_basic_when_full(size_t max_hbm_for_vectors = 16,
   create_random_keys<K, S, V, DIM>(h_keys.data(), h_scores.data(), nullptr,
                                    KEY_NUM);
 
-  auto d_keys = DeviceMem::Alloc(KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(KEY_NUM * sizeof(V) * DIM);
-  auto d_accum_or_assigns = DeviceMem::Alloc(KEY_NUM * sizeof(bool));
+  auto d_keys = DeviceMem::alloc(KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(KEY_NUM * sizeof(V) * DIM);
+  auto d_accum_or_assigns = DeviceMem::alloc(KEY_NUM * sizeof(bool));
 
   ACL_CHECK(aclrtMemcpy(d_keys.as<K>(), KEY_NUM * sizeof(K), h_keys.data(),
                         KEY_NUM * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE));
@@ -1759,11 +1759,11 @@ void test_erase_if_pred(size_t max_hbm_for_vectors, int key_start) {
   vector<uint8_t> h_found(KEY_NUM);
   vector<uint8_t> h_accum_or_assigns(KEY_NUM);
 
-  auto d_keys = DeviceMem::Alloc(KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(KEY_NUM * sizeof(V) * DIM);
-  auto d_found = DeviceMem::Alloc(KEY_NUM * sizeof(bool));
-  auto d_accum_or_assigns = DeviceMem::Alloc(KEY_NUM * sizeof(bool));
+  auto d_keys = DeviceMem::alloc(KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(KEY_NUM * sizeof(V) * DIM);
+  auto d_found = DeviceMem::alloc(KEY_NUM * sizeof(bool));
+  auto d_accum_or_assigns = DeviceMem::alloc(KEY_NUM * sizeof(bool));
 
   aclrtStream stream;
   ACL_CHECK(aclrtCreateStream(&stream));
@@ -1870,12 +1870,12 @@ void test_export_batch_if(size_t max_hbm_for_vectors, int key_start) {
   vector<uint8_t> h_accum_or_assigns(KEY_NUM);
   vector<uint8_t> h_found(KEY_NUM);
 
-  auto d_keys = DeviceMem::Alloc(KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(KEY_NUM * sizeof(V) * DIM);
-  auto d_found = DeviceMem::Alloc(KEY_NUM * sizeof(bool));
-  auto d_accum_or_assigns = DeviceMem::Alloc(KEY_NUM * sizeof(bool));
-  auto d_dump_counter = DeviceMem::Alloc(sizeof(size_t));
+  auto d_keys = DeviceMem::alloc(KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(KEY_NUM * sizeof(V) * DIM);
+  auto d_found = DeviceMem::alloc(KEY_NUM * sizeof(bool));
+  auto d_accum_or_assigns = DeviceMem::alloc(KEY_NUM * sizeof(bool));
+  auto d_dump_counter = DeviceMem::alloc(sizeof(size_t));
 
   aclrtStream stream;
   ACL_CHECK(aclrtCreateStream(&stream));
@@ -1985,10 +1985,10 @@ void test_rehash(size_t max_hbm_for_vectors = 16, int key_start = 0) {
   vector<S> h_scores(KEY_NUM);
   vector<V> h_vectors(KEY_NUM * DIM);
   vector<uint8_t> h_accum_or_assigns(KEY_NUM);
-  auto d_keys = DeviceMem::Alloc(KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(KEY_NUM * sizeof(V) * DIM);
-  auto d_accum_or_assigns = DeviceMem::Alloc(KEY_NUM * sizeof(bool));
+  auto d_keys = DeviceMem::alloc(KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(KEY_NUM * sizeof(V) * DIM);
+  auto d_accum_or_assigns = DeviceMem::alloc(KEY_NUM * sizeof(bool));
   aclrtStream stream;
   ACL_CHECK(aclrtCreateStream(&stream));
   for (int i = 0; i < TEST_TIMES; i++) {
@@ -2089,11 +2089,11 @@ void test_rehash_on_big_batch(size_t max_hbm_for_vectors = 16,
   vector<uint8_t> h_accum_or_assigns(KEY_NUM);
   vector<uint8_t> h_accum_or_assigns_init(KEY_NUM);
 
-  auto d_keys = DeviceMem::Alloc(KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(KEY_NUM * sizeof(V) * DIM);
-  auto d_accum_or_assigns = DeviceMem::Alloc(KEY_NUM * sizeof(bool));
-  auto d_found = DeviceMem::Alloc(KEY_NUM * sizeof(bool));
+  auto d_keys = DeviceMem::alloc(KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(KEY_NUM * sizeof(V) * DIM);
+  auto d_accum_or_assigns = DeviceMem::alloc(KEY_NUM * sizeof(bool));
+  auto d_found = DeviceMem::alloc(KEY_NUM * sizeof(bool));
 
   aclrtStream stream;
   ACL_CHECK(aclrtCreateStream(&stream));
@@ -2257,10 +2257,10 @@ void test_dynamic_rehash_on_multi_threads(size_t max_hbm_for_vectors,
     HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
                     "aclrtSetDevice failed");
 
-    auto d_keys = DeviceMem::Alloc(KEY_NUM * sizeof(K));
-    auto d_vectors = DeviceMem::Alloc(KEY_NUM * sizeof(V) * options.dim);
-    auto d_found = DeviceMem::Alloc(KEY_NUM * sizeof(bool));
-    auto d_accum_or_assigns = DeviceMem::Alloc(KEY_NUM * sizeof(bool));
+    auto d_keys = DeviceMem::alloc(KEY_NUM * sizeof(K));
+    auto d_vectors = DeviceMem::alloc(KEY_NUM * sizeof(V) * options.dim);
+    auto d_found = DeviceMem::alloc(KEY_NUM * sizeof(bool));
+    auto d_accum_or_assigns = DeviceMem::alloc(KEY_NUM * sizeof(bool));
 
     aclrtStream stream;
     ACL_CHECK(aclrtCreateStream(&stream));
@@ -2387,8 +2387,8 @@ void test_accum_or_assign_values_check(size_t max_hbm_for_vectors) {
   auto table = make_table<Table>(options);
   vector<K> h_keys(B);
   vector<V> h_values(B * dim);
-  auto d_keys = DeviceMem::Alloc(B * sizeof(K));
-  auto d_values = DeviceMem::Alloc(B * sizeof(V) * dim);
+  auto d_keys = DeviceMem::alloc(B * sizeof(K));
+  auto d_values = DeviceMem::alloc(B * sizeof(V) * dim);
 
   for (int i = 0; i < 20; i++) {
     create_random_keys<K, S, V, dim>(h_keys.data(), static_cast<S*>(nullptr),
@@ -2399,7 +2399,7 @@ void test_accum_or_assign_values_check(size_t max_hbm_for_vectors) {
                           h_values.data(), B * sizeof(V) * dim,
                           ACL_MEMCPY_HOST_TO_DEVICE));
 
-    CheckAccumOrAssignValues<Table, dim>(table.get(), h_keys, d_keys, d_values,
+    check_accum_or_assign_values<Table, dim>(table.get(), h_keys, d_keys, d_values,
                                          B, stream);
   }
 

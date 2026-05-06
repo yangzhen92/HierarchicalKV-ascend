@@ -69,9 +69,9 @@ void test_lock_and_unlock() {
   HostAndDeviceBuffer<bool> d_found;
   HostAndDeviceBuffer<bool> d_lock_results;
   HostAndDeviceBuffer<i64*> lock_keys_ptr;
-  d_found.Alloc(M, stream);
-  d_lock_results.Alloc(M, stream);
-  lock_keys_ptr.Alloc(M, stream);
+  d_found.alloc(M, stream);
+  d_lock_results.alloc(M, stream);
+  lock_keys_ptr.alloc(M, stream);
 
   // step1
   std::unique_ptr<Table> table = std::make_unique<Table>();
@@ -79,52 +79,52 @@ void test_lock_and_unlock() {
 
   // step2
   KVMSBuffer<i64, f32, u64> buffer;
-  buffer.Reserve(M, dim, stream);
+  buffer.reserve(M, dim, stream);
 
   i64 start = 0;
   for (int i = 0; i < static_cast<int>(U / M); i++) {
-    buffer.ToRange(start, 1, stream);
+    buffer.to_range(start, 1, stream);
     start += static_cast<i64>(M);
-    buffer.Setscore(static_cast<u64>(i), stream);
+    buffer.set_score(static_cast<u64>(i), stream);
     table->insert_or_assign(M, buffer.keys_ptr(), buffer.values_ptr(),
                             buffer.scores_ptr(), stream);
 
-    d_found.ToZeros(stream);
-    d_lock_results.ToZeros(stream);
+    d_found.to_zeros(stream);
+    d_lock_results.to_zeros(stream);
     table->contains(M, buffer.keys_ptr(), d_found.d_data, stream);
     table->lock_keys(M, buffer.keys_ptr(), lock_keys_ptr.d_data,
                      d_lock_results.d_data, stream, buffer.scores_ptr());
     ACL_CHECK(aclrtSynchronizeStream(stream));
     bool result =
-        allEqualGpu(d_found.d_data, d_lock_results.d_data, M, stream);
+        all_equal_npu(d_found.d_data, d_lock_results.d_data, M, stream);
     ASSERT_EQ(result, true);
-    result = allTrueGpu(d_found.d_data, M, stream);
+    result = all_true_npu(d_found.d_data, M, stream);
     ASSERT_EQ(result, true);
 
-    d_found.ToZeros(stream);
-    d_lock_results.ToZeros(stream);
+    d_found.to_zeros(stream);
+    d_lock_results.to_zeros(stream);
     table->contains(M, buffer.keys_ptr(), d_found.d_data, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     result =
-        allEqualGpu(d_found.d_data, d_lock_results.d_data, M, stream);
+        all_equal_npu(d_found.d_data, d_lock_results.d_data, M, stream);
     ASSERT_EQ(result, true);
 
-    d_found.ToZeros(stream);
+    d_found.to_zeros(stream);
     table->unlock_keys(M, lock_keys_ptr.d_data, buffer.keys_ptr(),
                        d_lock_results.d_data, stream);
     table->contains(M, buffer.keys_ptr(), d_found.d_data, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     result =
-        allEqualGpu(d_found.d_data, d_lock_results.d_data, M, stream);
+        all_equal_npu(d_found.d_data, d_lock_results.d_data, M, stream);
     ASSERT_EQ(result, true);
-    result = allTrueGpu(d_found.d_data, M, stream);
+    result = all_true_npu(d_found.d_data, M, stream);
     ASSERT_EQ(result, true);
   }
 
-  buffer.Free(stream);
-  lock_keys_ptr.Free(stream);
-  d_lock_results.Free(stream);
-  d_found.Free(stream);
+  buffer.free(stream);
+  lock_keys_ptr.free(stream);
+  d_lock_results.free(stream);
+  d_found.free(stream);
   ACL_CHECK(aclrtDestroyStream(stream));
 }
 

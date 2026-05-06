@@ -349,8 +349,8 @@ struct ValueArray {
 template <typename T>
 struct HostAndDeviceBuffer {
  public:
-  void Alloc(size_t n, aclrtStream stream = 0) {
-    Free(stream);
+  void alloc(size_t n, aclrtStream stream = 0) {
+    free(stream);
     HKV_EXPECT_TRUE((aclrtMalloc(reinterpret_cast<void**>(&d_data),
                                  n * sizeof(T), ACL_MEM_MALLOC_HUGE_FIRST) ==
                      ACL_ERROR_NONE),
@@ -358,12 +358,12 @@ struct HostAndDeviceBuffer {
     h_data = static_cast<T*>(std::malloc(n * sizeof(T)));
     HKV_EXPECT_TRUE((h_data != nullptr), "malloc failed");
     size_ = n;
-    ToZeros(stream);
+    to_zeros(stream);
   }
 
-  ~HostAndDeviceBuffer() { Free(); }
+  ~HostAndDeviceBuffer() { free(); }
 
-  void Free(aclrtStream stream = 0) {
+  void free(aclrtStream stream = 0) {
     if (d_data != nullptr) {
       if (stream != nullptr) {
         HKV_EXPECT_TRUE((aclrtSynchronizeStream(stream) == ACL_ERROR_NONE),
@@ -379,13 +379,13 @@ struct HostAndDeviceBuffer {
     size_ = 0;
   }
 
-  void SetFromHost(const T* data, size_t n, aclrtStream stream = 0) {
+  void set_from_host(const T* data, size_t n, aclrtStream stream = 0) {
     HKV_EXPECT_TRUE((n <= size_), "SetFromHost size exceeds allocation");
     std::memcpy(h_data, data, n * sizeof(T));
-    SyncData(true, stream);
+    sync_data(true, stream);
   }
 
-  void SetFromDevice(const T* data, size_t n, aclrtStream stream = 0) {
+  void set_from_device(const T* data, size_t n, aclrtStream stream = 0) {
     HKV_EXPECT_TRUE((n <= size_), "SetFromDevice size exceeds allocation");
     HKV_EXPECT_TRUE(
         (aclrtMemcpyAsync(d_data, n * sizeof(T), data, n * sizeof(T),
@@ -399,7 +399,7 @@ struct HostAndDeviceBuffer {
         "aclrtMemcpyAsync device to host failed");
   }
 
-  bool SetValueInRange(T start, T skip, size_t stripe,
+  bool set_value_in_range(T start, T skip, size_t stripe,
                        aclrtStream stream = 0) {
     if (h_data == nullptr || skip == 0 || stripe == 0 || size_ % stripe != 0) {
       return false;
@@ -412,11 +412,11 @@ struct HostAndDeviceBuffer {
         h_data[i * stripe + j] = value;
       }
     }
-    SyncData(true, stream);
+    sync_data(true, stream);
     return true;
   }
 
-  void ToZeros(aclrtStream stream = 0) {
+  void to_zeros(aclrtStream stream = 0) {
     if (d_data != nullptr) {
       HKV_EXPECT_TRUE((aclrtMemset(d_data, size_ * sizeof(T), 0,
                                    size_ * sizeof(T)) == ACL_ERROR_NONE),
@@ -431,14 +431,14 @@ struct HostAndDeviceBuffer {
     }
   }
 
-  void ToConst(const T val, aclrtStream stream = 0) {
+  void to_const(const T val, aclrtStream stream = 0) {
     for (size_t i = 0; i < size_; ++i) {
       h_data[i] = val;
     }
-    SyncData(true, stream);
+    sync_data(true, stream);
   }
 
-  void SyncData(bool h2d, aclrtStream stream = 0) {
+  void sync_data(bool h2d, aclrtStream stream = 0) {
     if (size_ == 0 || h_data == nullptr || d_data == nullptr) {
       return;
     }
@@ -468,22 +468,22 @@ struct KVMSBuffer {
  public:
   KVMSBuffer() : len_(0), dim_(0) {}
 
-  void Reserve(size_t n, size_t dim, aclrtStream stream = 0) {
-    keys.Alloc(n, stream);
-    values.Alloc(n * dim, stream);
-    scores.Alloc(n, stream);
-    status.Alloc(n, stream);
+  void reserve(size_t n, size_t dim, aclrtStream stream = 0) {
+    keys.alloc(n, stream);
+    values.alloc(n * dim, stream);
+    scores.alloc(n, stream);
+    status.alloc(n, stream);
     len_ = n;
     dim_ = dim;
   }
 
-  ~KVMSBuffer() { Free(); }
+  ~KVMSBuffer() { free(); }
 
-  void Free(aclrtStream stream = 0) {
-    keys.Free(stream);
-    values.Free(stream);
-    scores.Free(stream);
-    status.Free(stream);
+  void free(aclrtStream stream = 0) {
+    keys.free(stream);
+    values.free(stream);
+    scores.free(stream);
+    status.free(stream);
     len_ = 0;
     dim_ = 0;
   }
@@ -491,26 +491,26 @@ struct KVMSBuffer {
   size_t len() const { return len_; }
   size_t dim() const { return dim_; }
 
-  void ToRange(size_t start, size_t skip = 1, aclrtStream stream = 0) {
+  void to_range(size_t start, size_t skip = 1, aclrtStream stream = 0) {
     HKV_EXPECT_TRUE(
-        keys.SetValueInRange(static_cast<K>(start), static_cast<K>(skip), 1,
+        keys.set_value_in_range(static_cast<K>(start), static_cast<K>(skip), 1,
                              stream),
         "keys SetValueInRange failed");
-    HKV_EXPECT_TRUE(values.SetValueInRange(static_cast<V>(start),
+    HKV_EXPECT_TRUE(values.set_value_in_range(static_cast<V>(start),
                                            static_cast<V>(skip), dim_, stream),
                     "values SetValueInRange failed");
-    status.ToZeros(stream);
+    status.to_zeros(stream);
   }
 
-  void ToZeros(aclrtStream stream = 0) {
-    keys.ToZeros(stream);
-    values.ToZeros(stream);
-    scores.ToZeros(stream);
-    status.ToZeros(stream);
+  void to_zeros(aclrtStream stream = 0) {
+    keys.to_zeros(stream);
+    values.to_zeros(stream);
+    scores.to_zeros(stream);
+    status.to_zeros(stream);
   }
 
-  void Setscore(const S score, aclrtStream stream = 0) {
-    scores.ToConst(score, stream);
+  void set_score(const S score, aclrtStream stream = 0) {
+    scores.to_const(score, stream);
   }
 
   K* keys_ptr(bool on_device = true) {
@@ -529,24 +529,24 @@ struct KVMSBuffer {
     return on_device ? status.d_data : status.h_data;
   }
 
-  void SyncData(bool h2d, aclrtStream stream = 0) {
-    keys.SyncData(h2d, stream);
-    values.SyncData(h2d, stream);
-    scores.SyncData(h2d, stream);
-    status.SyncData(h2d, stream);
+  void sync_data(bool h2d, aclrtStream stream = 0) {
+    keys.sync_data(h2d, stream);
+    values.sync_data(h2d, stream);
+    scores.sync_data(h2d, stream);
+    status.sync_data(h2d, stream);
   }
 
-  void CopyFrom(KVMSBuffer<K, V, S>& src, aclrtStream stream = 0) {
+  void copy_from(KVMSBuffer<K, V, S>& src, aclrtStream stream = 0) {
     HKV_EXPECT_TRUE((src.len() == len_), "CopyFrom len mismatch");
     HKV_EXPECT_TRUE((src.dim() == dim_), "CopyFrom dim mismatch");
     std::memcpy(keys_ptr(false), src.keys_ptr(false), sizeof(K) * len());
     std::memcpy(scores_ptr(false), src.scores_ptr(false), sizeof(S) * len());
     std::memcpy(values_ptr(false), src.values_ptr(false),
                 sizeof(V) * len() * dim());
-    keys.SyncData(true, stream);
-    values.SyncData(true, stream);
-    scores.SyncData(true, stream);
-    status.SyncData(true, stream);
+    keys.sync_data(true, stream);
+    values.sync_data(true, stream);
+    scores.sync_data(true, stream);
+    status.sync_data(true, stream);
   }
 
  public:
@@ -696,7 +696,7 @@ void init_value_using_key(K* h_keys, V* h_vectors, const size_t key_num,
 }
 
 // 辅助函数：验证两个 bool 数组是否完全相等
-inline bool allEqualGpu(const bool* d_array1, const bool* d_array2,
+inline bool all_equal_npu(const bool* d_array1, const bool* d_array2,
                         size_t size, aclrtStream stream) {
   std::vector<char> h_array1(size);
   std::vector<char> h_array2(size);
@@ -725,7 +725,7 @@ inline bool allEqualGpu(const bool* d_array1, const bool* d_array2,
 }
 
 // 辅助函数：验证 bool 数组是否全为 true
-inline bool allTrueGpu(const bool* d_array, size_t size, aclrtStream stream) {
+inline bool all_true_npu(const bool* d_array, size_t size, aclrtStream stream) {
   std::vector<char> h_array(size);
 
   HKV_EXPECT_TRUE(

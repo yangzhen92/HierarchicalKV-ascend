@@ -74,18 +74,18 @@ void capture_table_snapshot(Table* table, size_t cap,
                             HostAndDeviceBuffer<V>& d_values,
                             HostAndDeviceBuffer<S>& d_scores,
                             size_t* exported_count, aclrtStream stream) {
-  d_keys.Alloc(cap, stream);
-  d_values.Alloc(cap * dim, stream);
-  d_scores.Alloc(cap, stream);
-  d_keys.ToZeros(stream);
-  d_values.ToZeros(stream);
-  d_scores.ToZeros(stream);
+  d_keys.alloc(cap, stream);
+  d_values.alloc(cap * dim, stream);
+  d_scores.alloc(cap, stream);
+  d_keys.to_zeros(stream);
+  d_values.to_zeros(stream);
+  d_scores.to_zeros(stream);
   *exported_count = table->export_batch(table->capacity(), 0, d_keys.d_data,
                                         d_values.d_data, d_scores.d_data,
                                         stream);
-  d_keys.SyncData(false, stream);
-  d_values.SyncData(false, stream);
-  d_scores.SyncData(false, stream);
+  d_keys.sync_data(false, stream);
+  d_values.sync_data(false, stream);
+  d_scores.sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
 }
 
@@ -93,7 +93,7 @@ void capture_table_snapshot(Table* table, size_t cap,
  * There are several steps to check whether if
  * the insert_and_evict API is safe to use:
  *
- *   step1: Create a table with max_capacity U
+ *   step1: create a table with max_capacity U
  *   step2: Insert M keys into table while M < U. And
  *     the table size became m <= M. M - m keys was
  *     evicted.
@@ -135,50 +135,50 @@ void test_insert_and_evict_basic() {
 
   // step2
   KVMSBuffer<i64, f32, u64> evict_buffer;
-  evict_buffer.Reserve(M, dim, stream);
-  evict_buffer.ToZeros(stream);
+  evict_buffer.reserve(M, dim, stream);
+  evict_buffer.to_zeros(stream);
 
   KVMSBuffer<i64, f32, u64> buffer;
-  buffer.Reserve(M, dim, stream);
-  buffer.ToRange(0, 1, stream);
-  buffer.Setscore(static_cast<u64>(1), stream);
+  buffer.reserve(M, dim, stream);
+  buffer.to_range(0, 1, stream);
+  buffer.set_score(static_cast<u64>(1), stream);
   size_t n_evicted = table->insert_and_evict(
       M, buffer.keys_ptr(), buffer.values_ptr(), buffer.scores_ptr(),
       evict_buffer.keys_ptr(), evict_buffer.values_ptr(),
       evict_buffer.scores_ptr(), stream);
   const size_t table_size_m = table->size(stream);
-  buffer.SyncData(false, stream);
-  evict_buffer.SyncData(false, stream);
+  buffer.sync_data(false, stream);
+  evict_buffer.sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
   ASSERT_EQ(n_evicted + table_size_m, M);
   emplace_value_map(summarized_kvs, evict_buffer.keys_ptr(false),
                     evict_buffer.values_ptr(false), n_evicted);
 
   // step3
-  evict_buffer.Reserve(N, dim, stream);
-  buffer.Reserve(N, dim, stream);
-  buffer.ToRange(M, 1, stream);
-  buffer.Setscore(static_cast<u64>(2), stream);
+  evict_buffer.reserve(N, dim, stream);
+  buffer.reserve(N, dim, stream);
+  buffer.to_range(M, 1, stream);
+  buffer.set_score(static_cast<u64>(2), stream);
   n_evicted = table->insert_and_evict(
       N, buffer.keys_ptr(), buffer.values_ptr(), buffer.scores_ptr(),
       evict_buffer.keys_ptr(), evict_buffer.values_ptr(),
       evict_buffer.scores_ptr(), stream);
   const size_t table_size_n = table->size(stream);
-  buffer.SyncData(false, stream);
-  evict_buffer.SyncData(false, stream);
+  buffer.sync_data(false, stream);
+  evict_buffer.sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
   ASSERT_EQ(table_size_m + N, table_size_n + n_evicted);
   emplace_value_map(summarized_kvs, evict_buffer.keys_ptr(false),
                     evict_buffer.values_ptr(false), n_evicted);
 
   // step4
-  buffer.Reserve(table_size_n, dim, stream);
+  buffer.reserve(table_size_n, dim, stream);
   const size_t n_exported = table->export_batch(table->capacity(), 0,
                                                 buffer.keys_ptr(),
                                                 buffer.values_ptr(),
                                                 buffer.scores_ptr(), stream);
   ASSERT_EQ(table_size_n, n_exported);
-  buffer.SyncData(false, stream);
+  buffer.sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
   emplace_value_map(summarized_kvs, buffer.keys_ptr(false),
                     buffer.values_ptr(false), n_exported);
@@ -230,7 +230,7 @@ void CheckInsertAndEvict(Table* table, KVMSBuffer<K, V, S>* data_buffer,
           : data_buffer->scores_ptr(),
       evict_buffer->keys_ptr(), evict_buffer->values_ptr(),
       evict_buffer->scores_ptr(), stream);
-  evict_buffer->SyncData(false, stream);
+  evict_buffer->sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
   auto end = std::chrono::steady_clock::now();
   const auto diff =
@@ -239,13 +239,13 @@ void CheckInsertAndEvict(Table* table, KVMSBuffer<K, V, S>* data_buffer,
   {
     HostAndDeviceBuffer<V> d_find_values;
     HostAndDeviceBuffer<S> d_find_scores;
-    d_find_values.Alloc(len * dim, stream);
-    d_find_scores.Alloc(len, stream);
-    d_tmp_founds.Alloc(len, stream);
-    d_tmp_founds.ToZeros(stream);
+    d_find_values.alloc(len * dim, stream);
+    d_find_scores.alloc(len, stream);
+    d_tmp_founds.alloc(len, stream);
+    d_tmp_founds.to_zeros(stream);
     table->find(len, data_buffer->keys_ptr(), d_find_values.d_data,
                 d_tmp_founds.d_data, d_find_scores.d_data, stream);
-    d_tmp_founds.SyncData(false, stream);
+    d_tmp_founds.sync_data(false, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     size_t found_counter = 0;
     for (size_t i = 0; i < len; ++i) {
@@ -256,9 +256,9 @@ void CheckInsertAndEvict(Table* table, KVMSBuffer<K, V, S>* data_buffer,
     std::cout << "filtered_len:" << filtered_len
               << ", miss counter:" << len - found_counter << std::endl;
 
-    d_tmp_founds.ToZeros(stream);
+    d_tmp_founds.to_zeros(stream);
     table->contains(len, data_buffer->keys_ptr(), d_tmp_founds.d_data, stream);
-    d_tmp_founds.SyncData(false, stream);
+    d_tmp_founds.sync_data(false, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     size_t contains_counter = 0;
     for (size_t i = 0; i < len; ++i) {
@@ -342,17 +342,17 @@ void test_insert_and_evict_advanced_on_lru() {
   table->init(opt);
 
   KVMSBuffer<i64, f32, u64> evict_buffer;
-  evict_buffer.Reserve(B, dim, stream);
-  evict_buffer.ToZeros(stream);
+  evict_buffer.reserve(B, dim, stream);
+  evict_buffer.to_zeros(stream);
 
   KVMSBuffer<i64, f32, u64> data_buffer;
-  data_buffer.Reserve(B, dim, stream);
+  data_buffer.reserve(B, dim, stream);
 
   for (int i = 0; i < 16; ++i) {
     create_random_keys<i64, u64, f32, dim>(
         data_buffer.keys_ptr(false), data_buffer.scores_ptr(false),
         data_buffer.values_ptr(false), B, B * 16);
-    data_buffer.SyncData(true, stream);
+    data_buffer.sync_data(true, stream);
 
     CheckInsertAndEvict<i64, f32, u64, Table>(table.get(), &data_buffer,
                                               &evict_buffer, B, stream);
@@ -405,7 +405,7 @@ void CheckInsertAndEvictOnLfu(Table* table,
       len, data_buffer->keys_ptr(), data_buffer->values_ptr(),
       data_buffer->scores_ptr(), evict_buffer->keys_ptr(),
       evict_buffer->values_ptr(), evict_buffer->scores_ptr(), stream);
-  evict_buffer->SyncData(false, stream);
+  evict_buffer->sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
   auto end = std::chrono::steady_clock::now();
   const auto diff =
@@ -414,13 +414,13 @@ void CheckInsertAndEvictOnLfu(Table* table,
   {
     HostAndDeviceBuffer<V> d_find_values;
     HostAndDeviceBuffer<S> d_find_scores;
-    d_find_values.Alloc(len * dim, stream);
-    d_find_scores.Alloc(len, stream);
-    d_tmp_founds.Alloc(len, stream);
-    d_tmp_founds.ToZeros(stream);
+    d_find_values.alloc(len * dim, stream);
+    d_find_scores.alloc(len, stream);
+    d_tmp_founds.alloc(len, stream);
+    d_tmp_founds.to_zeros(stream);
     table->find(len, data_buffer->keys_ptr(), d_find_values.d_data,
                 d_tmp_founds.d_data, d_find_scores.d_data, stream);
-    d_tmp_founds.SyncData(false, stream);
+    d_tmp_founds.sync_data(false, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     size_t found_counter = 0;
     for (size_t i = 0; i < len; ++i) {
@@ -429,9 +429,9 @@ void CheckInsertAndEvictOnLfu(Table* table,
       }
     }
 
-    d_tmp_founds.ToZeros(stream);
+    d_tmp_founds.to_zeros(stream);
     table->contains(len, data_buffer->keys_ptr(), d_tmp_founds.d_data, stream);
-    d_tmp_founds.SyncData(false, stream);
+    d_tmp_founds.sync_data(false, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     size_t contains_counter = 0;
     for (size_t i = 0; i < len; ++i) {
@@ -544,17 +544,17 @@ void test_insert_and_evict_advanced_on_lfu() {
   table->init(opt);
 
   KVMSBuffer<i64, f32, u64> evict_buffer;
-  evict_buffer.Reserve(B, dim, stream);
-  evict_buffer.ToZeros(stream);
+  evict_buffer.reserve(B, dim, stream);
+  evict_buffer.to_zeros(stream);
 
   KVMSBuffer<i64, f32, u64> data_buffer;
-  data_buffer.Reserve(B, dim, stream);
+  data_buffer.reserve(B, dim, stream);
 
   for (unsigned int global_epoch = 1; global_epoch <= 32; ++global_epoch) {
     create_random_keys_advanced<i64, u64, f32>(
         dim, data_buffer.keys_ptr(false), data_buffer.scores_ptr(false),
         data_buffer.values_ptr(false), B, B * 16, 100);
-    data_buffer.SyncData(true, stream);
+    data_buffer.sync_data(true, stream);
 
     CheckInsertAndEvictOnLfu<i64, f32, u64, Table>(table.get(), &data_buffer,
                                                    &evict_buffer, B, stream,
@@ -610,7 +610,7 @@ void CheckInsertAndEvictOnEpochLru(Table* table,
       len, data_buffer->keys_ptr(), data_buffer->values_ptr(), nullptr,
       evict_buffer->keys_ptr(), evict_buffer->values_ptr(),
       evict_buffer->scores_ptr(), stream);
-  evict_buffer->SyncData(false, stream);
+  evict_buffer->sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
   auto end = std::chrono::steady_clock::now();
   const auto diff =
@@ -621,13 +621,13 @@ void CheckInsertAndEvictOnEpochLru(Table* table,
   {
     HostAndDeviceBuffer<V> d_find_values;
     HostAndDeviceBuffer<S> d_find_scores;
-    d_find_values.Alloc(len * dim, stream);
-    d_find_scores.Alloc(len, stream);
-    d_tmp_founds.Alloc(len, stream);
-    d_tmp_founds.ToZeros(stream);
+    d_find_values.alloc(len * dim, stream);
+    d_find_scores.alloc(len, stream);
+    d_tmp_founds.alloc(len, stream);
+    d_tmp_founds.to_zeros(stream);
     table->find(len, data_buffer->keys_ptr(), d_find_values.d_data,
                 d_tmp_founds.d_data, d_find_scores.d_data, stream);
-    d_tmp_founds.SyncData(false, stream);
+    d_tmp_founds.sync_data(false, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     size_t found_counter = 0;
     for (size_t i = 0; i < len; ++i) {
@@ -639,9 +639,9 @@ void CheckInsertAndEvictOnEpochLru(Table* table,
               << ", miss counter:" << len - found_counter << std::endl;
     ASSERT_EQ(len, found_counter);
 
-    d_tmp_founds.ToZeros(stream);
+    d_tmp_founds.to_zeros(stream);
     table->contains(len, data_buffer->keys_ptr(), d_tmp_founds.d_data, stream);
-    d_tmp_founds.SyncData(false, stream);
+    d_tmp_founds.sync_data(false, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     size_t contains_counter = 0;
     for (size_t i = 0; i < len; ++i) {
@@ -753,17 +753,17 @@ void test_insert_and_evict_advanced_on_epochlru() {
   table->init(opt);
 
   KVMSBuffer<i64, f32, u64> evict_buffer;
-  evict_buffer.Reserve(B, dim, stream);
-  evict_buffer.ToZeros(stream);
+  evict_buffer.reserve(B, dim, stream);
+  evict_buffer.to_zeros(stream);
 
   KVMSBuffer<i64, f32, u64> data_buffer;
-  data_buffer.Reserve(B, dim, stream);
+  data_buffer.reserve(B, dim, stream);
 
   for (unsigned int global_epoch = 1; global_epoch <= 64; ++global_epoch) {
     create_random_keys_advanced<i64, u64, f32>(
         dim, data_buffer.keys_ptr(false), data_buffer.scores_ptr(false),
         data_buffer.values_ptr(false), B, B * 16);
-    data_buffer.SyncData(true, stream);
+    data_buffer.sync_data(true, stream);
 
     CheckInsertAndEvictOnEpochLru<i64, f32, u64, Table>(
         table.get(), &data_buffer, &evict_buffer, B, stream, global_epoch);
@@ -818,21 +818,21 @@ void CheckInsertAndEvictOnEpochLfu(
       len, data_buffer->keys_ptr(), data_buffer->values_ptr(),
       data_buffer->scores_ptr(), evict_buffer->keys_ptr(),
       evict_buffer->values_ptr(), evict_buffer->scores_ptr(), stream);
-  evict_buffer->SyncData(false, stream);
+  evict_buffer->sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
   auto end = std::chrono::steady_clock::now();
   const auto diff =
       std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
-  d_tmp_founds.Alloc(len, stream);
-  d_find_values.Alloc(len * dim, stream);
+  d_tmp_founds.alloc(len, stream);
+  d_find_values.alloc(len * dim, stream);
 
   {
-    d_tmp_founds.ToZeros(stream);
+    d_tmp_founds.to_zeros(stream);
     table->find(len, pre_data_buffer->keys_ptr(), d_find_values.d_data,
                 d_tmp_founds.d_data, pre_data_buffer->scores_ptr(), stream);
-    d_tmp_founds.SyncData(false, stream);
-    pre_data_buffer->scores.SyncData(false, stream);
+    d_tmp_founds.sync_data(false, stream);
+    pre_data_buffer->scores.sync_data(false, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     size_t found_counter = 0;
     size_t old_epoch_counter = 0;
@@ -857,10 +857,10 @@ void CheckInsertAndEvictOnEpochLfu(
               << ", pre_data miss counter:" << len - found_counter << std::endl;
     ASSERT_EQ(len, found_counter);
 
-    d_tmp_founds.ToZeros(stream);
+    d_tmp_founds.to_zeros(stream);
     table->contains(len, pre_data_buffer->keys_ptr(), d_tmp_founds.d_data,
                     stream);
-    d_tmp_founds.SyncData(false, stream);
+    d_tmp_founds.sync_data(false, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     size_t contains_counter = 0;
     for (size_t i = 0; i < len; ++i) {
@@ -872,11 +872,11 @@ void CheckInsertAndEvictOnEpochLfu(
   }
 
   {
-    d_tmp_founds.ToZeros(stream);
+    d_tmp_founds.to_zeros(stream);
     table->find(len, data_buffer->keys_ptr(), d_find_values.d_data,
                 d_tmp_founds.d_data, data_buffer->scores_ptr(), stream);
-    d_tmp_founds.SyncData(false, stream);
-    data_buffer->scores.SyncData(false, stream);
+    d_tmp_founds.sync_data(false, stream);
+    data_buffer->scores.sync_data(false, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     size_t found_counter = 0;
     size_t new_epoch_counter = 0;
@@ -895,9 +895,9 @@ void CheckInsertAndEvictOnEpochLfu(
               << ", miss counter:" << len - found_counter << std::endl;
     ASSERT_EQ(len, found_counter);
 
-    d_tmp_founds.ToZeros(stream);
+    d_tmp_founds.to_zeros(stream);
     table->contains(len, data_buffer->keys_ptr(), d_tmp_founds.d_data, stream);
-    d_tmp_founds.SyncData(false, stream);
+    d_tmp_founds.sync_data(false, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     size_t contains_counter = 0;
     for (size_t i = 0; i < len; ++i) {
@@ -1033,13 +1033,13 @@ void test_insert_and_evict_advanced_on_epochlfu() {
   table->init(opt);
 
   KVMSBuffer<i64, f32, u64> evict_buffer;
-  evict_buffer.Reserve(B, dim, stream);
-  evict_buffer.ToZeros(stream);
+  evict_buffer.reserve(B, dim, stream);
+  evict_buffer.to_zeros(stream);
 
   KVMSBuffer<i64, f32, u64> data_buffer;
   KVMSBuffer<i64, f32, u64> pre_data_buffer;
-  data_buffer.Reserve(B, dim, stream);
-  pre_data_buffer.Reserve(B, dim, stream);
+  data_buffer.reserve(B, dim, stream);
+  pre_data_buffer.reserve(B, dim, stream);
 
   constexpr int freq_range = 100;
   constexpr float repeat_rate = 0.9f;
@@ -1054,16 +1054,16 @@ void test_insert_and_evict_advanced_on_epochlfu() {
           data_buffer.scores_ptr(false), data_buffer.values_ptr(false), B,
           B * 16, freq_range, repeat_rate);
     }
-    data_buffer.SyncData(true, stream);
+    data_buffer.sync_data(true, stream);
     if (global_epoch <= 1) {
-      pre_data_buffer.CopyFrom(data_buffer, stream);
+      pre_data_buffer.copy_from(data_buffer, stream);
     }
 
     CheckInsertAndEvictOnEpochLfu<i64, f32, u64, Table>(
         table.get(), &data_buffer, &evict_buffer, &pre_data_buffer, B, stream,
         global_epoch);
 
-    pre_data_buffer.CopyFrom(data_buffer, stream);
+    pre_data_buffer.copy_from(data_buffer, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
   }
 
@@ -1093,17 +1093,17 @@ void test_insert_and_evict_advanced_on_customized() {
   table->init(opt);
 
   KVMSBuffer<i64, f32, u64> evict_buffer;
-  evict_buffer.Reserve(B, dim, stream);
-  evict_buffer.ToZeros(stream);
+  evict_buffer.reserve(B, dim, stream);
+  evict_buffer.to_zeros(stream);
 
   KVMSBuffer<i64, f32, u64> data_buffer;
-  data_buffer.Reserve(B, dim, stream);
+  data_buffer.reserve(B, dim, stream);
 
   for (int i = 0; i < 32; ++i) {
     create_random_keys<i64, u64, f32, dim>(
         data_buffer.keys_ptr(false), data_buffer.scores_ptr(false),
         data_buffer.values_ptr(false), B, B * 16);
-    data_buffer.SyncData(true, stream);
+    data_buffer.sync_data(true, stream);
 
     CheckInsertAndEvict<i64, f32, u64, Table>(table.get(), &data_buffer,
                                               &evict_buffer, B, stream);
@@ -1138,16 +1138,16 @@ void test_insert_and_evict_with_export_batch() {
   table->init(opt);
 
   KVMSBuffer<i64, f32, u64> buffer;
-  buffer.Reserve(len, dim, stream);
+  buffer.reserve(len, dim, stream);
   KVMSBuffer<i64, f32, u64> evict_buffer;
-  evict_buffer.Reserve(len, dim, stream);
+  evict_buffer.reserve(len, dim, stream);
 
-  buffer.ToRange(offset, 1, stream);
+  buffer.to_range(offset, 1, stream);
   const size_t n_evicted = table->insert_and_evict(
       len, buffer.keys_ptr(), buffer.values_ptr(), nullptr,
       evict_buffer.keys_ptr(), evict_buffer.values_ptr(), nullptr, stream);
   std::printf("Insert %zu keys and evict %zu\n", len, n_evicted);
-  evict_buffer.SyncData(false, stream);
+  evict_buffer.sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
   for (size_t i = 0; i < n_evicted; ++i) {
     const auto* vec =
@@ -1165,7 +1165,7 @@ void test_insert_and_evict_with_export_batch() {
                                                   buffer.keys_ptr(),
                                                   buffer.values_ptr(),
                                                   nullptr, stream);
-    buffer.SyncData(false, stream);
+    buffer.sync_data(false, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     for (size_t i = 0; i < n_exported; ++i) {
       const auto* vec =
@@ -1332,10 +1332,10 @@ void BatchCheckFind(Table* table, K* keys, V* values, S* scores, size_t len,
   HostAndDeviceBuffer<V> d_tmp_values;
   HostAndDeviceBuffer<S> d_tmp_scores;
   HostAndDeviceBuffer<bool> d_tmp_founds;
-  d_tmp_keys.Alloc(cap, stream);
-  d_tmp_values.Alloc(cap * dim, stream);
-  d_tmp_scores.Alloc(cap, stream);
-  d_tmp_founds.Alloc(cap, stream);
+  d_tmp_keys.alloc(cap, stream);
+  d_tmp_values.alloc(cap * dim, stream);
+  d_tmp_scores.alloc(cap, stream);
+  d_tmp_founds.alloc(cap, stream);
 
   while (step->load() < static_cast<int>(total_step)) {
     while (find_step >= (step->load() / static_cast<int>(find_interval))) {
@@ -1343,10 +1343,10 @@ void BatchCheckFind(Table* table, K* keys, V* values, S* scores, size_t len,
 
     size_t found_num = 0;
     size_t value_diff_cnt = 0;
-    d_tmp_keys.ToZeros(stream);
-    d_tmp_values.ToZeros(stream);
-    d_tmp_scores.ToZeros(stream);
-    d_tmp_founds.ToZeros(stream);
+    d_tmp_keys.to_zeros(stream);
+    d_tmp_values.to_zeros(stream);
+    d_tmp_scores.to_zeros(stream);
+    d_tmp_founds.to_zeros(stream);
 
     ACL_CHECK(aclrtMemcpyAsync(d_tmp_keys.d_data, cap * sizeof(K),
                                keys + cap * find_step, cap * sizeof(K),
@@ -1362,10 +1362,10 @@ void BatchCheckFind(Table* table, K* keys, V* values, S* scores, size_t len,
         std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
     if (if_check) {
-      d_tmp_keys.SyncData(false, stream);
-      d_tmp_values.SyncData(false, stream);
-      d_tmp_scores.SyncData(false, stream);
-      d_tmp_founds.SyncData(false, stream);
+      d_tmp_keys.sync_data(false, stream);
+      d_tmp_values.sync_data(false, stream);
+      d_tmp_scores.sync_data(false, stream);
+      d_tmp_founds.sync_data(false, stream);
       ACL_CHECK(aclrtSynchronizeStream(stream));
 
       for (size_t i = 0; i < cap; ++i) {
@@ -1381,9 +1381,9 @@ void BatchCheckFind(Table* table, K* keys, V* values, S* scores, size_t len,
       }
       ASSERT_EQ(value_diff_cnt, 0);
 
-      d_tmp_founds.ToZeros(stream);
+      d_tmp_founds.to_zeros(stream);
       table->contains(cap, keys, d_tmp_founds.d_data, stream);
-      d_tmp_founds.SyncData(false, stream);
+      d_tmp_founds.sync_data(false, stream);
       ACL_CHECK(aclrtSynchronizeStream(stream));
       size_t contains_num = 0;
       for (size_t i = 0; i < cap; ++i) {
@@ -1438,11 +1438,11 @@ void test_insert_and_evict_run_with_batch_find() {
   table->init(opt);
 
   KVMSBuffer<i64, f32, u64> global_buffer;
-  global_buffer.Reserve(B * batch_num, dim, insert_stream);
+  global_buffer.reserve(B * batch_num, dim, insert_stream);
 
   KVMSBuffer<i64, f32, u64> evict_buffer;
-  evict_buffer.Reserve(B, dim, insert_stream);
-  evict_buffer.ToZeros(insert_stream);
+  evict_buffer.reserve(B, dim, insert_stream);
+  evict_buffer.to_zeros(insert_stream);
 
   for (size_t i = 0; i < batch_num; ++i) {
     create_random_keys<i64, u64, f32, dim>(
@@ -1450,7 +1450,7 @@ void test_insert_and_evict_run_with_batch_find() {
         global_buffer.scores_ptr(false) + B * i,
         global_buffer.values_ptr(false) + B * i * dim, B);
   }
-  global_buffer.SyncData(true, insert_stream);
+  global_buffer.sync_data(true, insert_stream);
   ACL_CHECK(aclrtSynchronizeStream(insert_stream));
 
   auto insert_and_evict_func = [&table, &global_buffer, &evict_buffer, &B,
