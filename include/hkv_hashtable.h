@@ -1566,8 +1566,8 @@ class HashTable : public HashTableBase<K, V, S> {
         size_t size_all = n * sizeof(value_type*) + n * sizeof(bool);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
         auto temp_storage{dev_ws.get<uint8_t*>(0)};
-        bool* d_founds{reinterpret_cast<bool*>(temp_storage)};
-        value_type** table_value_addrs{reinterpret_cast<value_type**>(temp_storage + n * sizeof(bool))};
+        value_type** table_value_addrs{reinterpret_cast<value_type**>(temp_storage)};
+        bool* d_founds{reinterpret_cast<bool*>(temp_storage + n * sizeof(value_type*))};
 
         find_or_insert_hybrid_kernel<K, V, S, evict_strategy>
             <<<block_dim_, 0, stream>>>(
@@ -1589,8 +1589,8 @@ class HashTable : public HashTableBase<K, V, S> {
         size_t size_all = n * sizeof(value_type*) + n * sizeof(bool);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
         auto temp_storage{dev_ws.get<uint8_t*>(0)};
-        bool* d_founds{reinterpret_cast<bool*>(temp_storage)};
-        value_type** table_value_addrs{reinterpret_cast<value_type**>(temp_storage + n * sizeof(bool))};
+        value_type** table_value_addrs{reinterpret_cast<value_type**>(temp_storage)};
+        bool* d_founds{reinterpret_cast<bool*>(temp_storage + n * sizeof(value_type*))};
 
         find_or_insert_non_unique_kernel<K, V, S, true, evict_strategy>
             <<<block_dim_, 0, stream>>>(
@@ -1601,7 +1601,6 @@ class HashTable : public HashTableBase<K, V, S> {
                 table_->capacity_divisor_shift);
         if (options_.io_by_cpu) {
           size_t value_size = n * table_->dim * sizeof(value_type);
-
           size_t host_size_all = value_size + size_all;
           auto host_ws{host_mem_pool_->get_workspace<1>(host_size_all, stream)};
           auto host_storage{host_ws.get<uint8_t*>(0)};
