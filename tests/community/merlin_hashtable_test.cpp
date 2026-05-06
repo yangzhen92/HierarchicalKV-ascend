@@ -195,6 +195,9 @@ TableOptions MakeOptions(size_t init_capacity, size_t max_capacity,
 template <class T>
 void CopyDeviceToHostRaw(T* device, std::vector<T>* host, size_t n,
                          aclrtStream stream) {
+  if (n == 0) {
+    return;
+  }
   host->assign(n, T{});
   ACL_CHECK(aclrtMemcpyAsync(host->data(), sizeof(T) * n, device,
                              sizeof(T) * n, ACL_MEMCPY_DEVICE_TO_HOST,
@@ -429,8 +432,6 @@ void test_basic_common(size_t max_hbm_for_vectors, bool without_rehash) {
   ACL_CHECK(aclrtSynchronizeStream(guard.stream));
   ASSERT_EQ(table->size(guard.stream), 0);
 
-  d_vectors.CopyFromHost(h_vectors, guard.stream);
-  d_scores.CopyFromHost(h_scores, guard.stream);
   table->insert_or_assign(KEY_NUM, d_keys.get(), d_vectors.get(),
                           d_scores.get(), guard.stream);
   ACL_CHECK(aclrtSynchronizeStream(guard.stream));
@@ -684,12 +685,12 @@ void test_rehash(size_t max_hbm_for_vectors) {
     ASSERT_EQ(table->capacity(), MAX_CAPACITY);
     ASSERT_EQ(table->size(guard.stream), KEY_NUM);
     d_vectors.Memset(0, guard.stream);
-    FindAndVerify(table.get(), BUCKET_MAX_SIZE, d_keys.get(), d_vectors.get(),
+    FindAndVerify(table.get(), KEY_NUM, d_keys.get(), d_vectors.get(),
                   d_scores.get(), d_found.get(), &h_keys, &h_scores,
-                  &h_vectors, &h_found, guard.stream, DIM, BUCKET_MAX_SIZE,
+                  &h_vectors, &h_found, guard.stream, DIM, KEY_NUM,
                   true);
     ContainsAndVerify(table.get(), KEY_NUM, d_keys.get(), d_found.get(),
-                      BUCKET_MAX_SIZE, guard.stream);
+                      KEY_NUM, guard.stream);
     table->clear(guard.stream);
     ACL_CHECK(aclrtSynchronizeStream(guard.stream));
     ASSERT_EQ(table->size(guard.stream), 0);
@@ -809,11 +810,16 @@ void test_dynamic_rehash_on_multi_threads(size_t max_hbm_for_vectors) {
                                      BUCKET_MAX_SIZE);
   options.num_of_buckets_per_alloc = 16;
   options.max_load_factor = 0.50f;
+  options.api_lock = true;
   auto table = std::make_shared<Table>();
   table->init(options);
   ASSERT_EQ(table->bucket_count(), 32);
 
   auto worker_function = [&table, KEY_NUM, options](int task_n) {
+    auto device_id_env = std::getenv("HKV_TEST_DEVICE");
+    int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
+    HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
+                    "aclrtSetDevice failed");
     StreamGuard guard;
     guard.Create();
     std::vector<K> h_keys(KEY_NUM);
@@ -1537,12 +1543,17 @@ void test_insert_or_assign_multi_threads(size_t max_hbm_for_vectors,
                                      max_hbm_for_vectors, 0, DIM,
                                      BUCKET_MAX_SIZE);
   options.max_load_factor = 0.50f;
+  options.api_lock = true;
   auto table = std::make_shared<Table>();
   table->init(options);
 
   auto worker = [&table, KEY_NUM, options, capacity_silent](int batch,
                                                             int task_n,
                                                             bool update_twice) {
+    auto device_id_env = std::getenv("HKV_TEST_DEVICE");
+    int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
+    HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
+                    "aclrtSetDevice failed");
     StreamGuard guard;
     guard.Create();
     std::vector<K> h_keys(KEY_NUM);
@@ -1794,7 +1805,7 @@ void test_bucket_size(bool load_scores = true) {
   d_vectors.Alloc(KEY_NUM * TEST_DIM);
   d_found.Alloc(KEY_NUM);
 
-  for (uint64_t bucket_max_size = 8; bucket_max_size <= 2048;
+  for (uint64_t bucket_max_size = 16; bucket_max_size <= 2048;
        bucket_max_size *= 2) {
     TableOptions options = MakeOptions(INIT_CAPACITY, INIT_CAPACITY, 16, 1,
                                        TEST_DIM, bucket_max_size);

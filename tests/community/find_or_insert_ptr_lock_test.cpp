@@ -561,6 +561,7 @@ void test_rehash(size_t max_hbm_for_vectors, int key_start = 0) {
                        d_vectors.get(), d_found.get(), d_scores.get(),
                        guard.stream);
     CopyBoolToHost(d_found.get(), &h_found, KEY_NUM, guard.stream);
+    d_keys.CopyToHost(&h_keys, KEY_NUM, guard.stream);
     d_scores.CopyToHost(&h_scores, KEY_NUM, guard.stream);
     d_vectors.CopyToHost(&h_vectors, KEY_NUM * DIM, guard.stream);
     VerifyFoundValuesAndScores(h_keys, h_scores, h_vectors, h_found,
