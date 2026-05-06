@@ -45,7 +45,7 @@ namespace {
 
 #define ACL_CHECK(expr) ASSERT_EQ((expr), ACL_ERROR_NONE)
 
-int32_t GetTestDeviceId() {
+int32_t get_test_device_id() {
   auto device_id_env = std::getenv("HKV_TEST_DEVICE");
   try {
     return device_id_env != nullptr ? std::stoi(device_id_env) : 0;
@@ -59,7 +59,7 @@ int32_t GetTestDeviceId() {
 }  // namespace
 
 // Test the basic functionality of the group_shared_mutex
-TEST(GroupSharedMutexTest, BasicFunctionality) {
+TEST(GroupSharedMutexTest, basic_functionality) {
   init_env();
   group_shared_mutex mutex;
   ASSERT_EQ(mutex.read_count(), 0);
@@ -104,12 +104,12 @@ TEST(GroupSharedMutexTest, BasicFunctionality) {
   ASSERT_EQ(mutex.update_count(), 0);
 }
 
-TEST(GroupSharedMutexTest, AdvancedFunctionalitySingleStream) {
+TEST(GroupSharedMutexTest, advanced_functionality_single_stream) {
   init_env();
   group_shared_mutex mutex;
   std::atomic<bool> multiple_read{false};
   std::atomic<bool> multiple_update{false};
-  const int32_t device_id = GetTestDeviceId();
+  const int32_t device_id = get_test_device_id();
 
   // Test multiple reads
   std::vector<std::thread> reads;
@@ -178,12 +178,12 @@ TEST(GroupSharedMutexTest, AdvancedFunctionalitySingleStream) {
   EXPECT_TRUE(multiple_read.load());
 }
 
-TEST(GroupSharedMutexTest, AdvancedFunctionalityMultiStream) {
+TEST(GroupSharedMutexTest, advanced_functionality_multi_stream) {
   init_env();
   group_shared_mutex mutex;
   std::atomic<bool> multiple_read{false};
   std::atomic<bool> multiple_update{false};
-  const int32_t device_id = GetTestDeviceId();
+  const int32_t device_id = get_test_device_id();
 
   // Test multiple reads
   std::vector<std::thread> reads;

@@ -77,13 +77,13 @@ void test_dynamic_max_capcity_table() {
   table->init(opt);
 
   KVMSBuffer<i64, f32, u64> buffer;
-  buffer.Reserve(len, dim, stream);
+  buffer.reserve(len, dim, stream);
   KVMSBuffer<i64, f32, u64> evict_buffer;
-  evict_buffer.Reserve(len, dim, stream);
+  evict_buffer.reserve(len, dim, stream);
 
   size_t total_len = 0;
   while (true) {
-    buffer.ToRange(offset, 1, stream);
+    buffer.to_range(offset, 1, stream);
     const size_t n_evicted = table->insert_and_evict(
         len, buffer.keys_ptr(), buffer.values_ptr(), nullptr,
         evict_buffer.keys_ptr(), evict_buffer.values_ptr(), nullptr, stream);
@@ -91,7 +91,7 @@ void test_dynamic_max_capcity_table() {
     offset += len;
     total_len += len;
 
-    evict_buffer.SyncData(false, stream);
+    evict_buffer.sync_data(false, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     for (size_t i = 0; i < n_evicted; ++i) {
       const auto* vec =
@@ -131,7 +131,7 @@ void test_dynamic_max_capcity_table() {
     const size_t n_exported =
         table->export_batch(search_len, offset, buffer.keys_ptr(),
                             buffer.values_ptr(), nullptr, stream);
-    buffer.SyncData(false, stream);
+    buffer.sync_data(false, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
     for (size_t i = 0; i < n_exported; ++i) {
       const auto* vec =

@@ -91,7 +91,7 @@ struct DeviceMem {
     return reinterpret_cast<T*>(ptr);
   }
 
-  static DeviceMem Alloc(size_t bytes) {
+  static DeviceMem alloc(size_t bytes) {
     DeviceMem mem;
     EXPECT_EQ(aclrtMalloc(&mem.ptr, bytes, ACL_MEM_MALLOC_HUGE_FIRST),
               ACL_ERROR_NONE);
@@ -195,9 +195,9 @@ void test_evict_strategy_lru_basic(size_t max_hbm_for_vectors,
   vector<S> h_scores_temp(TEMP_KEY_NUM);
   vector<V> h_vectors_temp(TEMP_KEY_NUM * DIM);
 
-  auto d_keys = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
+  auto d_keys = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
 
   create_keys_in_one_buckets<K, S, V, DIM>(
       h_keys_base.data(), h_scores_base.data(), h_vectors_base.data(),
@@ -300,9 +300,9 @@ void test_evict_strategy_lfu_basic(size_t max_hbm_for_vectors,
   vector<S> h_scores_temp(TEMP_KEY_NUM);
   vector<V> h_vectors_temp(TEMP_KEY_NUM * DIM);
 
-  auto d_keys = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
+  auto d_keys = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
 
   create_keys_in_one_buckets_lfu<K, S, V, DIM>(
       h_keys_base.data(), h_scores_base.data(), h_vectors_base.data(),
@@ -394,9 +394,9 @@ void test_evict_strategy_epochlru_basic(size_t max_hbm_for_vectors,
   vector<K> h_keys_temp(TEMP_KEY_NUM);
   vector<S> h_scores_temp(TEMP_KEY_NUM);
   vector<V> h_vectors_temp(TEMP_KEY_NUM * DIM);
-  auto d_keys = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
+  auto d_keys = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
 
   create_keys_in_one_buckets<K, S, V, DIM>(
       h_keys_base.data(), h_scores_base.data(), h_vectors_base.data(),
@@ -499,9 +499,9 @@ void test_evict_strategy_epochlfu_basic(size_t max_hbm_for_vectors,
   vector<K> h_keys_temp(TEMP_KEY_NUM);
   vector<S> h_scores_temp(TEMP_KEY_NUM);
   vector<V> h_vectors_temp(TEMP_KEY_NUM * DIM);
-  auto d_keys = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
+  auto d_keys = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
 
   create_keys_in_one_buckets_lfu<K, S, V, DIM>(
       h_keys_base.data(), h_scores_base.data(), h_vectors_base.data(),
@@ -625,9 +625,9 @@ void test_evict_strategy_customized_basic(size_t max_hbm_for_vectors,
   vector<K> h_keys_temp(TEMP_KEY_NUM);
   vector<S> h_scores_temp(TEMP_KEY_NUM);
   vector<V> h_vectors_temp(TEMP_KEY_NUM * DIM);
-  auto d_keys = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
+  auto d_keys = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
 
   create_keys_in_one_buckets<K, S, V, DIM>(
       h_keys_base.data(), h_scores_base.data(), h_vectors_base.data(),
@@ -717,9 +717,9 @@ void test_evict_strategy_customized_advanced(size_t max_hbm_for_vectors,
   vector<K> h_keys_temp(TEMP_KEY_NUM);
   vector<S> h_scores_temp(TEMP_KEY_NUM);
   vector<V> h_vectors_temp(TEMP_KEY_NUM * DIM);
-  auto d_keys = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
+  auto d_keys = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(K));
+  auto d_scores = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(TEMP_KEY_NUM * sizeof(V) * DIM);
 
   create_keys_in_one_buckets<K, S, V, DIM>(
       h_keys_base.data(), h_scores_base.data(), h_vectors_base.data(),
@@ -796,7 +796,7 @@ void test_evict_strategy_customized_advanced(size_t max_hbm_for_vectors,
 
 template <typename K0, typename V0, typename S0, typename Table,
           size_t dim = 64>
-void CheckAssignOnEpochLfu(Table* table, KVMSBuffer<K0, V0, S0>* data_buffer,
+void check_assign_on_epoch_lfu(Table* table, KVMSBuffer<K0, V0, S0>* data_buffer,
                            KVMSBuffer<K0, V0, S0>* evict_buffer,
                            KVMSBuffer<K0, V0, S0>* pre_data_buffer,
                            size_t len, aclrtStream stream,
@@ -818,17 +818,17 @@ void CheckAssignOnEpochLfu(Table* table, KVMSBuffer<K0, V0, S0>* data_buffer,
   HostAndDeviceBuffer<K0> tmp_keys;
   HostAndDeviceBuffer<V0> tmp_values;
   HostAndDeviceBuffer<S0> tmp_scores;
-  tmp_keys.Alloc(cap, stream);
-  tmp_values.Alloc(cap * dim, stream);
-  tmp_scores.Alloc(cap, stream);
+  tmp_keys.alloc(cap, stream);
+  tmp_values.alloc(cap * dim, stream);
+  tmp_scores.alloc(cap, stream);
 
   size_t exported = table->export_batch(table->capacity(), 0,
                                         tmp_keys.d_data, tmp_values.d_data,
                                         tmp_scores.d_data, stream);
   ASSERT_EQ(exported, table_size_before);
-  tmp_keys.SyncData(false, stream);
-  tmp_values.SyncData(false, stream);
-  tmp_scores.SyncData(false, stream);
+  tmp_keys.sync_data(false, stream);
+  tmp_values.sync_data(false, stream);
+  tmp_scores.sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
 
   for (size_t i = 0; i < table_size_before; ++i) {
@@ -846,9 +846,9 @@ void CheckAssignOnEpochLfu(Table* table, KVMSBuffer<K0, V0, S0>* data_buffer,
   exported = table->export_batch(table->capacity(), 0, tmp_keys.d_data,
                                  tmp_values.d_data, tmp_scores.d_data, stream);
   ASSERT_EQ(exported, table_size_before);
-  tmp_keys.SyncData(false, stream);
-  tmp_values.SyncData(false, stream);
-  tmp_scores.SyncData(false, stream);
+  tmp_keys.sync_data(false, stream);
+  tmp_values.sync_data(false, stream);
+  tmp_scores.sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
 
   size_t score_error_cnt = 0;
@@ -888,7 +888,7 @@ void CheckAssignOnEpochLfu(Table* table, KVMSBuffer<K0, V0, S0>* data_buffer,
       len, data_buffer->keys_ptr(), data_buffer->values_ptr(),
       data_buffer->scores_ptr(), evict_buffer->keys_ptr(),
       evict_buffer->values_ptr(), evict_buffer->scores_ptr(), stream);
-  evict_buffer->SyncData(false, stream);
+  evict_buffer->sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
   for (size_t i = 0; i < filtered_len; ++i) {
     current_evict_scores[evict_buffer->keys_ptr(false)[i]] =
@@ -899,9 +899,9 @@ void CheckAssignOnEpochLfu(Table* table, KVMSBuffer<K0, V0, S0>* data_buffer,
   exported = table->export_batch(table->capacity(), 0, tmp_keys.d_data,
                                  tmp_values.d_data, tmp_scores.d_data, stream);
   ASSERT_EQ(exported, table_size_after);
-  tmp_keys.SyncData(false, stream);
-  tmp_values.SyncData(false, stream);
-  tmp_scores.SyncData(false, stream);
+  tmp_keys.sync_data(false, stream);
+  tmp_values.sync_data(false, stream);
+  tmp_scores.sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
 
   size_t key_miss_cnt = 0;
@@ -987,10 +987,10 @@ void test_assign_advanced_on_epochlfu(size_t max_hbm_for_vectors) {
   KVMSBuffer<K, V, S> evict_buffer;
   KVMSBuffer<K, V, S> data_buffer;
   KVMSBuffer<K, V, S> pre_data_buffer;
-  evict_buffer.Reserve(B, dim, stream);
-  evict_buffer.ToZeros(stream);
-  data_buffer.Reserve(B, dim, stream);
-  pre_data_buffer.Reserve(B, dim, stream);
+  evict_buffer.reserve(B, dim, stream);
+  evict_buffer.to_zeros(stream);
+  data_buffer.reserve(B, dim, stream);
+  pre_data_buffer.reserve(B, dim, stream);
 
   int freq_range = 100;
   float repeat_rate = 0.9;
@@ -1007,16 +1007,16 @@ void test_assign_advanced_on_epochlfu(size_t max_hbm_for_vectors) {
           data_buffer.scores_ptr(false), data_buffer.values_ptr(false),
           static_cast<int>(B), B * 32, freq_range, repeat_rate);
     }
-    data_buffer.SyncData(true, stream);
+    data_buffer.sync_data(true, stream);
     if (global_epoch <= 1) {
-      pre_data_buffer.CopyFrom(data_buffer, stream);
+      pre_data_buffer.copy_from(data_buffer, stream);
     }
 
-    CheckAssignOnEpochLfu<K, V, S, Table, dim>(
+    check_assign_on_epoch_lfu<K, V, S, Table, dim>(
         table.get(), &data_buffer, &evict_buffer, &pre_data_buffer, B, stream,
         global_epoch);
 
-    pre_data_buffer.CopyFrom(data_buffer, stream);
+    pre_data_buffer.copy_from(data_buffer, stream);
     ACL_CHECK(aclrtSynchronizeStream(stream));
   }
   ACL_CHECK(aclrtDestroyStream(stream));
@@ -1044,9 +1044,9 @@ void test_evict_strategy_customized_correct_rate(size_t max_hbm_for_vectors,
   vector<K> h_keys_temp(MAX_CAPACITY);
   vector<S> h_scores_temp(MAX_CAPACITY);
   vector<V> h_vectors_temp(MAX_CAPACITY * DIM);
-  auto d_keys = DeviceMem::Alloc(MAX_CAPACITY * sizeof(K));
-  auto d_scores = DeviceMem::Alloc(MAX_CAPACITY * sizeof(S));
-  auto d_vectors = DeviceMem::Alloc(MAX_CAPACITY * sizeof(V) * DIM);
+  auto d_keys = DeviceMem::alloc(MAX_CAPACITY * sizeof(K));
+  auto d_scores = DeviceMem::alloc(MAX_CAPACITY * sizeof(S));
+  auto d_vectors = DeviceMem::alloc(MAX_CAPACITY * sizeof(V) * DIM);
 
   aclrtStream stream;
   ACL_CHECK(aclrtCreateStream(&stream));

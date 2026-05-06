@@ -92,25 +92,25 @@ struct DeviceArray {
 
   T* get() const { return ptr; }
 
-  void Alloc(size_t n) {
+  void alloc(size_t n) {
     count = n;
     ACL_CHECK(aclrtMalloc(reinterpret_cast<void**>(&ptr), sizeof(T) * count,
                           ACL_MEM_MALLOC_HUGE_FIRST));
   }
 
-  void Memset(int value, aclrtStream stream) {
+  void memset(int value, aclrtStream stream) {
     ACL_CHECK(aclrtMemsetAsync(ptr, sizeof(T) * count, value,
                                sizeof(T) * count, stream));
   }
 
-  void CopyFromHost(const std::vector<T>& host, aclrtStream stream) {
+  void copy_from_host(const std::vector<T>& host, aclrtStream stream) {
     ASSERT_LE(host.size(), count);
     ACL_CHECK(aclrtMemcpyAsync(ptr, sizeof(T) * count, host.data(),
                                sizeof(T) * host.size(),
                                ACL_MEMCPY_HOST_TO_DEVICE, stream));
   }
 
-  void CopyToHost(std::vector<T>* host, size_t n, aclrtStream stream) {
+  void copy_to_host(std::vector<T>* host, size_t n, aclrtStream stream) {
     ASSERT_LE(n, count);
     host->assign(n, T{});
     ACL_CHECK(aclrtMemcpyAsync(host->data(), sizeof(T) * n, ptr, sizeof(T) * n,
@@ -128,10 +128,10 @@ struct StreamGuard {
     }
   }
 
-  void Create() { ACL_CHECK(aclrtCreateStream(&stream)); }
+  void create() { ACL_CHECK(aclrtCreateStream(&stream)); }
 };
 
-TableOptions MakeOptions(size_t init_capacity, size_t max_capacity,
+TableOptions make_options(size_t init_capacity, size_t max_capacity,
                          size_t max_hbm_for_vectors, int key_start = 0,
                          size_t max_bucket_size = 128) {
   TableOptions options{};
@@ -145,7 +145,7 @@ TableOptions MakeOptions(size_t init_capacity, size_t max_capacity,
 }
 
 template <int Strategy>
-S* ScoresForInsert(S* d_scores) {
+S* scores_for_insert(S* d_scores) {
   if constexpr (Strategy == EvictStrategy::kLru ||
                 Strategy == EvictStrategy::kEpochLru) {
     return nullptr;
@@ -154,7 +154,7 @@ S* ScoresForInsert(S* d_scores) {
 }
 
 template <int Strategy>
-void SetEpochIfNeeded(HashTable<K, V, S, Strategy>* table, S epoch) {
+void set_epoch_if_needed(HashTable<K, V, S, Strategy>* table, S epoch) {
   if constexpr (Strategy == EvictStrategy::kEpochLru ||
                 Strategy == EvictStrategy::kEpochLfu) {
     table->set_global_epoch(epoch);
@@ -168,9 +168,9 @@ void find_or_insert_safe_ptr(Table* table, uint64_t key_num, K* d_keys,
   DeviceArray<V*> d_vectors_ptr;
   DeviceArray<bool> d_found;
   DeviceArray<K*> d_key_ptrs;
-  d_vectors_ptr.Alloc(key_num);
-  d_found.Alloc(key_num);
-  d_key_ptrs.Alloc(key_num);
+  d_vectors_ptr.alloc(key_num);
+  d_found.alloc(key_num);
+  d_key_ptrs.alloc(key_num);
 
   table->find_or_insert(key_num, d_keys, d_vectors_ptr.get(), d_found.get(),
                         d_scores, stream, true, false, d_key_ptrs.get());
@@ -182,17 +182,17 @@ void find_or_insert_safe_ptr(Table* table, uint64_t key_num, K* d_keys,
 }
 
 template <class Table>
-void FindIntoContiguous(Table* table, size_t key_num, K* d_keys, V* d_vectors,
+void find_into_contiguous(Table* table, size_t key_num, K* d_keys, V* d_vectors,
                         bool* d_found, S* d_scores, aclrtStream stream) {
   DeviceArray<V*> d_vectors_ptr;
-  d_vectors_ptr.Alloc(key_num);
-  d_vectors_ptr.Memset(0, stream);
+  d_vectors_ptr.alloc(key_num);
+  d_vectors_ptr.memset(0, stream);
   table->find(key_num, d_keys, d_vectors_ptr.get(), d_found, d_scores, stream);
   read_from_ptr(d_vectors_ptr.get(), d_vectors, DIM, key_num, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
 }
 
-void VerifyFoundValuesAndScores(const std::vector<K>& keys,
+void verify_found_values_and_scores(const std::vector<K>& keys,
                                 const std::vector<S>& scores,
                                 const std::vector<V>& values,
                                 const std::vector<uint8_t>& found,
@@ -214,7 +214,7 @@ void VerifyFoundValuesAndScores(const std::vector<K>& keys,
   ASSERT_EQ(found_num, expected_found);
 }
 
-void CopyBoolToHost(bool* device, std::vector<uint8_t>* host, size_t n,
+void copy_bool_to_host(bool* device, std::vector<uint8_t>* host, size_t n,
                     aclrtStream stream) {
   host->assign(n, uint8_t{0});
   ACL_CHECK(aclrtMemcpyAsync(host->data(), sizeof(uint8_t) * n, device,
@@ -224,7 +224,7 @@ void CopyBoolToHost(bool* device, std::vector<uint8_t>* host, size_t n,
 }
 
 template <class Table>
-void ExportAndVerifyAll(Table* table, size_t expected_count, K* d_keys,
+void export_and_verify_all(Table* table, size_t expected_count, K* d_keys,
                         V* d_vectors, S* d_scores, aclrtStream stream,
                         bool verify_score = true) {
   const size_t exported =
@@ -245,9 +245,9 @@ void ExportAndVerifyAll(Table* table, size_t expected_count, K* d_keys,
   value_view.count = expected_count * DIM;
   score_view.ptr = d_scores;
   score_view.count = expected_count;
-  key_view.CopyToHost(&h_keys, expected_count, stream);
-  value_view.CopyToHost(&h_vectors, expected_count * DIM, stream);
-  score_view.CopyToHost(&h_scores, expected_count, stream);
+  key_view.copy_to_host(&h_keys, expected_count, stream);
+  value_view.copy_to_host(&h_vectors, expected_count * DIM, stream);
+  score_view.copy_to_host(&h_scores, expected_count, stream);
   key_view.ptr = nullptr;
   value_view.ptr = nullptr;
   score_view.ptr = nullptr;
@@ -264,7 +264,7 @@ void ExportAndVerifyAll(Table* table, size_t expected_count, K* d_keys,
 }
 
 template <typename T, std::size_t N>
-std::array<T, N> Range(const T start) {
+std::array<T, N> range(const T start) {
   std::array<T, N> result{};
   for (size_t i = 0; i < N; ++i) {
     result[i] = start + static_cast<T>(i);
@@ -273,7 +273,7 @@ std::array<T, N> Range(const T start) {
 }
 
 template <class Table>
-void ExportToHost(Table* table, size_t expected_count, K* d_keys, V* d_vectors,
+void export_to_host(Table* table, size_t expected_count, K* d_keys, V* d_vectors,
                   S* d_scores, std::vector<K>* h_keys,
                   std::vector<V>* h_vectors, std::vector<S>* h_scores,
                   aclrtStream stream) {
@@ -292,15 +292,15 @@ void ExportToHost(Table* table, size_t expected_count, K* d_keys, V* d_vectors,
   value_view.count = expected_count * DIM;
   score_view.ptr = d_scores;
   score_view.count = expected_count;
-  key_view.CopyToHost(h_keys, expected_count, stream);
-  value_view.CopyToHost(h_vectors, expected_count * DIM, stream);
-  score_view.CopyToHost(h_scores, expected_count, stream);
+  key_view.copy_to_host(h_keys, expected_count, stream);
+  value_view.copy_to_host(h_vectors, expected_count * DIM, stream);
+  score_view.copy_to_host(h_scores, expected_count, stream);
   key_view.ptr = nullptr;
   value_view.ptr = nullptr;
   score_view.ptr = nullptr;
 }
 
-void VerifyExportedValues(const std::vector<K>& keys,
+void verify_exported_values(const std::vector<K>& keys,
                           const std::vector<V>& values, size_t count) {
   for (size_t i = 0; i < count; ++i) {
     for (size_t j = 0; j < DIM; ++j) {
@@ -318,7 +318,7 @@ void test_basic(size_t max_hbm_for_vectors, int key_start = 0) {
 
   init_env();
   auto options =
-      MakeOptions(INIT_CAPACITY, MAX_CAPACITY, max_hbm_for_vectors, key_start);
+      make_options(INIT_CAPACITY, MAX_CAPACITY, max_hbm_for_vectors, key_start);
   std::vector<K> h_keys(KEY_NUM);
   std::vector<S> h_scores(KEY_NUM);
   std::vector<V> h_vectors(KEY_NUM * DIM);
@@ -327,20 +327,20 @@ void test_basic(size_t max_hbm_for_vectors, int key_start = 0) {
                                    h_vectors.data(), KEY_NUM);
 
   StreamGuard guard;
-  guard.Create();
+  guard.create();
   DeviceArray<K> d_keys;
   DeviceArray<S> d_scores;
   DeviceArray<V> d_vectors;
   DeviceArray<V> d_new_vectors;
   DeviceArray<bool> d_found;
-  d_keys.Alloc(KEY_NUM);
-  d_scores.Alloc(KEY_NUM);
-  d_vectors.Alloc(KEY_NUM * DIM);
-  d_new_vectors.Alloc(KEY_NUM * DIM);
-  d_found.Alloc(KEY_NUM);
-  d_keys.CopyFromHost(h_keys, guard.stream);
-  d_scores.CopyFromHost(h_scores, guard.stream);
-  d_vectors.CopyFromHost(h_vectors, guard.stream);
+  d_keys.alloc(KEY_NUM);
+  d_scores.alloc(KEY_NUM);
+  d_vectors.alloc(KEY_NUM * DIM);
+  d_new_vectors.alloc(KEY_NUM * DIM);
+  d_found.alloc(KEY_NUM);
+  d_keys.copy_from_host(h_keys, guard.stream);
+  d_scores.copy_from_host(h_scores, guard.stream);
+  d_vectors.copy_from_host(h_vectors, guard.stream);
 
   auto table = std::make_unique<Table>();
   table->init(options);
@@ -350,28 +350,28 @@ void test_basic(size_t max_hbm_for_vectors, int key_start = 0) {
                           d_vectors.get(), options.dim, guard.stream);
   ASSERT_EQ(table->size(guard.stream), KEY_NUM);
 
-  d_found.Memset(0, guard.stream);
-  d_scores.Memset(0, guard.stream);
-  d_vectors.Memset(0, guard.stream);
-  FindIntoContiguous(table.get(), KEY_NUM, d_keys.get(), d_vectors.get(),
+  d_found.memset(0, guard.stream);
+  d_scores.memset(0, guard.stream);
+  d_vectors.memset(0, guard.stream);
+  find_into_contiguous(table.get(), KEY_NUM, d_keys.get(), d_vectors.get(),
                      d_found.get(), d_scores.get(), guard.stream);
-  CopyBoolToHost(d_found.get(), &h_found, KEY_NUM, guard.stream);
-  d_scores.CopyToHost(&h_scores, KEY_NUM, guard.stream);
-  d_vectors.CopyToHost(&h_vectors, KEY_NUM * DIM, guard.stream);
-  VerifyFoundValuesAndScores(h_keys, h_scores, h_vectors, h_found, KEY_NUM);
+  copy_bool_to_host(d_found.get(), &h_found, KEY_NUM, guard.stream);
+  d_scores.copy_to_host(&h_scores, KEY_NUM, guard.stream);
+  d_vectors.copy_to_host(&h_vectors, KEY_NUM * DIM, guard.stream);
+  verify_found_values_and_scores(h_keys, h_scores, h_vectors, h_found, KEY_NUM);
 
-  d_new_vectors.Memset(2, guard.stream);
+  d_new_vectors.memset(2, guard.stream);
   table->assign(KEY_NUM, d_keys.get(), d_new_vectors.get(), d_scores.get(),
                 guard.stream);
   ACL_CHECK(aclrtSynchronizeStream(guard.stream));
   ASSERT_EQ(table->size(guard.stream), KEY_NUM);
 
-  d_found.Memset(0, guard.stream);
-  d_new_vectors.Memset(0, guard.stream);
-  FindIntoContiguous(table.get(), KEY_NUM, d_keys.get(), d_new_vectors.get(),
+  d_found.memset(0, guard.stream);
+  d_new_vectors.memset(0, guard.stream);
+  find_into_contiguous(table.get(), KEY_NUM, d_keys.get(), d_new_vectors.get(),
                      d_found.get(), d_scores.get(), guard.stream);
-  CopyBoolToHost(d_found.get(), &h_found, KEY_NUM, guard.stream);
-  d_new_vectors.CopyToHost(&h_vectors, KEY_NUM * DIM, guard.stream);
+  copy_bool_to_host(d_found.get(), &h_found, KEY_NUM, guard.stream);
+  d_new_vectors.copy_to_host(&h_vectors, KEY_NUM * DIM, guard.stream);
   const uint32_t i_value = 0x2020202;
   const float expected_memset_value =
       *(reinterpret_cast<const float*>(&i_value));
@@ -401,10 +401,10 @@ void test_basic(size_t max_hbm_for_vectors, int key_start = 0) {
                           d_vectors.get(), options.dim, guard.stream);
   ASSERT_EQ(table->size(guard.stream), KEY_NUM);
 
-  d_keys.Memset(0, guard.stream);
-  d_scores.Memset(0, guard.stream);
-  d_vectors.Memset(0, guard.stream);
-  ExportAndVerifyAll(table.get(), KEY_NUM, d_keys.get(), d_vectors.get(),
+  d_keys.memset(0, guard.stream);
+  d_scores.memset(0, guard.stream);
+  d_vectors.memset(0, guard.stream);
+  export_and_verify_all(table.get(), KEY_NUM, d_keys.get(), d_vectors.get(),
                      d_scores.get(), guard.stream);
 }
 
@@ -415,7 +415,7 @@ void test_basic_when_full(size_t max_hbm_for_vectors, int key_start = 0) {
 
   init_env();
   auto options =
-      MakeOptions(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
+      make_options(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
   std::vector<K> h_keys(KEY_NUM);
   std::vector<S> h_scores(KEY_NUM);
   std::vector<V> h_vectors(KEY_NUM * DIM);
@@ -423,16 +423,16 @@ void test_basic_when_full(size_t max_hbm_for_vectors, int key_start = 0) {
                                    KEY_NUM);
 
   StreamGuard guard;
-  guard.Create();
+  guard.create();
   DeviceArray<K> d_keys;
   DeviceArray<S> d_scores;
   DeviceArray<V> d_vectors;
-  d_keys.Alloc(KEY_NUM);
-  d_scores.Alloc(KEY_NUM);
-  d_vectors.Alloc(KEY_NUM * DIM);
-  d_keys.CopyFromHost(h_keys, guard.stream);
-  d_scores.CopyFromHost(h_scores, guard.stream);
-  d_vectors.Memset(1, guard.stream);
+  d_keys.alloc(KEY_NUM);
+  d_scores.alloc(KEY_NUM);
+  d_vectors.alloc(KEY_NUM * DIM);
+  d_keys.copy_from_host(h_keys, guard.stream);
+  d_scores.copy_from_host(h_scores, guard.stream);
+  d_vectors.memset(1, guard.stream);
 
   auto table = std::make_unique<Table>();
   table->init(options);
@@ -455,11 +455,11 @@ void test_erase_if_pred(size_t max_hbm_for_vectors, int key_start = 0) {
 
   init_env();
   auto options =
-      MakeOptions(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
+      make_options(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
   auto table = std::make_unique<Table>();
   table->init(options);
   StreamGuard guard;
-  guard.Create();
+  guard.create();
 
   std::vector<K> h_keys(KEY_NUM);
   std::vector<S> h_scores(KEY_NUM);
@@ -472,13 +472,13 @@ void test_erase_if_pred(size_t max_hbm_for_vectors, int key_start = 0) {
   DeviceArray<S> d_scores;
   DeviceArray<V> d_vectors;
   DeviceArray<bool> d_found;
-  d_keys.Alloc(KEY_NUM);
-  d_scores.Alloc(KEY_NUM);
-  d_vectors.Alloc(KEY_NUM * DIM);
-  d_found.Alloc(KEY_NUM);
-  d_keys.CopyFromHost(h_keys, guard.stream);
-  d_scores.CopyFromHost(h_scores, guard.stream);
-  d_vectors.CopyFromHost(h_vectors, guard.stream);
+  d_keys.alloc(KEY_NUM);
+  d_scores.alloc(KEY_NUM);
+  d_vectors.alloc(KEY_NUM * DIM);
+  d_found.alloc(KEY_NUM);
+  d_keys.copy_from_host(h_keys, guard.stream);
+  d_scores.copy_from_host(h_scores, guard.stream);
+  d_vectors.copy_from_host(h_vectors, guard.stream);
 
   find_or_insert_safe_ptr(table.get(), KEY_NUM, d_keys.get(), d_scores.get(),
                           d_vectors.get(), options.dim, guard.stream);
@@ -493,14 +493,14 @@ void test_erase_if_pred(size_t max_hbm_for_vectors, int key_start = 0) {
   ACL_CHECK(aclrtSynchronizeStream(guard.stream));
   ASSERT_EQ(erase_num + total_size, BUCKET_MAX_SIZE);
 
-  d_vectors.Memset(0, guard.stream);
-  d_found.Memset(0, guard.stream);
-  FindIntoContiguous(table.get(), KEY_NUM, d_keys.get(), d_vectors.get(),
+  d_vectors.memset(0, guard.stream);
+  d_found.memset(0, guard.stream);
+  find_into_contiguous(table.get(), KEY_NUM, d_keys.get(), d_vectors.get(),
                      d_found.get(), d_scores.get(), guard.stream);
-  CopyBoolToHost(d_found.get(), &h_found, KEY_NUM, guard.stream);
-  d_scores.CopyToHost(&h_scores, KEY_NUM, guard.stream);
-  d_vectors.CopyToHost(&h_vectors, KEY_NUM * DIM, guard.stream);
-  VerifyFoundValuesAndScores(h_keys, h_scores, h_vectors, h_found,
+  copy_bool_to_host(d_found.get(), &h_found, KEY_NUM, guard.stream);
+  d_scores.copy_to_host(&h_scores, KEY_NUM, guard.stream);
+  d_vectors.copy_to_host(&h_vectors, KEY_NUM * DIM, guard.stream);
+  verify_found_values_and_scores(h_keys, h_scores, h_vectors, h_found,
                              BUCKET_MAX_SIZE - erase_num);
 }
 
@@ -513,10 +513,10 @@ void test_rehash(size_t max_hbm_for_vectors, int key_start = 0) {
   using Table = HashTable<K, V, S, EvictStrategy::kCustomized>;
 
   init_env();
-  auto options = MakeOptions(INIT_CAPACITY, MAX_CAPACITY, max_hbm_for_vectors,
+  auto options = make_options(INIT_CAPACITY, MAX_CAPACITY, max_hbm_for_vectors,
                              key_start, BUCKET_MAX_SIZE);
   StreamGuard guard;
-  guard.Create();
+  guard.create();
 
   std::vector<K> h_keys(KEY_NUM);
   std::vector<S> h_scores(KEY_NUM);
@@ -527,10 +527,10 @@ void test_rehash(size_t max_hbm_for_vectors, int key_start = 0) {
   DeviceArray<S> d_scores;
   DeviceArray<V> d_vectors;
   DeviceArray<bool> d_found;
-  d_keys.Alloc(KEY_NUM);
-  d_scores.Alloc(KEY_NUM);
-  d_vectors.Alloc(KEY_NUM * DIM);
-  d_found.Alloc(KEY_NUM);
+  d_keys.alloc(KEY_NUM);
+  d_scores.alloc(KEY_NUM);
+  d_vectors.alloc(KEY_NUM * DIM);
+  d_found.alloc(KEY_NUM);
 
   for (size_t round = 0; round < TEST_TIMES; ++round) {
     auto table = std::make_unique<Table>();
@@ -538,9 +538,9 @@ void test_rehash(size_t max_hbm_for_vectors, int key_start = 0) {
     create_keys_in_one_buckets<K, S, V, DIM>(
         h_keys.data(), h_scores.data(), h_vectors.data(), KEY_NUM,
         INIT_CAPACITY, BUCKET_MAX_SIZE);
-    d_keys.CopyFromHost(h_keys, guard.stream);
-    d_scores.CopyFromHost(h_scores, guard.stream);
-    d_vectors.CopyFromHost(h_vectors, guard.stream);
+    d_keys.copy_from_host(h_keys, guard.stream);
+    d_scores.copy_from_host(h_scores, guard.stream);
+    d_vectors.copy_from_host(h_vectors, guard.stream);
     ASSERT_EQ(table->size(guard.stream), 0);
 
     find_or_insert_safe_ptr(table.get(), KEY_NUM, d_keys.get(), d_scores.get(),
@@ -555,16 +555,16 @@ void test_rehash(size_t max_hbm_for_vectors, int key_start = 0) {
     ASSERT_EQ(table->capacity(), MAX_CAPACITY);
     ASSERT_EQ(table->size(guard.stream), KEY_NUM);
 
-    d_vectors.Memset(0, guard.stream);
-    d_found.Memset(0, guard.stream);
-    FindIntoContiguous(table.get(), BUCKET_MAX_SIZE, d_keys.get(),
+    d_vectors.memset(0, guard.stream);
+    d_found.memset(0, guard.stream);
+    find_into_contiguous(table.get(), BUCKET_MAX_SIZE, d_keys.get(),
                        d_vectors.get(), d_found.get(), d_scores.get(),
                        guard.stream);
-    CopyBoolToHost(d_found.get(), &h_found, KEY_NUM, guard.stream);
-    d_keys.CopyToHost(&h_keys, KEY_NUM, guard.stream);
-    d_scores.CopyToHost(&h_scores, KEY_NUM, guard.stream);
-    d_vectors.CopyToHost(&h_vectors, KEY_NUM * DIM, guard.stream);
-    VerifyFoundValuesAndScores(h_keys, h_scores, h_vectors, h_found,
+    copy_bool_to_host(d_found.get(), &h_found, KEY_NUM, guard.stream);
+    d_keys.copy_to_host(&h_keys, KEY_NUM, guard.stream);
+    d_scores.copy_to_host(&h_scores, KEY_NUM, guard.stream);
+    d_vectors.copy_to_host(&h_vectors, KEY_NUM * DIM, guard.stream);
+    verify_found_values_and_scores(h_keys, h_scores, h_vectors, h_found,
                                BUCKET_MAX_SIZE);
     table->clear(guard.stream);
     ASSERT_EQ(table->size(guard.stream), 0);
@@ -581,10 +581,10 @@ void test_rehash_on_big_batch(size_t max_hbm_for_vectors, int key_start = 0) {
 
   init_env();
   auto options =
-      MakeOptions(INIT_CAPACITY, MAX_CAPACITY, max_hbm_for_vectors);
+      make_options(INIT_CAPACITY, MAX_CAPACITY, max_hbm_for_vectors);
   options.max_load_factor = 0.6f;
   StreamGuard guard;
-  guard.Create();
+  guard.create();
   auto table = std::make_unique<Table>();
   table->init(options);
 
@@ -597,12 +597,12 @@ void test_rehash_on_big_batch(size_t max_hbm_for_vectors, int key_start = 0) {
   DeviceArray<K> d_keys;
   DeviceArray<S> d_scores;
   DeviceArray<V> d_vectors;
-  d_keys.Alloc(KEY_NUM);
-  d_scores.Alloc(KEY_NUM);
-  d_vectors.Alloc(KEY_NUM * DIM);
-  d_keys.CopyFromHost(h_keys, guard.stream);
-  d_scores.CopyFromHost(h_scores, guard.stream);
-  d_vectors.CopyFromHost(h_vectors, guard.stream);
+  d_keys.alloc(KEY_NUM);
+  d_scores.alloc(KEY_NUM);
+  d_vectors.alloc(KEY_NUM * DIM);
+  d_keys.copy_from_host(h_keys, guard.stream);
+  d_scores.copy_from_host(h_scores, guard.stream);
+  d_vectors.copy_from_host(h_vectors, guard.stream);
 
   find_or_insert_safe_ptr(table.get(), INIT_KEY_NUM, d_keys.get(),
                           d_scores.get(), d_vectors.get(), options.dim,
@@ -614,7 +614,7 @@ void test_rehash_on_big_batch(size_t max_hbm_for_vectors, int key_start = 0) {
                           d_vectors.get(), options.dim, guard.stream);
   ASSERT_EQ(table->size(guard.stream), KEY_NUM);
   ASSERT_EQ(table->capacity(), KEY_NUM * 4);
-  ExportAndVerifyAll(table.get(), KEY_NUM, d_keys.get(), d_vectors.get(),
+  export_and_verify_all(table.get(), KEY_NUM, d_keys.get(), d_vectors.get(),
                      d_scores.get(), guard.stream);
 }
 
@@ -625,9 +625,9 @@ void test_export_batch_if(size_t max_hbm_for_vectors, int key_start = 0) {
 
   init_env();
   auto options =
-      MakeOptions(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
+      make_options(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
   StreamGuard guard;
-  guard.Create();
+  guard.create();
   auto table = std::make_unique<Table>();
   table->init(options);
 
@@ -643,37 +643,37 @@ void test_export_batch_if(size_t max_hbm_for_vectors, int key_start = 0) {
   DeviceArray<V> d_vectors;
   DeviceArray<bool> d_found;
   DeviceArray<size_t> d_dump_counter;
-  d_keys.Alloc(KEY_NUM);
-  d_scores.Alloc(KEY_NUM);
-  d_vectors.Alloc(KEY_NUM * DIM);
-  d_found.Alloc(KEY_NUM);
-  d_dump_counter.Alloc(1);
-  d_keys.CopyFromHost(h_keys, guard.stream);
-  d_scores.CopyFromHost(h_scores, guard.stream);
-  d_vectors.CopyFromHost(h_vectors, guard.stream);
+  d_keys.alloc(KEY_NUM);
+  d_scores.alloc(KEY_NUM);
+  d_vectors.alloc(KEY_NUM * DIM);
+  d_found.alloc(KEY_NUM);
+  d_dump_counter.alloc(1);
+  d_keys.copy_from_host(h_keys, guard.stream);
+  d_scores.copy_from_host(h_scores, guard.stream);
+  d_vectors.copy_from_host(h_vectors, guard.stream);
 
   const S threshold = npu::hkv::host_nano<S>(guard.stream);
   find_or_insert_safe_ptr(table.get(), KEY_NUM, d_keys.get(), nullptr,
                           d_vectors.get(), options.dim, guard.stream);
   ASSERT_EQ(table->size(guard.stream), KEY_NUM);
 
-  d_vectors.Memset(0, guard.stream);
-  d_found.Memset(0, guard.stream);
-  FindIntoContiguous(table.get(), KEY_NUM, d_keys.get(), d_vectors.get(),
+  d_vectors.memset(0, guard.stream);
+  d_found.memset(0, guard.stream);
+  find_into_contiguous(table.get(), KEY_NUM, d_keys.get(), d_vectors.get(),
                      d_found.get(), nullptr, guard.stream);
-  CopyBoolToHost(d_found.get(), &h_found, KEY_NUM, guard.stream);
-  d_vectors.CopyToHost(&h_vectors, KEY_NUM * DIM, guard.stream);
-  VerifyFoundValuesAndScores(h_keys, h_scores, h_vectors, h_found, KEY_NUM,
+  copy_bool_to_host(d_found.get(), &h_found, KEY_NUM, guard.stream);
+  d_vectors.copy_to_host(&h_vectors, KEY_NUM * DIM, guard.stream);
+  verify_found_values_and_scores(h_keys, h_scores, h_vectors, h_found, KEY_NUM,
                              false);
 
   K pattern = 100;
-  d_dump_counter.Memset(0, guard.stream);
+  d_dump_counter.memset(0, guard.stream);
   table->template export_batch_if<ExportIfPredFunctor>(
       pattern, threshold, table->capacity(), 0, d_dump_counter.get(),
       d_keys.get(), d_vectors.get(), d_scores.get(), guard.stream);
   std::vector<size_t> h_count;
-  d_dump_counter.CopyToHost(&h_count, 1, guard.stream);
-  d_scores.CopyToHost(&h_scores, KEY_NUM, guard.stream);
+  d_dump_counter.copy_to_host(&h_count, 1, guard.stream);
+  d_scores.copy_to_host(&h_scores, KEY_NUM, guard.stream);
   size_t expected_export_count = 0;
   for (size_t i = 0; i < KEY_NUM; ++i) {
     if (h_scores[i] > threshold) {
@@ -682,12 +682,12 @@ void test_export_batch_if(size_t max_hbm_for_vectors, int key_start = 0) {
   }
   ASSERT_EQ(h_count[0], expected_export_count);
 
-  d_dump_counter.Memset(0, guard.stream);
+  d_dump_counter.memset(0, guard.stream);
   table->template export_batch_if<ExportIfPredFunctor>(
       pattern, npu::hkv::host_nano<S>(guard.stream), table->capacity(), 0,
       d_dump_counter.get(), d_keys.get(), d_vectors.get(), d_scores.get(),
       guard.stream);
-  d_dump_counter.CopyToHost(&h_count, 1, guard.stream);
+  d_dump_counter.copy_to_host(&h_count, 1, guard.stream);
   ASSERT_EQ(h_count[0], 0);
 }
 
@@ -704,9 +704,9 @@ void test_evict_strategy_lru_basic(size_t max_hbm_for_vectors,
 
   init_env();
   auto options =
-      MakeOptions(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
+      make_options(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
   StreamGuard guard;
-  guard.Create();
+  guard.create();
   std::vector<K> h_keys_base(BASE_KEY_NUM);
   std::vector<S> h_scores_base(BASE_KEY_NUM);
   std::vector<V> h_vectors_base(BASE_KEY_NUM * DIM);
@@ -736,25 +736,25 @@ void test_evict_strategy_lru_basic(size_t max_hbm_for_vectors,
   DeviceArray<K> d_keys_temp;
   DeviceArray<S> d_scores_temp;
   DeviceArray<V> d_vectors_temp;
-  d_keys_temp.Alloc(TEMP_KEY_NUM);
-  d_scores_temp.Alloc(TEMP_KEY_NUM);
-  d_vectors_temp.Alloc(TEMP_KEY_NUM * DIM);
+  d_keys_temp.alloc(TEMP_KEY_NUM);
+  d_scores_temp.alloc(TEMP_KEY_NUM);
+  d_vectors_temp.alloc(TEMP_KEY_NUM * DIM);
 
   for (size_t round = 0; round < TEST_TIMES; ++round) {
     auto table = std::make_unique<Table>();
     table->init(options);
     ASSERT_EQ(table->size(guard.stream), 0);
 
-    d_keys_temp.CopyFromHost(h_keys_base, guard.stream);
-    d_scores_temp.CopyFromHost(h_scores_base, guard.stream);
-    d_vectors_temp.CopyFromHost(h_vectors_base, guard.stream);
+    d_keys_temp.copy_from_host(h_keys_base, guard.stream);
+    d_scores_temp.copy_from_host(h_scores_base, guard.stream);
+    d_vectors_temp.copy_from_host(h_vectors_base, guard.stream);
     const S start_ts = npu::hkv::host_nano<S>(guard.stream);
     find_or_insert_safe_ptr(table.get(), BASE_KEY_NUM, d_keys_temp.get(),
                             nullptr, d_vectors_temp.get(), options.dim,
                             guard.stream);
     const S end_ts = npu::hkv::host_nano<S>(guard.stream);
     ASSERT_EQ(table->size(guard.stream), BUCKET_MAX_SIZE);
-    ExportToHost(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
+    export_to_host(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
                  d_vectors_temp.get(), d_scores_temp.get(), &h_keys_temp,
                  &h_vectors_temp, &h_scores_temp, guard.stream);
 
@@ -762,11 +762,11 @@ void test_evict_strategy_lru_basic(size_t max_hbm_for_vectors,
     std::sort(h_scores_temp_sorted.begin(), h_scores_temp_sorted.end());
     ASSERT_GE(h_scores_temp_sorted[0], start_ts);
     ASSERT_LE(h_scores_temp_sorted[BASE_KEY_NUM - 1], end_ts);
-    VerifyExportedValues(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
+    verify_exported_values(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
 
-    d_keys_temp.CopyFromHost(h_keys_test, guard.stream);
-    d_scores_temp.CopyFromHost(h_scores_test, guard.stream);
-    d_vectors_temp.CopyFromHost(h_vectors_test, guard.stream);
+    d_keys_temp.copy_from_host(h_keys_test, guard.stream);
+    d_scores_temp.copy_from_host(h_scores_test, guard.stream);
+    d_vectors_temp.copy_from_host(h_vectors_test, guard.stream);
     const S second_start_ts = npu::hkv::host_nano<S>(guard.stream);
     table->assign(TEST_KEY_NUM, d_keys_temp.get(), d_vectors_temp.get(),
                   nullptr, guard.stream);
@@ -775,7 +775,7 @@ void test_evict_strategy_lru_basic(size_t max_hbm_for_vectors,
                             guard.stream);
     const S second_end_ts = npu::hkv::host_nano<S>(guard.stream);
     ASSERT_EQ(table->size(guard.stream), BUCKET_MAX_SIZE);
-    ExportToHost(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
+    export_to_host(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
                  d_vectors_temp.get(), d_scores_temp.get(), &h_keys_temp,
                  &h_vectors_temp, &h_scores_temp, guard.stream);
 
@@ -793,7 +793,7 @@ void test_evict_strategy_lru_basic(size_t max_hbm_for_vectors,
     std::sort(updated_scores.begin(), updated_scores.begin() + ctr);
     ASSERT_GE(updated_scores[0], second_start_ts);
     ASSERT_LE(updated_scores[ctr - 1], second_end_ts);
-    VerifyExportedValues(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
+    verify_exported_values(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
   }
 }
 
@@ -811,9 +811,9 @@ void test_evict_strategy_lfu_basic(size_t max_hbm_for_vectors,
 
   init_env();
   auto options =
-      MakeOptions(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
+      make_options(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
   StreamGuard guard;
-  guard.Create();
+  guard.create();
   std::vector<K> h_keys_base(BASE_KEY_NUM);
   std::vector<S> h_scores_base(BASE_KEY_NUM);
   std::vector<V> h_vectors_base(BASE_KEY_NUM * DIM);
@@ -844,9 +844,9 @@ void test_evict_strategy_lfu_basic(size_t max_hbm_for_vectors,
   DeviceArray<K> d_keys_temp;
   DeviceArray<S> d_scores_temp;
   DeviceArray<V> d_vectors_temp;
-  d_keys_temp.Alloc(TEMP_KEY_NUM);
-  d_scores_temp.Alloc(TEMP_KEY_NUM);
-  d_vectors_temp.Alloc(TEMP_KEY_NUM * DIM);
+  d_keys_temp.alloc(TEMP_KEY_NUM);
+  d_scores_temp.alloc(TEMP_KEY_NUM);
+  d_vectors_temp.alloc(TEMP_KEY_NUM * DIM);
 
   S global_epoch = 1;
   for (size_t round = 0; round < TEST_TIMES; ++round) {
@@ -854,32 +854,32 @@ void test_evict_strategy_lfu_basic(size_t max_hbm_for_vectors,
     table->init(options);
     ASSERT_EQ(table->size(guard.stream), 0);
 
-    d_keys_temp.CopyFromHost(h_keys_base, guard.stream);
-    d_scores_temp.CopyFromHost(h_scores_base, guard.stream);
-    d_vectors_temp.CopyFromHost(h_vectors_base, guard.stream);
+    d_keys_temp.copy_from_host(h_keys_base, guard.stream);
+    d_scores_temp.copy_from_host(h_scores_base, guard.stream);
+    d_vectors_temp.copy_from_host(h_vectors_base, guard.stream);
     find_or_insert_safe_ptr(table.get(), BASE_KEY_NUM, d_keys_temp.get(),
                             d_scores_temp.get(), d_vectors_temp.get(),
                             options.dim, guard.stream);
     ASSERT_EQ(table->size(guard.stream), BUCKET_MAX_SIZE);
-    ExportToHost(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
+    export_to_host(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
                  d_vectors_temp.get(), d_scores_temp.get(), &h_keys_temp,
                  &h_vectors_temp, &h_scores_temp, guard.stream);
     for (size_t i = 0; i < BUCKET_MAX_SIZE; ++i) {
       ASSERT_EQ(h_scores_temp[i], h_keys_temp[i] % FREQ_RANGE);
     }
-    VerifyExportedValues(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
+    verify_exported_values(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
 
     ++global_epoch;
-    d_keys_temp.CopyFromHost(h_keys_test, guard.stream);
-    d_scores_temp.CopyFromHost(h_scores_test, guard.stream);
-    d_vectors_temp.CopyFromHost(h_vectors_test, guard.stream);
+    d_keys_temp.copy_from_host(h_keys_test, guard.stream);
+    d_scores_temp.copy_from_host(h_scores_test, guard.stream);
+    d_vectors_temp.copy_from_host(h_vectors_test, guard.stream);
     table->assign(TEST_KEY_NUM, d_keys_temp.get(), d_vectors_temp.get(),
                   d_scores_temp.get(), guard.stream);
     find_or_insert_safe_ptr(table.get(), TEST_KEY_NUM, d_keys_temp.get(),
                             d_scores_temp.get(), d_vectors_temp.get(),
                             options.dim, guard.stream);
     ASSERT_EQ(table->size(guard.stream), BUCKET_MAX_SIZE);
-    ExportToHost(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
+    export_to_host(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
                  d_vectors_temp.get(), d_scores_temp.get(), &h_keys_temp,
                  &h_vectors_temp, &h_scores_temp, guard.stream);
     for (size_t i = 0; i < BUCKET_MAX_SIZE; ++i) {
@@ -895,7 +895,7 @@ void test_evict_strategy_lfu_basic(size_t max_hbm_for_vectors,
         ASSERT_EQ(h_scores_temp[i], h_keys_temp[i] % FREQ_RANGE);
       }
     }
-    VerifyExportedValues(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
+    verify_exported_values(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
   }
 }
 
@@ -913,9 +913,9 @@ void test_evict_strategy_epochlru_basic(size_t max_hbm_for_vectors,
 
   init_env();
   auto options =
-      MakeOptions(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
+      make_options(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
   StreamGuard guard;
-  guard.Create();
+  guard.create();
   std::vector<K> h_keys_base(BASE_KEY_NUM);
   std::vector<S> h_scores_base(BASE_KEY_NUM);
   std::vector<V> h_vectors_base(BASE_KEY_NUM * DIM);
@@ -944,9 +944,9 @@ void test_evict_strategy_epochlru_basic(size_t max_hbm_for_vectors,
   DeviceArray<K> d_keys_temp;
   DeviceArray<S> d_scores_temp;
   DeviceArray<V> d_vectors_temp;
-  d_keys_temp.Alloc(TEMP_KEY_NUM);
-  d_scores_temp.Alloc(TEMP_KEY_NUM);
-  d_vectors_temp.Alloc(TEMP_KEY_NUM * DIM);
+  d_keys_temp.alloc(TEMP_KEY_NUM);
+  d_scores_temp.alloc(TEMP_KEY_NUM);
+  d_vectors_temp.alloc(TEMP_KEY_NUM * DIM);
 
   S global_epoch = 1;
   for (size_t round = 0; round < TEST_TIMES; ++round) {
@@ -954,9 +954,9 @@ void test_evict_strategy_epochlru_basic(size_t max_hbm_for_vectors,
     table->init(options);
     ASSERT_EQ(table->size(guard.stream), 0);
 
-    d_keys_temp.CopyFromHost(h_keys_base, guard.stream);
-    d_scores_temp.CopyFromHost(h_scores_base, guard.stream);
-    d_vectors_temp.CopyFromHost(h_vectors_base, guard.stream);
+    d_keys_temp.copy_from_host(h_keys_base, guard.stream);
+    d_scores_temp.copy_from_host(h_scores_base, guard.stream);
+    d_vectors_temp.copy_from_host(h_vectors_base, guard.stream);
     const S start_ts =
         (npu::hkv::host_nano<S>(guard.stream) >> RSHIFT_ON_NANO) & 0xFFFFFFFF;
     table->set_global_epoch(global_epoch);
@@ -966,7 +966,7 @@ void test_evict_strategy_epochlru_basic(size_t max_hbm_for_vectors,
     const S end_ts =
         (npu::hkv::host_nano<S>(guard.stream) >> RSHIFT_ON_NANO) & 0xFFFFFFFF;
     ASSERT_EQ(table->size(guard.stream), BUCKET_MAX_SIZE);
-    ExportToHost(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
+    export_to_host(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
                  d_vectors_temp.get(), d_scores_temp.get(), &h_keys_temp,
                  &h_vectors_temp, &h_scores_temp, guard.stream);
     auto h_scores_temp_sorted = h_scores_temp;
@@ -974,12 +974,12 @@ void test_evict_strategy_epochlru_basic(size_t max_hbm_for_vectors,
     ASSERT_GE(h_scores_temp_sorted[0], (global_epoch << 32 | start_ts));
     ASSERT_LE(h_scores_temp_sorted[BASE_KEY_NUM - 1],
               (global_epoch << 32 | end_ts));
-    VerifyExportedValues(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
+    verify_exported_values(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
 
     ++global_epoch;
-    d_keys_temp.CopyFromHost(h_keys_test, guard.stream);
-    d_scores_temp.CopyFromHost(h_scores_test, guard.stream);
-    d_vectors_temp.CopyFromHost(h_vectors_test, guard.stream);
+    d_keys_temp.copy_from_host(h_keys_test, guard.stream);
+    d_scores_temp.copy_from_host(h_scores_test, guard.stream);
+    d_vectors_temp.copy_from_host(h_vectors_test, guard.stream);
     const S second_start_ts =
         (npu::hkv::host_nano<S>(guard.stream) >> RSHIFT_ON_NANO) & 0xFFFFFFFF;
     table->set_global_epoch(global_epoch);
@@ -991,7 +991,7 @@ void test_evict_strategy_epochlru_basic(size_t max_hbm_for_vectors,
     const S second_end_ts =
         (npu::hkv::host_nano<S>(guard.stream) >> RSHIFT_ON_NANO) & 0xFFFFFFFF;
     ASSERT_EQ(table->size(guard.stream), BUCKET_MAX_SIZE);
-    ExportToHost(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
+    export_to_host(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
                  d_vectors_temp.get(), d_scores_temp.get(), &h_keys_temp,
                  &h_vectors_temp, &h_scores_temp, guard.stream);
     std::vector<S> updated_scores(TEST_KEY_NUM);
@@ -1008,7 +1008,7 @@ void test_evict_strategy_epochlru_basic(size_t max_hbm_for_vectors,
     std::sort(updated_scores.begin(), updated_scores.begin() + ctr);
     ASSERT_GE(updated_scores[0], (global_epoch << 32 | second_start_ts));
     ASSERT_LE(updated_scores[ctr - 1], (global_epoch << 32 | second_end_ts));
-    VerifyExportedValues(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
+    verify_exported_values(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
   }
 }
 
@@ -1026,9 +1026,9 @@ void test_evict_strategy_epochlfu_basic(size_t max_hbm_for_vectors,
 
   init_env();
   auto options =
-      MakeOptions(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
+      make_options(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
   StreamGuard guard;
-  guard.Create();
+  guard.create();
   std::vector<K> h_keys_base(BASE_KEY_NUM);
   std::vector<S> h_scores_base(BASE_KEY_NUM);
   std::vector<V> h_vectors_base(BASE_KEY_NUM * DIM);
@@ -1065,9 +1065,9 @@ void test_evict_strategy_epochlfu_basic(size_t max_hbm_for_vectors,
   DeviceArray<K> d_keys_temp;
   DeviceArray<S> d_scores_temp;
   DeviceArray<V> d_vectors_temp;
-  d_keys_temp.Alloc(TEMP_KEY_NUM);
-  d_scores_temp.Alloc(TEMP_KEY_NUM);
-  d_vectors_temp.Alloc(TEMP_KEY_NUM * DIM);
+  d_keys_temp.alloc(TEMP_KEY_NUM);
+  d_scores_temp.alloc(TEMP_KEY_NUM);
+  d_vectors_temp.alloc(TEMP_KEY_NUM * DIM);
 
   S global_epoch = 1;
   for (size_t round = 0; round < TEST_TIMES; ++round) {
@@ -1075,15 +1075,15 @@ void test_evict_strategy_epochlfu_basic(size_t max_hbm_for_vectors,
     table->init(options);
     ASSERT_EQ(table->size(guard.stream), 0);
 
-    d_keys_temp.CopyFromHost(h_keys_base, guard.stream);
-    d_scores_temp.CopyFromHost(h_scores_base, guard.stream);
-    d_vectors_temp.CopyFromHost(h_vectors_base, guard.stream);
+    d_keys_temp.copy_from_host(h_keys_base, guard.stream);
+    d_scores_temp.copy_from_host(h_scores_base, guard.stream);
+    d_vectors_temp.copy_from_host(h_vectors_base, guard.stream);
     table->set_global_epoch(global_epoch);
     find_or_insert_safe_ptr(table.get(), BASE_KEY_NUM, d_keys_temp.get(),
                             d_scores_temp.get(), d_vectors_temp.get(),
                             options.dim, guard.stream);
     ASSERT_EQ(table->size(guard.stream), BUCKET_MAX_SIZE);
-    ExportToHost(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
+    export_to_host(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
                  d_vectors_temp.get(), d_scores_temp.get(), &h_keys_temp,
                  &h_vectors_temp, &h_scores_temp, guard.stream);
     for (size_t i = 0; i < BUCKET_MAX_SIZE; ++i) {
@@ -1093,12 +1093,12 @@ void test_evict_strategy_epochlfu_basic(size_t max_hbm_for_vectors,
       ASSERT_EQ(h_scores_temp[i],
                 make_expected_score_for_epochlfu<S>(global_epoch, original));
     }
-    VerifyExportedValues(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
+    verify_exported_values(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
 
     ++global_epoch;
-    d_keys_temp.CopyFromHost(h_keys_test, guard.stream);
-    d_scores_temp.CopyFromHost(h_scores_test, guard.stream);
-    d_vectors_temp.CopyFromHost(h_vectors_test, guard.stream);
+    d_keys_temp.copy_from_host(h_keys_test, guard.stream);
+    d_scores_temp.copy_from_host(h_scores_test, guard.stream);
+    d_vectors_temp.copy_from_host(h_vectors_test, guard.stream);
     table->set_global_epoch(global_epoch);
     table->assign(TEST_KEY_NUM, d_keys_temp.get(), d_vectors_temp.get(),
                   d_scores_temp.get(), guard.stream);
@@ -1106,7 +1106,7 @@ void test_evict_strategy_epochlfu_basic(size_t max_hbm_for_vectors,
                             d_scores_temp.get(), d_vectors_temp.get(),
                             options.dim, guard.stream);
     ASSERT_EQ(table->size(guard.stream), BUCKET_MAX_SIZE);
-    ExportToHost(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
+    export_to_host(table.get(), BUCKET_MAX_SIZE, d_keys_temp.get(),
                  d_vectors_temp.get(), d_scores_temp.get(), &h_keys_temp,
                  &h_vectors_temp, &h_scores_temp, guard.stream);
     ASSERT_TRUE(std::find(h_keys_temp.begin(), h_keys_temp.end(),
@@ -1138,7 +1138,7 @@ void test_evict_strategy_epochlfu_basic(size_t max_hbm_for_vectors,
       }
       ASSERT_EQ(h_scores_temp[i], expected_score);
     }
-    VerifyExportedValues(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
+    verify_exported_values(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
   }
 }
 
@@ -1155,9 +1155,9 @@ void test_evict_strategy_customized_basic(size_t max_hbm_for_vectors,
 
   init_env();
   auto options =
-      MakeOptions(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
+      make_options(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
   StreamGuard guard;
-  guard.Create();
+  guard.create();
   std::vector<K> h_keys_base(BASE_KEY_NUM);
   std::vector<S> h_scores_base(BASE_KEY_NUM);
   std::vector<V> h_vectors_base(BASE_KEY_NUM * DIM);
@@ -1194,52 +1194,52 @@ void test_evict_strategy_customized_basic(size_t max_hbm_for_vectors,
   DeviceArray<K> d_keys;
   DeviceArray<S> d_scores;
   DeviceArray<V> d_vectors;
-  d_keys.Alloc(TEMP_KEY_NUM);
-  d_scores.Alloc(TEMP_KEY_NUM);
-  d_vectors.Alloc(TEMP_KEY_NUM * DIM);
+  d_keys.alloc(TEMP_KEY_NUM);
+  d_scores.alloc(TEMP_KEY_NUM);
+  d_vectors.alloc(TEMP_KEY_NUM * DIM);
 
   for (size_t round = 0; round < TEST_TIMES; ++round) {
     auto table = std::make_unique<Table>();
     table->init(options);
     ASSERT_EQ(table->size(guard.stream), 0);
 
-    d_keys.CopyFromHost(h_keys_base, guard.stream);
-    d_scores.CopyFromHost(h_scores_base, guard.stream);
-    d_vectors.CopyFromHost(h_vectors_base, guard.stream);
+    d_keys.copy_from_host(h_keys_base, guard.stream);
+    d_scores.copy_from_host(h_scores_base, guard.stream);
+    d_vectors.copy_from_host(h_vectors_base, guard.stream);
     find_or_insert_safe_ptr(table.get(), BASE_KEY_NUM, d_keys.get(),
                             d_scores.get(), d_vectors.get(), options.dim,
                             guard.stream);
     ASSERT_EQ(table->size(guard.stream), BUCKET_MAX_SIZE);
-    ExportToHost(table.get(), BUCKET_MAX_SIZE, d_keys.get(), d_vectors.get(),
+    export_to_host(table.get(), BUCKET_MAX_SIZE, d_keys.get(), d_vectors.get(),
                  d_scores.get(), &h_keys_temp, &h_vectors_temp, &h_scores_temp,
                  guard.stream);
     auto h_scores_temp_sorted = h_scores_temp;
     std::sort(h_scores_temp_sorted.begin(), h_scores_temp_sorted.end());
-    auto expected_range = Range<S, TEMP_KEY_NUM>(BASE_SCORE_START);
+    auto expected_range = range<S, TEMP_KEY_NUM>(BASE_SCORE_START);
     ASSERT_TRUE(std::equal(h_scores_temp_sorted.begin(),
                            h_scores_temp_sorted.end(),
                            expected_range.begin()));
-    VerifyExportedValues(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
+    verify_exported_values(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
 
-    d_keys.CopyFromHost(h_keys_test, guard.stream);
-    d_scores.CopyFromHost(h_scores_test, guard.stream);
-    d_vectors.CopyFromHost(h_vectors_test, guard.stream);
+    d_keys.copy_from_host(h_keys_test, guard.stream);
+    d_scores.copy_from_host(h_scores_test, guard.stream);
+    d_vectors.copy_from_host(h_vectors_test, guard.stream);
     table->assign(TEST_KEY_NUM, d_keys.get(), d_vectors.get(), d_scores.get(),
                   guard.stream);
     find_or_insert_safe_ptr(table.get(), TEST_KEY_NUM, d_keys.get(),
                             d_scores.get(), d_vectors.get(), options.dim,
                             guard.stream);
     ASSERT_EQ(table->size(guard.stream), BUCKET_MAX_SIZE);
-    ExportToHost(table.get(), BUCKET_MAX_SIZE, d_keys.get(), d_vectors.get(),
+    export_to_host(table.get(), BUCKET_MAX_SIZE, d_keys.get(), d_vectors.get(),
                  d_scores.get(), &h_keys_temp, &h_vectors_temp, &h_scores_temp,
                  guard.stream);
     h_scores_temp_sorted = h_scores_temp;
     std::sort(h_scores_temp_sorted.begin(), h_scores_temp_sorted.end());
-    auto expected_range_test = Range<S, TEST_KEY_NUM>(TEST_SCORE_START);
+    auto expected_range_test = range<S, TEST_KEY_NUM>(TEST_SCORE_START);
     ASSERT_TRUE(std::equal(h_scores_temp_sorted.begin(),
                            h_scores_temp_sorted.end(),
                            expected_range_test.begin()));
-    VerifyExportedValues(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
+    verify_exported_values(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
   }
 }
 
@@ -1256,9 +1256,9 @@ void test_evict_strategy_customized_advanced(size_t max_hbm_for_vectors,
 
   init_env();
   auto options =
-      MakeOptions(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
+      make_options(INIT_CAPACITY, INIT_CAPACITY, max_hbm_for_vectors, key_start);
   StreamGuard guard;
-  guard.Create();
+  guard.create();
   std::vector<K> h_keys_base(BASE_KEY_NUM);
   std::vector<S> h_scores_base(BASE_KEY_NUM);
   std::vector<V> h_vectors_base(BASE_KEY_NUM * DIM);
@@ -1308,43 +1308,43 @@ void test_evict_strategy_customized_advanced(size_t max_hbm_for_vectors,
   DeviceArray<K> d_keys;
   DeviceArray<S> d_scores;
   DeviceArray<V> d_vectors;
-  d_keys.Alloc(TEMP_KEY_NUM);
-  d_scores.Alloc(TEMP_KEY_NUM);
-  d_vectors.Alloc(TEMP_KEY_NUM * DIM);
+  d_keys.alloc(TEMP_KEY_NUM);
+  d_scores.alloc(TEMP_KEY_NUM);
+  d_vectors.alloc(TEMP_KEY_NUM * DIM);
 
   for (size_t round = 0; round < TEST_TIMES; ++round) {
     auto table = std::make_unique<Table>();
     table->init(options);
     ASSERT_EQ(table->size(guard.stream), 0);
 
-    d_keys.CopyFromHost(h_keys_base, guard.stream);
-    d_scores.CopyFromHost(h_scores_base, guard.stream);
-    d_vectors.CopyFromHost(h_vectors_base, guard.stream);
+    d_keys.copy_from_host(h_keys_base, guard.stream);
+    d_scores.copy_from_host(h_scores_base, guard.stream);
+    d_vectors.copy_from_host(h_vectors_base, guard.stream);
     find_or_insert_safe_ptr(table.get(), BASE_KEY_NUM, d_keys.get(),
                             d_scores.get(), d_vectors.get(), options.dim,
                             guard.stream);
     ASSERT_EQ(table->size(guard.stream), BUCKET_MAX_SIZE);
-    ExportToHost(table.get(), BUCKET_MAX_SIZE, d_keys.get(), d_vectors.get(),
+    export_to_host(table.get(), BUCKET_MAX_SIZE, d_keys.get(), d_vectors.get(),
                  d_scores.get(), &h_keys_temp, &h_vectors_temp, &h_scores_temp,
                  guard.stream);
     auto h_scores_temp_sorted = h_scores_temp;
     std::sort(h_scores_temp_sorted.begin(), h_scores_temp_sorted.end());
-    auto expected_range = Range<S, TEMP_KEY_NUM>(BASE_SCORE_START);
+    auto expected_range = range<S, TEMP_KEY_NUM>(BASE_SCORE_START);
     ASSERT_TRUE(std::equal(h_scores_temp_sorted.begin(),
                            h_scores_temp_sorted.end(),
                            expected_range.begin()));
-    VerifyExportedValues(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
+    verify_exported_values(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
 
-    d_keys.CopyFromHost(h_keys_test, guard.stream);
-    d_scores.CopyFromHost(h_scores_test, guard.stream);
-    d_vectors.CopyFromHost(h_vectors_test, guard.stream);
+    d_keys.copy_from_host(h_keys_test, guard.stream);
+    d_scores.copy_from_host(h_scores_test, guard.stream);
+    d_vectors.copy_from_host(h_vectors_test, guard.stream);
     table->assign(TEST_KEY_NUM, d_keys.get(), d_vectors.get(), d_scores.get(),
                   guard.stream);
     find_or_insert_safe_ptr(table.get(), TEST_KEY_NUM, d_keys.get(),
                             d_scores.get(), d_vectors.get(), options.dim,
                             guard.stream);
     ASSERT_EQ(table->size(guard.stream), BUCKET_MAX_SIZE);
-    ExportToHost(table.get(), BUCKET_MAX_SIZE, d_keys.get(), d_vectors.get(),
+    export_to_host(table.get(), BUCKET_MAX_SIZE, d_keys.get(), d_vectors.get(),
                  d_scores.get(), &h_keys_temp, &h_vectors_temp, &h_scores_temp,
                  guard.stream);
     for (size_t i = 0; i < TEST_KEY_NUM; ++i) {
@@ -1372,7 +1372,7 @@ void test_evict_strategy_customized_advanced(size_t max_hbm_for_vectors,
         ASSERT_EQ(h_scores_temp[i], h_scores_test[7]);
       }
     }
-    VerifyExportedValues(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
+    verify_exported_values(h_keys_temp, h_vectors_temp, BUCKET_MAX_SIZE);
   }
 }
 
@@ -1390,10 +1390,10 @@ void test_evict_strategy_customized_correct_rate(size_t max_hbm_for_vectors,
 
   init_env();
   auto options =
-      MakeOptions(INIT_CAPACITY, MAX_CAPACITY, max_hbm_for_vectors, key_start,
+      make_options(INIT_CAPACITY, MAX_CAPACITY, max_hbm_for_vectors, key_start,
                   MAX_BUCKET_SIZE);
   StreamGuard guard;
-  guard.Create();
+  guard.create();
 
   std::vector<K> h_keys_base(BATCH_SIZE);
   std::vector<S> h_scores_base(BATCH_SIZE);
@@ -1405,9 +1405,9 @@ void test_evict_strategy_customized_correct_rate(size_t max_hbm_for_vectors,
   DeviceArray<K> d_keys_temp;
   DeviceArray<S> d_scores_temp;
   DeviceArray<V> d_vectors_temp;
-  d_keys_temp.Alloc(MAX_CAPACITY);
-  d_scores_temp.Alloc(MAX_CAPACITY);
-  d_vectors_temp.Alloc(MAX_CAPACITY * DIM);
+  d_keys_temp.alloc(MAX_CAPACITY);
+  d_scores_temp.alloc(MAX_CAPACITY);
+  d_vectors_temp.alloc(MAX_CAPACITY * DIM);
 
   size_t global_start_key = 100000;
   for (size_t test_time = 0; test_time < TEST_TIMES; ++test_time) {
@@ -1430,9 +1430,9 @@ void test_evict_strategy_customized_correct_rate(size_t max_hbm_for_vectors,
             h_keys_base.data(), h_scores_base.data(), h_vectors_base.data(),
             BATCH_SIZE, start_key);
         start_key += BATCH_SIZE;
-        d_keys_temp.CopyFromHost(h_keys_base, guard.stream);
-        d_scores_temp.CopyFromHost(h_scores_base, guard.stream);
-        d_vectors_temp.CopyFromHost(h_vectors_base, guard.stream);
+        d_keys_temp.copy_from_host(h_keys_base, guard.stream);
+        d_scores_temp.copy_from_host(h_scores_base, guard.stream);
+        d_vectors_temp.copy_from_host(h_vectors_base, guard.stream);
         table->assign(BATCH_SIZE, d_keys_temp.get(), d_vectors_temp.get(),
                       d_scores_temp.get(), guard.stream);
         find_or_insert_safe_ptr(table.get(), BATCH_SIZE, d_keys_temp.get(),
@@ -1450,9 +1450,9 @@ void test_evict_strategy_customized_correct_rate(size_t max_hbm_for_vectors,
                               d_vectors_temp.get(), d_scores_temp.get(),
                               guard.stream);
       ACL_CHECK(aclrtSynchronizeStream(guard.stream));
-      d_keys_temp.CopyToHost(&h_keys_temp, MAX_CAPACITY, guard.stream);
-      d_scores_temp.CopyToHost(&h_scores_temp, MAX_CAPACITY, guard.stream);
-      d_vectors_temp.CopyToHost(&h_vectors_temp, MAX_CAPACITY * DIM,
+      d_keys_temp.copy_to_host(&h_keys_temp, MAX_CAPACITY, guard.stream);
+      d_scores_temp.copy_to_host(&h_scores_temp, MAX_CAPACITY, guard.stream);
+      d_vectors_temp.copy_to_host(&h_vectors_temp, MAX_CAPACITY * DIM,
                                 guard.stream);
 
       size_t bigger_score_counter = 0;

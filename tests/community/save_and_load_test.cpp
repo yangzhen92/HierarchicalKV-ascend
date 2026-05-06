@@ -60,7 +60,7 @@ struct StreamGuard {
     }
   }
 
-  void Create() { ACL_CHECK(aclrtCreateStream(&stream)); }
+  void create() { ACL_CHECK(aclrtCreateStream(&stream)); }
 };
 
 template <class T>
@@ -76,13 +76,13 @@ struct DeviceArray {
 
   T* get() const { return ptr; }
 
-  void Alloc(size_t n) {
+  void alloc(size_t n) {
     count = n;
     ACL_CHECK(aclrtMalloc(reinterpret_cast<void**>(&ptr), sizeof(T) * count,
                           ACL_MEM_MALLOC_HUGE_FIRST));
   }
 
-  void CopyToHost(std::vector<T>* host, size_t n, aclrtStream stream) const {
+  void copy_to_host(std::vector<T>* host, size_t n, aclrtStream stream) const {
     ASSERT_LE(n, count);
     host->assign(n, T{});
     ACL_CHECK(aclrtMemcpyAsync(host->data(), sizeof(T) * n, ptr, sizeof(T) * n,
@@ -112,12 +112,12 @@ void tables_equal(Table* a, Table* b, bool check_score, aclrtStream stream,
   DeviceArray<bool> d_founds_in_b;
   DeviceArray<V> d_vectors_in_b;
   DeviceArray<S> d_scores_in_b;
-  d_keys.Alloc(size);
-  d_vectors.Alloc(size * a->dim());
-  d_scores.Alloc(size);
-  d_founds_in_b.Alloc(size);
-  d_vectors_in_b.Alloc(size * a->dim());
-  d_scores_in_b.Alloc(size);
+  d_keys.alloc(size);
+  d_vectors.alloc(size * a->dim());
+  d_scores.alloc(size);
+  d_founds_in_b.alloc(size);
+  d_vectors_in_b.alloc(size * a->dim());
+  d_scores_in_b.alloc(size);
 
   const size_t exported =
       a->export_batch(a->capacity(), 0, d_keys.get(), d_vectors.get(),
@@ -143,8 +143,8 @@ void tables_equal(Table* a, Table* b, bool check_score, aclrtStream stream,
   if (check_score) {
     std::vector<S> h_scores;
     std::vector<S> h_scores_in_b;
-    d_scores.CopyToHost(&h_scores, size, stream);
-    d_scores_in_b.CopyToHost(&h_scores_in_b, size, stream);
+    d_scores.copy_to_host(&h_scores, size, stream);
+    d_scores_in_b.copy_to_host(&h_scores_in_b, size, stream);
     if (h_scores != h_scores_in_b) {
       return;
     }
@@ -152,8 +152,8 @@ void tables_equal(Table* a, Table* b, bool check_score, aclrtStream stream,
 
   std::vector<V> h_vectors;
   std::vector<V> h_vectors_in_b;
-  d_vectors.CopyToHost(&h_vectors, size * a->dim(), stream);
-  d_vectors_in_b.CopyToHost(&h_vectors_in_b, size * a->dim(), stream);
+  d_vectors.copy_to_host(&h_vectors, size * a->dim(), stream);
+  d_vectors_in_b.copy_to_host(&h_vectors_in_b, size * a->dim(), stream);
   if (h_vectors != h_vectors_in_b) {
     return;
   }
@@ -169,18 +169,18 @@ void test_save_to_file() {
   size_t buffer_size = 1024 * 1024;
   init_env();
   StreamGuard guard;
-  guard.Create();
+  guard.create();
 
   HostAndDeviceBuffer<K> keys;
   HostAndDeviceBuffer<V> vectors;
   HostAndDeviceBuffer<S> scores;
-  keys.Alloc(keynum, guard.stream);
-  vectors.Alloc(keynum * DIM, guard.stream);
-  scores.Alloc(keynum, guard.stream);
+  keys.alloc(keynum, guard.stream);
+  vectors.alloc(keynum * DIM, guard.stream);
+  scores.alloc(keynum, guard.stream);
   create_random_keys<K, S>(keys.h_data, scores.h_data,
                            static_cast<int>(keynum));
-  keys.SyncData(true, guard.stream);
-  scores.SyncData(true, guard.stream);
+  keys.sync_data(true, guard.stream);
+  scores.sync_data(true, guard.stream);
   ACL_CHECK(aclrtSynchronizeStream(guard.stream));
   printf("Pass create random keys.\n");
 
@@ -230,9 +230,9 @@ void test_save_to_file() {
   ASSERT_TRUE(equal);
   printf("table_0 and table_1 are equal.\n");
 
-  keys.Free(guard.stream);
-  vectors.Free(guard.stream);
-  scores.Free(guard.stream);
+  keys.free(guard.stream);
+  vectors.free(guard.stream);
+  scores.free(guard.stream);
   ACL_CHECK(aclrtSynchronizeStream(guard.stream));
 }
 

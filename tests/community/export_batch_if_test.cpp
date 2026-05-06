@@ -162,16 +162,16 @@ struct DeviceCounter {
     }
   }
 
-  void Alloc() {
+  void alloc() {
     ACL_CHECK(aclrtMalloc(reinterpret_cast<void**>(&ptr), sizeof(size_t),
                           ACL_MEM_MALLOC_HUGE_FIRST));
   }
 
-  void Reset(aclrtStream stream) {
+  void reset(aclrtStream stream) {
     ACL_CHECK(aclrtMemsetAsync(ptr, sizeof(size_t), 0, sizeof(size_t), stream));
   }
 
-  void ToHost(size_t* host, aclrtStream stream) {
+  void to_host(size_t* host, aclrtStream stream) {
     ACL_CHECK(aclrtMemcpyAsync(host, sizeof(size_t), ptr, sizeof(size_t),
                                ACL_MEMCPY_DEVICE_TO_HOST, stream));
     ACL_CHECK(aclrtSynchronizeStream(stream));
@@ -201,17 +201,17 @@ void test_export_batch_if_with_limited_size() {
   table->init(options);
 
   DeviceCounter d_cnt;
-  d_cnt.Alloc();
+  d_cnt.alloc();
 
   KVMSBuffer<i64, f32, u64> buffer0;
-  buffer0.Reserve(n0, dim, stream);
-  buffer0.ToRange(0, 1, stream);
-  buffer0.Setscore(static_cast<u64>(15), stream);
+  buffer0.reserve(n0, dim, stream);
+  buffer0.to_range(0, 1, stream);
+  buffer0.set_score(static_cast<u64>(15), stream);
   {
     KVMSBuffer<i64, f32, u64> buffer0_ev;
-    buffer0_ev.Reserve(n0, dim, stream);
-    buffer0_ev.ToZeros(stream);
-    d_cnt.Reset(stream);
+    buffer0_ev.reserve(n0, dim, stream);
+    buffer0_ev.to_zeros(stream);
+    d_cnt.reset(stream);
     table->insert_and_evict(n0, buffer0.keys_ptr(), buffer0.values_ptr(),
                             buffer0.scores_ptr(), buffer0_ev.keys_ptr(),
                             buffer0_ev.values_ptr(), buffer0_ev.scores_ptr(),
@@ -222,14 +222,14 @@ void test_export_batch_if_with_limited_size() {
   }
 
   KVMSBuffer<i64, f32, u64> buffer1;
-  buffer1.Reserve(n1, dim, stream);
-  buffer1.ToRange(n0, 1, stream);
-  buffer1.Setscore(static_cast<u64>(30), stream);
+  buffer1.reserve(n1, dim, stream);
+  buffer1.to_range(n0, 1, stream);
+  buffer1.set_score(static_cast<u64>(30), stream);
   {
     KVMSBuffer<i64, f32, u64> buffer1_ev;
-    buffer1_ev.Reserve(n0, dim, stream);
-    buffer1_ev.ToZeros(stream);
-    d_cnt.Reset(stream);
+    buffer1_ev.reserve(n0, dim, stream);
+    buffer1_ev.to_zeros(stream);
+    d_cnt.reset(stream);
     table->insert_and_evict(n0, buffer1.keys_ptr(), buffer1.values_ptr(),
                             buffer1.scores_ptr(), buffer1_ev.keys_ptr(),
                             buffer1_ev.values_ptr(), buffer1_ev.scores_ptr(),
@@ -239,14 +239,14 @@ void test_export_batch_if_with_limited_size() {
   }
 
   KVMSBuffer<i64, f32, u64> buffer2;
-  buffer2.Reserve(n2, dim, stream);
-  buffer2.ToRange(n0 + n1, 1, stream);
-  buffer2.Setscore(static_cast<u64>(45), stream);
+  buffer2.reserve(n2, dim, stream);
+  buffer2.to_range(n0 + n1, 1, stream);
+  buffer2.set_score(static_cast<u64>(45), stream);
   {
     KVMSBuffer<i64, f32, u64> buffer2_ev;
-    buffer2_ev.Reserve(n0, dim, stream);
-    buffer2_ev.ToZeros(stream);
-    d_cnt.Reset(stream);
+    buffer2_ev.reserve(n0, dim, stream);
+    buffer2_ev.to_zeros(stream);
+    d_cnt.reset(stream);
     table->insert_and_evict(n0, buffer2.keys_ptr(), buffer2.values_ptr(),
                             buffer2.scores_ptr(), buffer2_ev.keys_ptr(),
                             buffer2_ev.values_ptr(), buffer2_ev.scores_ptr(),
@@ -259,13 +259,13 @@ void test_export_batch_if_with_limited_size() {
 
   table->size_if<ExportIfPredFunctor>(pattern, threshold, d_cnt.ptr, stream);
   size_t h_cnt = 0;
-  d_cnt.ToHost(&h_cnt, stream);
+  d_cnt.to_host(&h_cnt, stream);
   std::printf("---> check h_cnt from size_if kernel: %zu\n", h_cnt);
 
   KVMSBuffer<i64, f32, u64> buffer_out;
-  buffer_out.Reserve(h_cnt, dim, stream);
-  buffer_out.ToZeros(stream);
-  d_cnt.Reset(stream);
+  buffer_out.reserve(h_cnt, dim, stream);
+  buffer_out.to_zeros(stream);
+  d_cnt.reset(stream);
 
   if (EV == ExportIfVersion::V1) {
     table->export_batch_if<ExportIfPredFunctor>(
@@ -294,12 +294,12 @@ void test_export_batch_if_with_limited_size() {
   }
 
   size_t h_cnt2 = 0;
-  d_cnt.ToHost(&h_cnt2, stream);
+  d_cnt.to_host(&h_cnt2, stream);
   std::printf("final h_cnt2: %zu\n", h_cnt2);
   ASSERT_EQ(h_cnt, h_cnt2)
       << "size_if and export_batch_if get different matching count.";
 
-  buffer_out.SyncData(false, stream);
+  buffer_out.sync_data(false, stream);
   ACL_CHECK(aclrtSynchronizeStream(stream));
 
   std::unordered_map<i64, u64> record;
