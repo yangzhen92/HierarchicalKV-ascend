@@ -718,8 +718,8 @@
 
  template <class V>
  __global__ __vector__ void read_or_write_value_kernel(
-     uint32_t block_dim, uint32_t dim, uint32_t max_tile_size, __gm__ V* values,
-     uint64_t n, __gm__ V * __gm__ * d_src_values,
+     uint32_t block_dim, uint32_t dim, uint32_t max_tile_size, __gm__ V* param_values,
+     uint64_t n, __gm__ V * __gm__ * table_value_addrs,
      __gm__ bool* founds) {
    uint64_t tail_core_move_num = n / block_dim;
    uint64_t former_core_move_num = tail_core_move_num + 1;
@@ -743,17 +743,17 @@
    TQueBind<TPosition::VECIN, TPosition::VECOUT, 0> move_queue;
    pipe.InitBuffer(move_queue, DOUBLE_BUFFER, tile_size * sizeof(V));
 
-   GlobalTensor<V> src_values_gm;
-   GlobalTensor<V> dst_values_gm;
+   GlobalTensor<V> table_values_addr_gm;
+   GlobalTensor<V> param_values_gm;
    LocalTensor<V> move_local;
    DataCopyPadExtParams<V> pad_params{true, 0, 0, 0};
 
-   dst_values_gm.SetGlobalBuffer(values);
+   param_value_gm.SetGlobalBuffer(param_values);
 
    for (uint64_t i = core_start_idx; i < core_start_idx + core_move_count;
         i++) {
-     __gm__ V* src_value = d_src_values[i];
-     if (src_value == nullptr) {
+     __gm__ V* table_value_addr = table_value_addrs[i];
+     if (table_value_addr == nullptr) {
        continue;
      }
 
@@ -770,19 +770,19 @@
 
        if (founds[i]) {
          // 找到 key，从 table 中读取值返回给用户
-         src_values_gm.SetGlobalBuffer(src_value + tile_idx * tile_size);
-         DataCopyPad(move_local, src_values_gm, copy_params, pad_params);
+         table_values_addr_gm.SetGlobalBuffer(table_value_addr + tile_idx * tile_size);
+         DataCopyPad(move_local, table_values_addr_gm, copy_params, pad_params);
          move_queue.EnQue<V>(move_local);
          move_queue.DeQue<V>(move_local);
-         DataCopyPad(dst_values_gm[dst_offset + tile_idx * tile_size],
+         DataCopyPad(param_values_gm[dst_offset + tile_idx * tile_size],
                      move_local, copy_params);
-       } else if (src_value != nullptr) {
+       } else if (table_value_addr != nullptr) {
          // 没找到 key，把用户的值写入 table
-         src_values_gm.SetGlobalBuffer(dst_values_gm[dst_offset + tile_idx * tile_size]);
-         DataCopyPad(move_local, src_values_gm, copy_params, pad_params);
+         table_values_addr_gm.SetGlobalBuffer(param_values_gm[dst_offset + tile_idx * tile_size]);
+         DataCopyPad(move_local, table_values_addr_gm, copy_params, pad_params);
          move_queue.EnQue<V>(move_local);
          move_queue.DeQue<V>(move_local);
-         DataCopyPad(src_value + tile_idx * tile_size, move_local, copy_params);
+         DataCopyPad(table_value_addr + tile_idx * tile_size, move_local, copy_params);
        }
 
        move_queue.FreeTensor(move_local);
