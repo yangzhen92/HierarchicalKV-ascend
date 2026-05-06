@@ -512,7 +512,7 @@ TEST(test_find_or_insert_ptr, hash_collisions) {
 }
 
 // 通用测试函数模板
-template <typename K, typename V, typename S, size_t Dim, bool is_unique>
+template <typename K, typename V, typename S, size_t Dim, bool is_unique = true, bool use_ddr = false, bool io_by_cpu = false>
 void test_find_or_insert_with_types_and_dim() {
   // 1. 初始化
   init_env();
@@ -539,8 +539,11 @@ void test_find_or_insert_with_types_and_dim() {
       .max_capacity = init_capacity,
       .max_hbm_for_vectors = hbm_for_values,
       .dim = dim,
-      .io_by_cpu = false,
+      .io_by_cpu = io_by_cpu,
   };
+  if (use_ddr) {
+    options.max_hbm_for_vectors = init_capacity * dim * each_value_size / 2;
+  }
   using Table = HashTable<K, V, S>;
 
   Table table;
@@ -677,6 +680,26 @@ TEST(test_find_or_insert, data_types_uint64_uint8_uint64_dim8_non_unique) {
   test_find_or_insert_with_types_and_dim<uint64_t, uint8_t, uint64_t, 8, false>();
 }
 
+TEST(test_find_or_insert, data_types_uint64_float_uint64_dim8_use_ddr) {
+  test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 8, true, true, false>();
+}
+
+TEST(test_find_or_insert, data_types_int64_double_uint64_dim8_use_ddr) {
+  test_find_or_insert_with_types_and_dim<int64_t, double, uint64_t, 8, true, true, false>();
+}
+
+TEST(test_find_or_insert, data_types_int64_float_uint64_dim8_use_ddr) {
+  test_find_or_insert_with_types_and_dim<int64_t, float, uint64_t, 8, true, true, false>();
+}
+
+TEST(test_find_or_insert, data_types_uint64_uint16_uint64_dim8_use_ddr) {
+  test_find_or_insert_with_types_and_dim<uint64_t, uint16_t, uint64_t, 8, true, true, false>();
+}
+
+TEST(test_find_or_insert, data_types_uint64_uint8_uint64_dim8_use_ddr) {
+  test_find_or_insert_with_types_and_dim<uint64_t, uint8_t, uint64_t, 8, true, true, false>();
+}
+
 // 测试不同dim大小
 TEST(test_find_or_insert, dim_16_uint64_float_uint64) {
   test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 16, true>();
@@ -716,6 +739,26 @@ TEST(test_find_or_insert, dim_128_uint64_float_uint64_non_unique) {
 
 TEST(test_find_or_insert, dim_256_uint64_float_uint64_non_unique) {
   test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 256, false>();
+}
+
+TEST(test_find_or_insert, dim_16_uint64_float_uint64_use_ddr) {
+  test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 16, true, true, false>();
+}
+
+TEST(test_find_or_insert, dim_32_uint64_float_uint64_use_ddr) {
+  test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 32, true, true, false>();
+}
+
+TEST(test_find_or_insert, dim_64_uint64_float_uint64_use_ddr) {
+  test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 64, true, true, false>();
+}
+
+TEST(test_find_or_insert, dim_128_uint64_float_uint64_use_ddr) {
+  test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 128, true, true, false>();
+}
+
+TEST(test_find_or_insert, dim_256_uint64_float_uint64_use_ddr) {
+  test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 256, true, true, false>();
 }
 
 TEST(test_find_or_insert, duplicate_keys) {
