@@ -1592,7 +1592,7 @@ class HashTable : public HashTableBase<K, V, S> {
         value_type** table_value_addrs{reinterpret_cast<value_type**>(temp_storage)};
         bool* d_founds{reinterpret_cast<bool*>(temp_storage + n * sizeof(value_type*))};
 
-        find_or_insert_non_unique_kernel<K, V, S, true, evict_strategy>
+        find_or_insert_non_unique_kernel<K, V, S, false, evict_strategy>
             <<<block_dim_, 0, stream>>>(
                 table_->buckets, table_->buckets_size, table_->capacity,
                 options_.max_bucket_size, options_.dim, keys, scores, n,
