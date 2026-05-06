@@ -49,6 +49,7 @@ using TableOptions = HashTableOptions;
 #define ACL_CHECK(expr) ASSERT_EQ((expr), ACL_ERROR_NONE)
 
 void test_lock_and_unlock() {
+  init_env();
   TableOptions opt;
 
   // table setting

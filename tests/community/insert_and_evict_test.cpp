@@ -1192,6 +1192,10 @@ void BatchCheckInsertAndEvict(Table* table, K* keys, V* values, S* scores,
                               S* evicted_scores, size_t len,
                               std::atomic<int>* step, size_t total_step,
                               aclrtStream stream, bool if_check = true) {
+  auto device_id_env = std::getenv("HKV_TEST_DEVICE");
+  int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
+  HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
+                  "aclrtSetDevice failed");
   int current_step = 0;
   while ((current_step = step->load()) < static_cast<int>(total_step)) {
     const size_t table_size_before = table->size(stream);
@@ -1317,6 +1321,10 @@ void BatchCheckFind(Table* table, K* keys, V* values, S* scores, size_t len,
                     std::atomic<int>* step, size_t total_step,
                     size_t find_interval, aclrtStream stream,
                     bool if_check = true) {
+  auto device_id_env = std::getenv("HKV_TEST_DEVICE");
+  int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
+  HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
+                  "aclrtSetDevice failed");
   int find_step = 0;
   const size_t cap = len * find_interval;
 
@@ -1417,6 +1425,7 @@ void test_insert_and_evict_run_with_batch_find() {
   opt.num_of_buckets_per_alloc = 128;
   opt.dim = dim;
   opt.io_by_cpu = false;
+  opt.api_lock = true;
 
   using Table = HashTable<i64, f32, u64, EvictStrategy::kLru>;
 

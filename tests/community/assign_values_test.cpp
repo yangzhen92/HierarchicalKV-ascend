@@ -512,13 +512,6 @@ void CheckAssignValuesOnEpochLfu(
   size_t score_error_cnt1 = 0;
   size_t score_error_cnt2 = 0;
 
-  for (size_t i = 0; i < table_size_after; ++i) {
-    auto* vec =
-        reinterpret_cast<ValueArray<V0, dim>*>(tmp_values.h_data + i * dim);
-    values_map_after_insert[tmp_keys.h_data[i]] = *vec;
-    scores_map_after_insert[tmp_keys.h_data[i]] = tmp_scores.h_data[i];
-  }
-
   for (size_t i = 0; i < filtered_len; ++i) {
     auto* vec = reinterpret_cast<ValueArray<V0, dim>*>(
         evict_buffer->values_ptr(false) + i * dim);
@@ -528,6 +521,13 @@ void CheckAssignValuesOnEpochLfu(
     if ((evict_buffer->scores_ptr(false)[i] >> 32) >= (global_epoch - 2)) {
       ++score_error_cnt1;
     }
+  }
+
+  for (size_t i = 0; i < table_size_after; ++i) {
+    auto* vec =
+        reinterpret_cast<ValueArray<V0, dim>*>(tmp_values.h_data + i * dim);
+    values_map_after_insert[tmp_keys.h_data[i]] = *vec;
+    scores_map_after_insert[tmp_keys.h_data[i]] = tmp_scores.h_data[i];
   }
 
   for (const auto& it : scores_map_current_batch) {

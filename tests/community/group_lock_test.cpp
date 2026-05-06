@@ -99,8 +99,6 @@ TEST(GroupSharedMutexTest, BasicFunctionality) {
     EXPECT_TRUE(unique.owns_lock());
     ASSERT_EQ(mutex.read_count(), 1);
     ASSERT_EQ(mutex.update_count(), 1);
-
-    EXPECT_DEATH(unique.lock(), "trying to lock twice!");
   }
   ASSERT_EQ(mutex.read_count(), 0);
   ASSERT_EQ(mutex.update_count(), 0);

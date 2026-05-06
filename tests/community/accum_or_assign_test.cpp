@@ -2236,6 +2236,7 @@ void test_dynamic_rehash_on_multi_threads(size_t max_hbm_for_vectors,
   options.max_load_factor = 0.50f;
   options.max_bucket_size = BUCKET_MAX_SIZE;
   options.max_hbm_for_vectors = GB(max_hbm_for_vectors);
+  options.api_lock = true;
   using Table = HashTable<K, V, S, EvictStrategy::kLru>;
 
   auto table = make_shared<Table>();
@@ -2251,6 +2252,10 @@ void test_dynamic_rehash_on_multi_threads(size_t max_hbm_for_vectors,
     vector<uint8_t> h_found(KEY_NUM);
     vector<uint8_t> h_found_temp(KEY_NUM);
     vector<uint8_t> h_accum_or_assigns(KEY_NUM);
+    auto device_id_env = std::getenv("HKV_TEST_DEVICE");
+    int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
+    HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
+                    "aclrtSetDevice failed");
 
     auto d_keys = DeviceMem::Alloc(KEY_NUM * sizeof(K));
     auto d_vectors = DeviceMem::Alloc(KEY_NUM * sizeof(V) * options.dim);
