@@ -453,7 +453,7 @@
  template <typename K = uint64_t, typename V = float, typename S = uint64_t,
            int Strategy = -1, int32_t EVICT_GROUP_SIZE = 16>
  __simt_vf__ __aicore__
- LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_kernel_hybrid_vf(
+ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_hybrid_kernel_vf(
      __gm__ Bucket<K, V, S>* __restrict__ buckets,
      __gm__ int32_t* __restrict__ buckets_size, uint32_t bucket_max_size,
      uint32_t dim, __gm__ const K* __restrict__ keys,
