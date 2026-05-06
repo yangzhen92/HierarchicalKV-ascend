@@ -418,7 +418,7 @@
      if (lane_id == 0) {
        if constexpr (!MoveV) {
          d_dst_values[key_idx] = bucket_vectors + key_pos * dim;
-         founds[key_idx] = occupy_result != OccupyResult::DUPLICATE;
+         founds[key_idx] = occupy_result == OccupyResult::DUPLICATE;
        }
        ScoreFunctor::update_with_digest(
            bucket_keys, key_pos, scores, key_idx, score, bucket_max_size,
