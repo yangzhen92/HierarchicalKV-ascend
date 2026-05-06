@@ -1610,7 +1610,7 @@ class HashTable : public HashTableBase<K, V, S> {
             host_storage + n * table_->dim * sizeof(value_type))};
           NPU_CHECK(aclrtMemcpyAsync(h_values, value_size, values, value_size,
                                      ACL_MEMCPY_DEVICE_TO_HOST, stream));
-          NPU_CHECK(aclrtMemcpyAsync(h_dst_values, n * sizeof(value_type*), d_dst_values,
+          NPU_CHECK(aclrtMemcpyAsync(h_dst_values, n * sizeof(value_type*), table_value_addrs,
                                      n * sizeof(value_type*), ACL_MEMCPY_DEVICE_TO_HOST,
                                      stream));
           NPU_CHECK(aclrtSynchronizeStream(stream));

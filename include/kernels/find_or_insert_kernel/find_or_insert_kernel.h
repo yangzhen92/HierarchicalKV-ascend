@@ -748,7 +748,7 @@
    LocalTensor<V> move_local;
    DataCopyPadExtParams<V> pad_params{true, 0, 0, 0};
 
-   param_value_gm.SetGlobalBuffer(param_values);
+   param_values_gm.SetGlobalBuffer(param_values);
 
    for (uint64_t i = core_start_idx; i < core_start_idx + core_move_count;
         i++) {
@@ -778,11 +778,11 @@
                      move_local, copy_params);
        } else if (table_value_addr != nullptr) {
          // 没找到 key，把用户的值写入 table
-         table_values_addr_gm.SetGlobalBuffer(param_values_gm[dst_offset + tile_idx * tile_size]);
-         DataCopyPad(move_local, table_values_addr_gm, copy_params, pad_params);
+         table_values_addr_gm.SetGlobalBuffer(table_value_addr + tile_idx * tile_size);
+         DataCopyPad(move_local, param_values_gm[dst_offset + tile_idx * tile_size], copy_params, pad_params);
          move_queue.EnQue<V>(move_local);
          move_queue.DeQue<V>(move_local);
-         DataCopyPad(table_value_addr + tile_idx * tile_size, move_local, copy_params);
+         DataCopyPad(table_values_addr_gm, move_local, copy_params);
        }
 
        move_queue.FreeTensor(move_local);
