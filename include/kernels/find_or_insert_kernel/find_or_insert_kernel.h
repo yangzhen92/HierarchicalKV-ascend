@@ -686,12 +686,12 @@
      if ((occupy_result != OccupyResult::REFUSED) &&
          (occupy_result != OccupyResult::ILLEGAL)) {
        d_dst_values[kv_idx] = bucket_values + key_pos * dim;
-       founds[kv_idx] = occupy_result == OccupyResult::DUPLICATE;
        // key也是原子标记位，所有key的操作必须原子化
        (void)asc_atomic_exch(bucket_keys + key_pos, key);
      } else if (kv_idx < n) {
        d_dst_values[kv_idx] = nullptr;
      }
+     founds[kv_idx] = occupy_result == OccupyResult::DUPLICATE;
    }
  }
 
@@ -776,7 +776,7 @@
          move_queue.DeQue<V>(move_local);
          DataCopyPad(param_values_gm[dst_offset + tile_idx * tile_size],
                      move_local, copy_params);
-       } else if (table_value_addr != nullptr) {
+       } else {
          // 没找到 key，把用户的值写入 table
          table_values_addr_gm.SetGlobalBuffer(table_value_addr + tile_idx * tile_size);
          DataCopyPad(move_local, param_values_gm[dst_offset + tile_idx * tile_size], copy_params, pad_params);
