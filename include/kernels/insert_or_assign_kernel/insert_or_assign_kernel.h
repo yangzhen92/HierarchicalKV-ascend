@@ -23,6 +23,7 @@
 #include "types.h"
 #include "utils.h"
 #include "kernel_operator.h"
+#include "dyn_emb.h"
 
 namespace npu {
 namespace hkv {
@@ -985,6 +986,10 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void upsert_kernel_vf(
   if (buckets == nullptr || buckets_size == nullptr || keys == nullptr) {
     return;
   }
+
+  OptStateInitializer<half, uint32_t> opt_state_init;
+  opt_state_init.init(nullptr);
+
   using BUCKET = Bucket<K, V, S>;
   using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
 

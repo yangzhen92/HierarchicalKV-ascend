@@ -40,15 +40,6 @@ target_compile_options(hkv_depends INTERFACE
   --cce-res-usage
 )
 
-# 4. 测试工程
-if(ENABLE_TEST STREQUAL 1)
-  enable_testing()
-  set(INSTALL_GTEST OFF CACHE BOOL "Disable installation of GTest" FORCE)
-  set(INSTALL_GMOCK OFF CACHE BOOL "Disable installation of GMock" FORCE)
-  add_subdirectory(3rdparty/gtest)
-  add_subdirectory(tests)
-endif()
-
 # 5. 编译示例
 set_source_files_properties(
   ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
@@ -57,27 +48,7 @@ set_source_files_properties(
   PROPERTIES LANGUAGE ASC
 )
 
-add_executable(hkv_demo ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
-target_link_libraries(hkv_demo PRIVATE hkv_depends)
-
 add_executable(hkv_benchmark
   ${CMAKE_CURRENT_SOURCE_DIR}/benchmark/hkv_hashtable_benchmark.cpp
 )
 target_link_libraries(hkv_benchmark PRIVATE hkv_depends)
-
-add_executable(hkv_benchmark_find_miss
-  ${CMAKE_CURRENT_SOURCE_DIR}/benchmark/benchmark_find_miss.cpp
-)
-target_link_libraries(hkv_benchmark_find_miss PRIVATE hkv_depends)
-
-# 6. 安装二进制
-install(TARGETS hkv_demo
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
-install(TARGETS hkv_benchmark hkv_benchmark_find_miss
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
