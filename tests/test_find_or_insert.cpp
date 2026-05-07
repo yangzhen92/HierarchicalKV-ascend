@@ -541,7 +541,9 @@ void test_find_or_insert_with_types_and_dim() {
       .dim = dim,
       .io_by_cpu = io_by_cpu,
   };
-  if (use_ddr) {
+  if (io_by_cpu) {
+    options.max_hbm_for_vectors = 0;
+  } else if (use_ddr) {
     options.max_hbm_for_vectors = init_capacity * dim * each_value_size / 2;
   }
   using Table = HashTable<K, V, S>;
