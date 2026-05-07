@@ -1605,15 +1605,23 @@ class HashTable : public HashTableBase<K, V, S> {
           auto host_ws{host_mem_pool_->get_workspace<1>(host_size_all, stream)};
           auto host_storage{host_ws.get<uint8_t*>(0)};
           value_type* h_values{reinterpret_cast<value_type*>(host_storage)};
-          value_type** h_dst_values{reinterpret_cast<value_type**>(
+          value_type** h_param_values{reinterpret_cast<value_type**>(
             host_storage + n * table_->dim * sizeof(value_type))};
+          bool* h_founds{reinterpret_cast<bool*>(host_storage + n * sizeof(value_type*) + n * table_->dim * sizeof(value_type))};
+
           NPU_CHECK(aclrtMemcpyAsync(h_values, value_size, values, value_size,
                                      ACL_MEMCPY_DEVICE_TO_HOST, stream));
-          NPU_CHECK(aclrtMemcpyAsync(h_dst_values, n * sizeof(value_type*), table_value_addrs,
+          NPU_CHECK(aclrtMemcpyAsync(h_param_values, n * sizeof(value_type*), table_value_addrs,
                                      n * sizeof(value_type*), ACL_MEMCPY_DEVICE_TO_HOST,
                                      stream));
+          NPU_CHECK(aclrtMemcpyAsync(h_founds, n * sizeof(bool), d_founds,
+                                     n * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST,
+                                     stream));
           NPU_CHECK(aclrtSynchronizeStream(stream));
-          //write_by_cpu<V>(h_dst_values, h_values, table_->dim, n);
+          read_or_write_by_cpu<V>(h_param_values, h_values, h_founds, table_->dim, n);
+          CUDA_CHECK(cudaMemcpyAsync(values, h_values,
+                                   n * sizeof(value_type) * dim(),
+                                   cudaMemcpyHostToDevice, stream));
         } else {
           uint64_t valid_ub_size = GetMixedOpUbSize();
           uint32_t max_tile_size =

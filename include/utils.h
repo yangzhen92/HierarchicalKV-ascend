@@ -174,5 +174,50 @@ void write_by_cpu(V** __restrict dst, const V* __restrict src, size_t dim,
   }
 }
 
+template <class V>
+void read_or_write_by_cpu(V** __restrict table_value_addrs,
+                          V* __restrict param_values,
+                          const bool* founds,
+                          size_t dim, int N, int n_worker = 16) {
+  std::vector<std::thread> thds;
+  if (n_worker < 1) n_worker = 1;
+
+  auto functor = [founds, dim](V** __restrict table_value_addrs,
+                               V* __restrict param_values,
+                               int handled_size,
+                               int trunk_size) -> void {
+    for (int i = handled_size; i < handled_size + trunk_size; i++) {
+      if (table_value_addrs[i] != nullptr) {
+        if (founds[i]) {
+          memcpy(param_values + i * dim, table_value_addrs[i],
+                 sizeof(V) * dim);
+        } else {
+          memcpy(table_value_addrs[i], param_values + i * dim,
+                 sizeof(V) * dim);
+        }
+      }
+    }
+  };
+
+  int32_t trunk_size_floor = N / n_worker;
+  int32_t trunk_size_remain = N % n_worker;
+  int32_t n_worker_used = trunk_size_floor == 0 ? trunk_size_remain : n_worker;
+
+  size_t handled_size = 0;
+  for (int i = 0; i < n_worker_used; i++) {
+    int32_t cur_trunk_size = trunk_size_floor;
+    if (trunk_size_remain != 0) {
+      cur_trunk_size += 1;
+      trunk_size_remain--;
+    }
+    thds.emplace_back(functor, table_value_addrs, param_values, handled_size, cur_trunk_size);
+    handled_size += cur_trunk_size;
+  }
+
+  for (int i = 0; i < n_worker_used; i++) {
+    thds[i].join();
+  }
+}
+
 }  // namespace hkv
 }  // namespace npu
