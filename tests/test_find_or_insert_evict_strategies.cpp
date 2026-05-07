@@ -428,7 +428,9 @@ void test_find_or_insert_with_strategy(const char* strategy_name) {
       .dim = dim,
       .io_by_cpu = io_by_cpu,
   };
-  if (use_ddr) {
+  if (io_by_cpu) {
+    options.max_hbm_for_vectors = 0;
+  } else if (use_ddr) {
     options.max_hbm_for_vectors = init_capacity * dim * each_value_size / 2;
   }
 
@@ -720,4 +722,64 @@ TEST(test_find_or_insert_ddr_evict_strategies, kEpochLfu) {
 TEST(test_find_or_insert_ddr_evict_strategies, kCustomized) {
   using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kCustomized>;
   test_find_or_insert_with_strategy<Table, true, true, false>("kCustomized");
+}
+
+// 测试 kLru 策略
+TEST(test_find_or_insert_ddr_non_unique_evict_strategies, kLru) {
+  using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kLru>;
+  test_find_or_insert_with_strategy<Table, false, true, false>("kLru");
+}
+
+// 测试 kLfu 策略
+TEST(test_find_or_insert_ddr_non_unique_evict_strategies, kLfu) {
+  using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kLfu>;
+  test_find_or_insert_with_strategy<Table, false, true, false>("kLfu");
+}
+
+// 测试 kEpochLru 策略
+TEST(test_find_or_insert_ddr_non_unique_evict_strategies, kEpochLru) {
+  using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kEpochLru>;
+  test_find_or_insert_with_strategy<Table, false, true, false>("kEpochLru");
+}
+
+// 测试 kEpochLfu 策略
+TEST(test_find_or_insert_ddr_non_unique_evict_strategies, kEpochLfu) {
+  using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kEpochLfu>;
+  test_find_or_insert_with_strategy<Table, false, true, false>("kEpochLfu");
+}
+
+// 测试 kCustomized 策略
+TEST(test_find_or_insert_ddr_non_unique_evict_strategies, kCustomized) {
+  using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kCustomized>;
+  test_find_or_insert_with_strategy<Table, false, true, false>("kCustomized");
+}
+
+// 测试 kLru 策略
+TEST(test_find_or_insert_ddr_non_unique_io_by_cpu_evict_strategies, kLru) {
+  using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kLru>;
+  test_find_or_insert_with_strategy<Table, false, true, true>("kLru");
+}
+
+// 测试 kLfu 策略
+TEST(test_find_or_insert_ddr_non_unique_io_by_cpu_evict_strategies, kLfu) {
+  using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kLfu>;
+  test_find_or_insert_with_strategy<Table, false, true, true>("kLfu");
+}
+
+// 测试 kEpochLru 策略
+TEST(test_find_or_insert_ddr_non_unique_io_by_cpu_evict_strategies, kEpochLru) {
+  using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kEpochLru>;
+  test_find_or_insert_with_strategy<Table, false, true, true>("kEpochLru");
+}
+
+// 测试 kEpochLfu 策略
+TEST(test_find_or_insert_ddr_non_unique_io_by_cpu_evict_strategies, kEpochLfu) {
+  using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kEpochLfu>;
+  test_find_or_insert_with_strategy<Table, false, true, true>("kEpochLfu");
+}
+
+// 测试 kCustomized 策略
+TEST(test_find_or_insert_ddr_non_unique_io_by_cpu_evict_strategies, kCustomized) {
+  using Table = HashTable<uint64_t, float, uint64_t, EvictStrategy::kCustomized>;
+  test_find_or_insert_with_strategy<Table, false, true, true>("kCustomized");
 }
