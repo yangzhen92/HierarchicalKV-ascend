@@ -28,7 +28,7 @@
 #include <vector>
 #include "acl/acl.h"
 #include "hkv_hashtable.h"
-#include "test_util.cuh"
+#include "test_util.h"
 
 using namespace npu::hkv;
 using namespace community_test_util;
@@ -120,6 +120,7 @@ struct StreamGuard {
 TableOptions make_options(size_t init_capacity, size_t max_capacity,
                          size_t max_hbm_for_vectors, int key_start = 0,
                          size_t max_bucket_size = 128) {
+  set_simd_value_move_enabled(max_hbm_for_vectors == 0);
   TableOptions options{};
   options.reserved_key_start_bit = key_start;
   options.init_capacity = init_capacity;

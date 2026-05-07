@@ -26,12 +26,14 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <random>
 #include <string>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 #include "hkv_hashtable.h"
 #include "kernels/utils_kernel/utils_kernel.h"
 
@@ -47,10 +49,37 @@
     exit(-1);                                                            \
   }
 
+namespace npu {
+namespace hkv {
+
+inline uint32_t get_test_value_move_block_dim() {
+  auto platform = platform_ascendc::PlatformAscendCManager::GetInstance();
+  HKV_EXPECT_TRUE((platform != nullptr), "get platform failed");
+  const uint32_t block_dim = platform->GetCoreNumAiv();
+  HKV_EXPECT_TRUE((block_dim != 0), "get vector core num failed");
+  return block_dim;
+}
+
+}  // namespace hkv
+}  // namespace npu
+
 namespace test_util {
 
 constexpr size_t DEFAULT_DIM = 8;
 constexpr size_t DEFAULT_CAPACITY = 128UL * 1024;
+
+inline bool& simd_value_move_enabled() {
+  static bool enabled = false;
+  return enabled;
+}
+
+inline void set_simd_value_move_enabled(bool enabled) {
+  simd_value_move_enabled() = enabled;
+}
+
+inline bool is_simd_value_move_enabled() {
+  return simd_value_move_enabled();
+}
 
 template <class K, class S>
 void create_random_keys(K* h_keys, S* h_scores, int KEY_NUM,
@@ -555,6 +584,23 @@ struct KVMSBuffer {
 template <class V>
 void read_from_ptr(V** __restrict src, V* __restrict dst, const size_t dim,
                    size_t n, aclrtStream stream) {
+  if (is_simd_value_move_enabled()) {
+    const uint32_t block_dim = npu::hkv::get_test_value_move_block_dim();
+    HKV_EXPECT_TRUE(
+        (n <= static_cast<size_t>(std::numeric_limits<uint32_t>::max())),
+        "read_from_ptr n exceeds uint32_t");
+    auto tiling =
+        npu::hkv::GetValueMoveTiling(static_cast<uint32_t>(n), block_dim,
+                                     static_cast<uint32_t>(dim), sizeof(V),
+                                     false);
+    npu::hkv::read_value_kernel<V>
+        <<<block_dim, tiling.valid_ub_size, stream>>>(
+            tiling.former_num, tiling.former_core_move_num,
+            tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
+            static_cast<uint32_t>(dim), dst, n, src);
+    return;
+  }
+
   const size_t block_size = 1024;
   const size_t N = n * dim;
   const size_t grid_size = (N - 1) / block_size + 1;
@@ -569,6 +615,75 @@ namespace npu {
 namespace hkv {
 
 using namespace AscendC;
+
+template <class V>
+__global__ __vector__ void read_or_write_value_kernel(
+    uint32_t former_num, uint64_t former_core_move_num,
+    uint64_t tail_core_move_num, uint32_t tile_size, uint32_t num_tiles,
+    uint32_t dim, __gm__ V* param_values, uint64_t n,
+    __gm__ V* __gm__* table_value_addrs, __gm__ bool* founds) {
+  uint64_t cur_block_idx = GetBlockIdx();
+  uint64_t core_start_idx = 0;
+  uint64_t core_move_count = 0;
+  constexpr uint32_t BUFFER_NUM = 2;
+  if (cur_block_idx < former_num) {
+    core_start_idx = cur_block_idx * former_core_move_num;
+    core_move_count = former_core_move_num;
+  } else {
+    core_start_idx = former_num * former_core_move_num +
+                     (cur_block_idx - former_num) * tail_core_move_num;
+    core_move_count = tail_core_move_num;
+  }
+
+  TPipe pipe;
+  TQueBind<TPosition::VECIN, TPosition::VECOUT, 0> move_queue;
+  pipe.InitBuffer(move_queue, BUFFER_NUM, tile_size * sizeof(V));
+
+  GlobalTensor<V> table_values_addr_gm;
+  GlobalTensor<V> param_values_gm;
+  LocalTensor<V> move_local;
+  DataCopyPadExtParams<V> pad_params{true, 0, 0, 0};
+
+  param_values_gm.SetGlobalBuffer(param_values);
+
+  for (uint64_t i = core_start_idx; i < core_start_idx + core_move_count; i++) {
+    __gm__ V* table_value_addr = table_value_addrs[i];
+    if (table_value_addr == nullptr) {
+      continue;
+    }
+
+    uint64_t param_offset = i * dim;
+
+    for (uint32_t tile_idx = 0; tile_idx < num_tiles; tile_idx++) {
+      uint32_t current_tile_size = (tile_idx == num_tiles - 1)
+                                       ? (dim - tile_idx * tile_size)
+                                       : tile_size;
+      DataCopyExtParams copy_params{
+          1, static_cast<uint32_t>(current_tile_size * sizeof(V)), 0, 0, 0};
+
+      move_queue.AllocTensor<V>(move_local);
+      table_values_addr_gm.SetGlobalBuffer(table_value_addr +
+                                           tile_idx * tile_size);
+
+      if (founds[i]) {
+        DataCopyPad(move_local, table_values_addr_gm, copy_params, pad_params);
+        move_queue.EnQue<V>(move_local);
+        move_queue.DeQue<V>(move_local);
+        DataCopyPad(param_values_gm[param_offset + tile_idx * tile_size],
+                    move_local, copy_params);
+      } else {
+        DataCopyPad(move_local,
+                    param_values_gm[param_offset + tile_idx * tile_size],
+                    copy_params, pad_params);
+        move_queue.EnQue<V>(move_local);
+        move_queue.DeQue<V>(move_local);
+        DataCopyPad(table_values_addr_gm, move_local, copy_params);
+      }
+
+      move_queue.FreeTensor(move_local);
+    }
+  }
+}
 
 template <class V>
 __simt_vf__ __aicore__ LAUNCH_BOUND(BLOCK_SIZE) inline void
@@ -615,6 +730,23 @@ template <class V>
 void read_or_write_ptr(V** __restrict src, V* __restrict dst,
                        bool* __restrict read_or_write, const size_t dim,
                        size_t n, aclrtStream stream) {
+  if (is_simd_value_move_enabled()) {
+    const uint32_t block_dim = npu::hkv::get_test_value_move_block_dim();
+    HKV_EXPECT_TRUE(
+        (n <= static_cast<size_t>(std::numeric_limits<uint32_t>::max())),
+        "read_or_write_ptr n exceeds uint32_t");
+    auto tiling =
+        npu::hkv::GetValueMoveTiling(static_cast<uint32_t>(n), block_dim,
+                                     static_cast<uint32_t>(dim), sizeof(V),
+                                     false);
+    npu::hkv::read_or_write_value_kernel<V>
+        <<<block_dim, tiling.valid_ub_size, stream>>>(
+            tiling.former_num, tiling.former_core_move_num,
+            tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
+            static_cast<uint32_t>(dim), dst, n, src, read_or_write);
+    return;
+  }
+
   const size_t block_size = 1024;
   const size_t N = n * dim;
   const size_t grid_size = (N - 1) / block_size + 1;

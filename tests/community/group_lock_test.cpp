@@ -25,7 +25,7 @@
 #include <vector>
 #include "acl/acl.h"
 #include "group_lock.h"
-#include "test_util.cuh"
+#include "test_util.h"
 
 using namespace npu::hkv;
 using namespace community_test_util;

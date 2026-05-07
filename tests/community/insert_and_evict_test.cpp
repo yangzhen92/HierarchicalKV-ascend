@@ -30,7 +30,7 @@
 #include <vector>
 #include "acl/acl.h"
 #include "hkv_hashtable.h"
-#include "test_util.cuh"
+#include "test_util.h"
 
 using namespace community_test_util;
 using namespace npu::hkv;

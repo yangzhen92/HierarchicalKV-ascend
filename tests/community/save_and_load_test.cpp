@@ -23,7 +23,7 @@
 #include <vector>
 #include "acl/acl.h"
 #include "hkv_hashtable.h"
-#include "test_util.cuh"
+#include "test_util.h"
 
 constexpr uint64_t DIM = 64;
 using K = int64_t;

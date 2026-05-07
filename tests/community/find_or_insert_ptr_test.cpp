@@ -30,7 +30,7 @@
 #include <vector>
 #include "acl/acl.h"
 #include "hkv_hashtable.h"
-#include "test_util.cuh"
+#include "test_util.h"
 
 using namespace npu::hkv;
 using namespace community_test_util;
@@ -125,6 +125,7 @@ struct StreamGuard {
 TableOptions make_options(size_t init_capacity, size_t max_capacity,
                          size_t max_hbm_for_vectors, int key_start = 0,
                          size_t max_bucket_size = 128) {
+  set_simd_value_move_enabled(max_hbm_for_vectors == 0);
   TableOptions options{};
   options.reserved_key_start_bit = key_start;
   options.init_capacity = init_capacity;
@@ -1678,7 +1679,8 @@ void test_find_or_insert_multi_threads(size_t max_hbm_for_vectors,
   table->init(options);
 
   // assert every key is different
-  auto worker1 = [&table, KEY_NUM, options, capacity_silent](int batch, int task_n) {
+  auto worker1 = [&table, KEY_NUM, options, capacity_silent](int batch,
+                                                             int task_n) {
     auto device_id_env = std::getenv("HKV_TEST_DEVICE");
     int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
     HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
@@ -1773,7 +1775,8 @@ void test_find_or_insert_multi_threads(size_t max_hbm_for_vectors,
     ACL_CHECK(aclrtSynchronizeStream(guard.stream));
   };
 
-  auto worker2 = [&table, KEY_NUM, options, capacity_silent](int batch, int task_n) {
+  auto worker2 = [&table, KEY_NUM, options, capacity_silent](int batch,
+                                                             int task_n) {
     auto device_id_env = std::getenv("HKV_TEST_DEVICE");
     int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
     HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
@@ -1996,6 +1999,7 @@ void test_find_or_insert_values_check(size_t max_hbm_for_vectors) {
   opt.max_capacity = U;
   opt.init_capacity = init_capacity;
   opt.max_hbm_for_vectors = GB(max_hbm_for_vectors);
+  set_simd_value_move_enabled(max_hbm_for_vectors == 0);
   opt.dim = dim;
 
   StreamGuard guard;

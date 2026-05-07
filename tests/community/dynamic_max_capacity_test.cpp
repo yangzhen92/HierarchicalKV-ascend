@@ -23,7 +23,7 @@
 #include <stdexcept>
 #include "acl/acl.h"
 #include "hkv_hashtable.h"
-#include "test_util.cuh"
+#include "test_util.h"
 
 using namespace npu::hkv;
 using namespace community_test_util;
