@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2026. Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (C) 2026. Huawei Technologies Co., Ltd. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,20 +13,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-
-/*
- * Source:
- * E:\hkv\code\nv\HierarchicalKV-master\HierarchicalKV-master\tests\assign_score_test.cc.cu
- *
- * test APIs: find_or_insert and assign,
- * move insert operation from `insert_or_assign` to `find`.
- *
- * NPU pattern references:
- * - tests/test_assign_scores.cpp
- * - tests/test_accum_or_assign.cpp
- * - tests/community/accum_or_assign_test.cpp
- * - tests/community/insert_and_evict_test.cpp
  */
 
 #include <gtest/gtest.h>
@@ -1161,7 +1148,7 @@ TEST(AssignScoreTest, test_assign_advanced_on_epochlfu) {
 
 TEST(AssignScoreTest, test_evict_strategy_customized_correct_rate) {
   init_env();
-  // TODO(rhdong): after blossom CI issue is resolved, the skip logic.
+  // TODO: after blossom CI issue is resolved, the skip logic.
   const bool skip_hmem_check = (nullptr != std::getenv("IS_BLOSSOM_CI"));
   test_evict_strategy_customized_correct_rate(16, 44);
   if (!skip_hmem_check) {

@@ -15,20 +15,6 @@
  * limitations under the License.
  */
 
-/*
- * test APIs: find_or_insert_ptr, unlock_keys
- *
- * Source:
- * E:\hkv\code\nv\HierarchicalKV-master\HierarchicalKV-master\tests\find_or_insert_ptr_lock_test.cc.cu
- *
- * NPU pattern references:
- * - include/hkv_hashtable.h
- * - tests/test_find_or_insert.cpp
- * - tests/test_find_or_insert_evict_strategies.cpp
- * - tests/test_lock_unlock_keys.cpp
- * - tests/community/test_util.cuh
- */
-
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <array>
@@ -1546,7 +1532,7 @@ TEST(FindOrInsertPtrLockTest, test_evict_strategy_customized_advanced) {
 }
 
 TEST(FindOrInsertPtrLockTest, test_evict_strategy_customized_correct_rate) {
-  // TODO(rhdong): after blossom CI issue is resolved, the skip logic.
+  // TODO: after blossom CI issue is resolved, the skip logic.
   test_evict_strategy_customized_correct_rate(16, 16);
   test_evict_strategy_customized_correct_rate(0);
 }
@@ -1558,5 +1544,5 @@ TEST(FindOrInsertPtrLockTest, test_evict_strategy_customized_correct_rate) {
 
 // Turn on to verify that it can't deal with small capacity case
 // TEST(FindOrInsertPtrLockTest, test_find_or_insert_values_check) {
-//   // TODO(rhdong): Add back when diff error issue fixed in hybrid mode.
+// TODO: Add back when diff error issue fixed in hybrid mode.
 // }

@@ -15,12 +15,6 @@
  * limitations under the License.
  */
 
-/*
- * Source references:
- * - E:\hkv\code\nv\HierarchicalKV-master\HierarchicalKV-master\tests\test_util.cuh
- * - E:\hkv\code\hkv\HierarchicalKV-ascend\tests\common\test_util.h
- */
-
 #pragma once
 
 #include <assert.h>

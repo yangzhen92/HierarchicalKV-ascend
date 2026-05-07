@@ -15,16 +15,6 @@
  * limitations under the License.
  */
 
-/*
- * Source:
- * E:\hkv\code\nv\HierarchicalKV-master\HierarchicalKV-master\tests\group_lock_test.cc.cu
- *
- * NPU pattern references:
- * - include/group_lock.h
- * - tests/test_group_lock.cpp
- * - tests/community/test_util.cuh
- */
-
 #include <gtest/gtest.h>
 #include <atomic>
 #include <chrono>

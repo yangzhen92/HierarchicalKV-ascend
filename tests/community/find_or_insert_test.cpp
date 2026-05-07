@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (c) 2025, NVIDIA CORPORATION.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
  * Copyright (C) 2026. Huawei Technologies Co., Ltd. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,20 +13,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-
-/*
- * test APIs: find_or_insert and assign,
- * move insert operation from `insert_or_assign` to `find`.
- *
- * Source:
- * E:\hkv\code\nv\HierarchicalKV-master\HierarchicalKV-master\tests\find_or_insert_test.cc.cu
- *
- * NPU pattern references:
- * - include/hkv_hashtable.h
- * - tests/test_find_or_insert.cpp
- * - tests/test_find_or_insert_evict_strategies.cpp
- * - tests/community/test_util.cuh
  */
 
 #include <gtest/gtest.h>
@@ -2504,7 +2490,7 @@ TEST(FindOrInsertTest, test_assign_advanced_on_epochlfu) {
 }
 
 TEST(FindOrInsertTest, test_evict_strategy_customized_correct_rate) {
-  // TODO(rhdong): after blossom CI issue is resolved, the skip logic.
+  // TODO: after blossom CI issue is resolved, the skip logic.
   const bool skip_hmem_check = (nullptr != std::getenv("IS_BLOSSOM_CI"));
   test_evict_strategy_customized_correct_rate(16);
   if (!skip_hmem_check) {
@@ -2516,6 +2502,6 @@ TEST(FindOrInsertTest, test_evict_strategy_customized_correct_rate) {
 
 TEST(FindOrInsertTest, test_find_or_insert_values_check) {
   test_find_or_insert_values_check(16);
-  // TODO(rhdong): Add back when diff error issue fixed in hybrid mode.
+  // TODO: Add back when diff error issue fixed in hybrid mode.
   test_find_or_insert_values_check(0);
 }

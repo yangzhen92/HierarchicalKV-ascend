@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2026. Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (C) 2026. Huawei Technologies Co., Ltd. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,16 +13,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-
-/*
- * Source:
- * E:\hkv\code\nv\HierarchicalKV-master\HierarchicalKV-master\tests\accum_or_assign_test.cc.cu
- *
- * NPU pattern references:
- * - tests/test_accum_or_assign.cpp
- * - tests/common/test_util.h
- * - include/utils.h
  */
 
 #include <gmock/gmock.h>
@@ -2443,7 +2434,7 @@ TEST(AccumOrAssignTest, test_evict_strategy_lru_basic) {
 }
 TEST(AccumOrAssignTest, test_evict_strategy_lfu_basic) {
   test_evict_strategy_lfu_basic(16, 3);
-  // TODO(rhdong): Add back when diff error issue fixed in hybrid mode.
+  // TODO: Add back when diff error issue fixed in hybrid mode.
   // test_evict_strategy_lfu_basic(0);
 }
 TEST(AccumOrAssignTest, test_evict_strategy_epochlru_basic) {
@@ -2463,7 +2454,7 @@ TEST(AccumOrAssignTest, test_evict_strategy_customized_advanced) {
   test_evict_strategy_customized_advanced(0);
 }
 TEST(AccumOrAssignTest, test_evict_strategy_customized_correct_rate) {
-  // TODO(rhdong): after blossom CI issue is resolved, the skip logic.
+  // TODO: after blossom CI issue is resolved, the skip logic.
   const bool skip_hmem_check = (nullptr != std::getenv("IS_BLOSSOM_CI"));
   test_evict_strategy_customized_correct_rate(16, 61);
   if (!skip_hmem_check) {
@@ -2474,6 +2465,6 @@ TEST(AccumOrAssignTest, test_evict_strategy_customized_correct_rate) {
 }
 TEST(AccumOrAssignTest, test_accum_or_assign_values_check) {
   test_accum_or_assign_values_check(16);
-  // TODO(rhdong): Add back when diff error issue fixed in hybrid mode.
+  // TODO: Add back when diff error issue fixed in hybrid mode.
   // test_accum_or_assign_values_check(0);
 }
