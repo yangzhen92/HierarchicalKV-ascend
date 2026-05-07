@@ -1555,10 +1555,9 @@ class HashTable : public HashTableBase<K, V, S> {
         find_or_insert_non_unique_kernel<K, V, S, true, evict_strategy>
             <<<block_dim_, 0, stream>>>(
                 table_->buckets, table_->buckets_size, table_->capacity,
-                options_.max_bucket_size, options_.dim, keys, scores, n,
-                values, nullptr, nullptr, global_epoch_,
-                table_->max_bucket_shift, table_->capacity_divisor_magic,
-                table_->capacity_divisor_shift);
+                options_.max_bucket_size, options_.dim, keys, scores, n, values,
+                nullptr, nullptr, global_epoch_, table_->max_bucket_shift,
+                table_->capacity_divisor_magic, table_->capacity_divisor_shift);
       }
     } else {
       bool filter_condition = unique_key && !options_.io_by_cpu;
@@ -1566,14 +1565,16 @@ class HashTable : public HashTableBase<K, V, S> {
         size_t size_all = n * sizeof(value_type*) + n * sizeof(bool);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
         auto temp_storage{dev_ws.get<uint8_t*>(0)};
-        value_type** table_value_addrs{reinterpret_cast<value_type**>(temp_storage)};
-        bool* d_founds{reinterpret_cast<bool*>(temp_storage + n * sizeof(value_type*))};
+        value_type** table_value_addrs{
+            reinterpret_cast<value_type**>(temp_storage)};
+        bool* d_founds{
+            reinterpret_cast<bool*>(temp_storage + n * sizeof(value_type*))};
 
         find_or_insert_hybrid_kernel<K, V, S, evict_strategy>
             <<<block_dim_, 0, stream>>>(
                 table_->buckets, table_->buckets_size, options_.max_bucket_size,
-                options_.dim, keys, values, scores, table_value_addrs, d_founds, n,
-                global_epoch_, table_->max_bucket_shift,
+                options_.dim, keys, values, scores, table_value_addrs, d_founds,
+                n, global_epoch_, table_->max_bucket_shift,
                 table_->capacity_divisor_magic, table_->capacity_divisor_shift,
                 table_->capacity);
 
@@ -1583,20 +1584,22 @@ class HashTable : public HashTableBase<K, V, S> {
         HKV_CHECK(max_tile_size != 0,
                   log_format("UB size %lu is too small.", valid_ub_size));
         read_or_write_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
-            block_dim_, table_->dim, max_tile_size, values, n, table_value_addrs,
-            d_founds);
-      } else { //
+            block_dim_, table_->dim, max_tile_size, values, n,
+            table_value_addrs, d_founds);
+      } else {  //
         size_t size_all = n * sizeof(value_type*) + n * sizeof(bool);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
         auto temp_storage{dev_ws.get<uint8_t*>(0)};
-        value_type** table_value_addrs{reinterpret_cast<value_type**>(temp_storage)};
-        bool* d_founds{reinterpret_cast<bool*>(temp_storage + n * sizeof(value_type*))};
+        value_type** table_value_addrs{
+            reinterpret_cast<value_type**>(temp_storage)};
+        bool* d_founds{
+            reinterpret_cast<bool*>(temp_storage + n * sizeof(value_type*))};
 
         find_or_insert_non_unique_kernel<K, V, S, false, evict_strategy>
             <<<block_dim_, 0, stream>>>(
                 table_->buckets, table_->buckets_size, table_->capacity,
-                options_.max_bucket_size, options_.dim, keys, scores, n,
-                values, table_value_addrs, d_founds, global_epoch_,
+                options_.max_bucket_size, options_.dim, keys, scores, n, values,
+                table_value_addrs, d_founds, global_epoch_,
                 table_->max_bucket_shift, table_->capacity_divisor_magic,
                 table_->capacity_divisor_shift);
         if (options_.io_by_cpu) {
@@ -1606,22 +1609,24 @@ class HashTable : public HashTableBase<K, V, S> {
           auto host_storage{host_ws.get<uint8_t*>(0)};
           value_type* h_values{reinterpret_cast<value_type*>(host_storage)};
           value_type** h_param_values{reinterpret_cast<value_type**>(
-            host_storage + n * table_->dim * sizeof(value_type))};
-          bool* h_founds{reinterpret_cast<bool*>(host_storage + n * sizeof(value_type*) + n * table_->dim * sizeof(value_type))};
+              host_storage + n * table_->dim * sizeof(value_type))};
+          bool* h_founds{
+              reinterpret_cast<bool*>(host_storage + n * sizeof(value_type*) +
+                                      n * table_->dim * sizeof(value_type))};
 
           NPU_CHECK(aclrtMemcpyAsync(h_values, value_size, values, value_size,
                                      ACL_MEMCPY_DEVICE_TO_HOST, stream));
-          NPU_CHECK(aclrtMemcpyAsync(h_param_values, n * sizeof(value_type*), table_value_addrs,
-                                     n * sizeof(value_type*), ACL_MEMCPY_DEVICE_TO_HOST,
-                                     stream));
+          NPU_CHECK(aclrtMemcpyAsync(h_param_values, n * sizeof(value_type*),
+                                     table_value_addrs, n * sizeof(value_type*),
+                                     ACL_MEMCPY_DEVICE_TO_HOST, stream));
           NPU_CHECK(aclrtMemcpyAsync(h_founds, n * sizeof(bool), d_founds,
-                                     n * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST,
-                                     stream));
+                                     n * sizeof(bool),
+                                     ACL_MEMCPY_DEVICE_TO_HOST, stream));
           NPU_CHECK(aclrtSynchronizeStream(stream));
-          read_or_write_by_cpu<V>(h_param_values, h_values, h_founds, table_->dim, n);
-          CUDA_CHECK(cudaMemcpyAsync(values, h_values,
-                                   n * sizeof(value_type) * dim(),
-                                   cudaMemcpyHostToDevice, stream));
+          read_or_write_by_cpu<V>(h_param_values, h_values, h_founds,
+                                  table_->dim, n);
+          NPU_CHECK(aclrtMemcpyAsync(values, h_values, value_size,
+                                     ACL_MEMCPY_DEVICE_TO_HOST, stream));
         } else {
           uint64_t valid_ub_size = GetMixedOpUbSize();
           uint32_t max_tile_size =
@@ -1629,12 +1634,11 @@ class HashTable : public HashTableBase<K, V, S> {
           HKV_CHECK(max_tile_size != 0,
                     log_format("UB size %lu is too small.", valid_ub_size));
           read_or_write_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
-              block_dim_, table_->dim, max_tile_size, values, n, table_value_addrs,
-              d_founds);
+              block_dim_, table_->dim, max_tile_size, values, n,
+              table_value_addrs, d_founds);
         }
       }
     }
-
     NpuCheckError();
   }
 
