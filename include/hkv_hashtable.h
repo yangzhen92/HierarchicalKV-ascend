@@ -1625,7 +1625,7 @@ class HashTable : public HashTableBase<K, V, S> {
           NPU_CHECK(aclrtSynchronizeStream(stream));
           read_or_write_by_cpu<V>(h_param_values, h_values, h_founds,
                                   table_->dim, n);
-          NPU_CHECK(aclrtMemcpyAsync(values, h_values, value_size,
+          NPU_CHECK(aclrtMemcpyAsync(values, value_size, h_values, value_size,
                                      ACL_MEMCPY_HOST_TO_DEVICE, stream));
         } else {
           uint64_t valid_ub_size = GetMixedOpUbSize();
