@@ -720,6 +720,26 @@ TEST(test_find_or_insert, data_types_uint64_uint8_uint64_dim8_use_ddr_non_unique
   test_find_or_insert_with_types_and_dim<uint64_t, uint8_t, uint64_t, 8, false, true, false>();
 }
 
+TEST(test_find_or_insert, data_types_uint64_float_uint64_dim8_use_ddr_non_unique_io_by_cpu) {
+  test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 8, false, true, true>();
+}
+
+TEST(test_find_or_insert, data_types_int64_double_uint64_dim8_use_ddr_non_unique_io_by_cpu) {
+  test_find_or_insert_with_types_and_dim<int64_t, double, uint64_t, 8, false, true, true>();
+}
+
+TEST(test_find_or_insert, data_types_int64_float_uint64_dim8_use_ddr_non_unique_io_by_cpu) {
+  test_find_or_insert_with_types_and_dim<int64_t, float, uint64_t, 8, false, true, true>();
+}
+
+TEST(test_find_or_insert, data_types_uint64_uint16_uint64_dim8_use_ddr_non_unique_io_by_cpu) {
+  test_find_or_insert_with_types_and_dim<uint64_t, uint16_t, uint64_t, 8, false, true, true>();
+}
+
+TEST(test_find_or_insert, data_types_uint64_uint8_uint64_dim8_use_ddr_non_unique_io_by_cpu) {
+  test_find_or_insert_with_types_and_dim<uint64_t, uint8_t, uint64_t, 8, false, true, true>();
+}
+
 // 测试不同dim大小
 TEST(test_find_or_insert, dim_16_uint64_float_uint64) {
   test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 16, true>();
@@ -799,6 +819,26 @@ TEST(test_find_or_insert, dim_128_uint64_float_uint64_use_ddr_non_unique) {
 
 TEST(test_find_or_insert, dim_256_uint64_float_uint64_use_ddr_non_unique) {
   test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 256, false, true, false>();
+}
+
+TEST(test_find_or_insert, dim_16_uint64_float_uint64_use_ddr_non_unique_io_by_cpu) {
+  test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 16, false, true, true>();
+}
+
+TEST(test_find_or_insert, dim_32_uint64_float_uint64_use_ddr_non_unique_io_by_cpu) {
+  test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 32, false, true, true>();
+}
+
+TEST(test_find_or_insert, dim_64_uint64_float_uint64_use_ddr_non_unique_io_by_cpu) {
+  test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 64, false, true, true>();
+}
+
+TEST(test_find_or_insert, dim_128_uint64_float_uint64_use_ddr_non_unique_io_by_cpu) {
+  test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 128, false, true, true>();
+}
+
+TEST(test_find_or_insert, dim_256_uint64_float_uint64_use_ddr_non_unique_io_by_cpu) {
+  test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 256, false, true, true>();
 }
 
 TEST(test_find_or_insert, duplicate_keys) {
