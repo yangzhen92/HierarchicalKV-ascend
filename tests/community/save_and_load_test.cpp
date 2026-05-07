@@ -15,19 +15,6 @@
  * limitations under the License.
  */
 
-/*
- * test APIs: save, load
- *
- * Source:
- * E:\hkv\code\nv\HierarchicalKV-master\HierarchicalKV-master\tests\save_and_load_test.cc.cu
- *
- * NPU pattern references:
- * - include/types.h
- * - include/hkv_hashtable.h
- * - tests/test_load.cpp
- * - tests/community/test_util.cuh
- */
-
 #include <gtest/gtest.h>
 #include <cstdio>
 #include <cstdint>

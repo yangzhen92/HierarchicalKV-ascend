@@ -15,19 +15,6 @@
  * limitations under the License.
  */
 
-/*
- * test APIs: lock_keys, unlock_keys, contains
- *
- * Source:
- * E:\hkv\code\nv\HierarchicalKV-master\HierarchicalKV-master\tests\lock_unlock_test.cc.cu
- *
- * NPU pattern references:
- * - include/hkv_hashtable.h
- * - tests/test_lock_unlock_keys.cpp
- * - tests/community/find_or_insert_ptr_lock_test.cpp
- * - tests/community/test_util.cuh
- */
-
 #include <gtest/gtest.h>
 #include <cstdint>
 #include <memory>

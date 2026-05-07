@@ -15,20 +15,6 @@
  * limitations under the License.
  */
 
-/*
- * test APIs: init_reserved_keys, IS_RESERVED_KEY, 64-bit device memset
- *
- * Source:
- * E:\hkv\code\nv\HierarchicalKV-master\HierarchicalKV-master\tests\reserved_keys_test.cc.cu
- *
- * NPU pattern references:
- * - include/types.h
- * - include/hashtable_options.h
- * - tests/test_contains.cpp
- * - tests/test_find.cpp
- * - tests/community/test_util.cuh
- */
-
 #include <gtest/gtest.h>
 #include <cstdint>
 #include <iostream>

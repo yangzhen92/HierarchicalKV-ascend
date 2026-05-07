@@ -15,19 +15,6 @@
  * limitations under the License.
  */
 
-/*
- * Source:
- * E:\hkv\code\nv\HierarchicalKV-master\HierarchicalKV-master\tests\merlin_hashtable_test.cc.cu
- *
- * NPU pattern references:
- * - include/hkv_hashtable.h
- * - include/utils.h
- * - tests/test_erase.cpp
- * - tests/community/find_or_insert_test.cpp
- * - tests/community/export_batch_if_test.cpp
- * - tests/community/test_util.cuh
- */
-
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <array>
@@ -1916,7 +1903,7 @@ TEST(MerlinHashTableTest, test_evict_strategy_lru_basic) {
 
 TEST(MerlinHashTableTest, test_evict_strategy_lfu_basic) {
   test_evict_strategy_basic<EvictStrategy::kLfu>(16);
-  // TODO(rhdong): Add back when diff error issue fixed in hybrid mode.
+  // TODO: Add back when diff error issue fixed in hybrid mode.
   // test_evict_strategy_lfu_basic(0);
 }
 
@@ -1942,7 +1929,7 @@ TEST(MerlinHashTableTest, test_evict_strategy_customized_advanced) {
 
 TEST(MerlinHashTableTest, test_evict_strategy_customized_correct_rate) {
   test_evict_strategy_customized_correct_rate(16);
-  // TODO(rhdong): after blossom CI issue is resolved, the skip logic.
+  // TODO: after blossom CI issue is resolved, the skip logic.
   const bool skip_hmem_check = (nullptr != std::getenv("IS_BLOSSOM_CI"));
   if (!skip_hmem_check) {
     test_evict_strategy_customized_correct_rate(0);
@@ -1953,6 +1940,6 @@ TEST(MerlinHashTableTest, test_evict_strategy_customized_correct_rate) {
 
 TEST(MerlinHashTableTest, test_insert_or_assign_values_check) {
   test_insert_or_assign_values_check(16);
-  // TODO(rhdong): Add back when diff error issue fixed in hybrid mode.
+  // TODO: Add back when diff error issue fixed in hybrid mode.
   test_insert_or_assign_values_check(0);
 }
