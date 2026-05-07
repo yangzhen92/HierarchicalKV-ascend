@@ -1626,7 +1626,7 @@ class HashTable : public HashTableBase<K, V, S> {
           read_or_write_by_cpu<V>(h_param_values, h_values, h_founds,
                                   table_->dim, n);
           NPU_CHECK(aclrtMemcpyAsync(values, h_values, value_size,
-                                     ACL_MEMCPY_DEVICE_TO_HOST, stream));
+                                     ACL_MEMCPY_HOST_TO_DEVICE, stream));
         } else {
           uint64_t valid_ub_size = GetMixedOpUbSize();
           uint32_t max_tile_size =
