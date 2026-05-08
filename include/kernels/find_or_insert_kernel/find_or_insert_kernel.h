@@ -31,6 +31,7 @@
  #include "simt_vf_dispatcher.h"
  #include "find_utils.h" 
  #include "simt_api/asc_simt.h"
+ #include "../insert_or_assign/insert_or_assign_kernel.h"
  
  namespace npu {
  namespace hkv {
@@ -459,11 +460,13 @@
      uint32_t dim, __gm__ const K* __restrict__ keys,
      __gm__ V* __restrict__ values, __gm__ S* __restrict__ scores,
      __gm__ V * __gm__ * __restrict__ d_dst_values,
+     __gm__ V * __gm__ * __restrict__ d_dst_keys,
      __gm__ bool* founds, uint64_t n, uint64_t global_epoch,
      uint64_t cur_score, uint32_t blockIdx, uint64_t thread_all,
      uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
      uint64_t capacity_divisor_shift, uint64_t capacity) {
-   if ((!buckets) || (!buckets_size) || (!keys) || (!values)) {
+   if ((!buckets) || (!buckets_size) || (!keys) || (!values) || (!d_dst_keys) ||
+       (!d_dst_values) || (!founds)) {
      return;
    }
 
@@ -687,9 +690,10 @@
          (occupy_result != OccupyResult::ILLEGAL)) {
        d_dst_values[kv_idx] = bucket_values + key_pos * dim;
        // key也是原子标记位，所有key的操作必须原子化
-       (void)asc_atomic_exch(bucket_keys + key_pos, key);
+       d_dst_keys[kv_idx] = bucket_keys + key_pos;
      } else if (kv_idx < n) {
        d_dst_values[kv_idx] = nullptr;
+       d_dst_keys[kv_idx] = nullptr;
      }
      founds[kv_idx] = occupy_result == OccupyResult::DUPLICATE;
    }
@@ -716,12 +720,13 @@
        capacity_divisor_magic, capacity_divisor_shift, capacity);
  }
 
- template <class V>
+ template <class V, bool UNLOCK_KEY>
  __global__ __vector__ void read_or_write_value_kernel(
      uint32_t former_num, uint64_t former_core_move_num,
      uint64_t tail_core_move_num, uint32_t tile_size, uint32_t num_tiles,
      uint32_t dim, __gm__ V* param_values, uint64_t n,
-     __gm__ V * __gm__ * table_value_addrs, __gm__ bool* founds) {
+     __gm__ V * __gm__ * table_value_addrs, __gm__ K * __gm__ * d_dst_keys,
+     __gm__ bool* founds) {
    uint64_t cur_block_idx = GetBlockIdx();
    uint64_t core_start_idx = 0;
    uint64_t core_move_count = 0;
@@ -782,6 +787,13 @@
        move_queue.FreeTensor(move_local);
      }
    }
+
+   if constexpr (UNLOCK_KEY) {
+    const uint32_t thread_all = THREAD_NUM_2048 * GetBlockNum();
+
+    asc_vf_call<write_key_vf<K>>(dim3{THREAD_NUM_2048}, n, keys, d_dst_keys,
+                                 thread_all, GetBlockIdx());
+  }
  }
 
  }  // namespace hkv
