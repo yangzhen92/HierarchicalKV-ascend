@@ -645,7 +645,7 @@ void print_title_hybrid_a() {
        //<< "|   find "
        << "|-------:"
        //<< "| find_or_insert "
-       << "|----------------:"
+       << "|---------------:"
        //<< "| assign "
        << "|-------:"
        //<< "| assign_values "
