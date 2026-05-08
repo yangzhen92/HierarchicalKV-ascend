@@ -718,15 +718,10 @@
 
  template <class V>
  __global__ __vector__ void read_or_write_value_kernel(
-     uint32_t block_dim, uint32_t dim, uint32_t max_tile_size, __gm__ V* param_values,
-     uint64_t n, __gm__ V * __gm__ * table_value_addrs,
-     __gm__ bool* founds) {
-   uint64_t tail_core_move_num = n / block_dim;
-   uint64_t former_core_move_num = tail_core_move_num + 1;
-   uint32_t former_num = n - tail_core_move_num * block_dim;
-   uint32_t tile_size = (dim <= max_tile_size) ? dim : max_tile_size;
-   uint32_t num_tiles = (dim + tile_size - 1) / tile_size;
-
+     uint32_t former_num, uint64_t former_core_move_num,
+     uint64_t tail_core_move_num, uint32_t tile_size, uint32_t num_tiles,
+     uint32_t dim, __gm__ V* param_values, uint64_t n,
+     __gm__ V * __gm__ * table_value_addrs, __gm__ bool* founds) {
    uint64_t cur_block_idx = GetBlockIdx();
    uint64_t core_start_idx = 0;
    uint64_t core_move_count = 0;
@@ -767,10 +762,10 @@
            1, static_cast<uint32_t>(current_tile_size * sizeof(V)), 0, 0, 0};
 
        move_queue.AllocTensor<V>(move_local);
+       table_values_addr_gm.SetGlobalBuffer(table_value_addr + tile_idx * tile_size);
 
        if (founds[i]) {
          // 找到 key，从 table 中读取值返回给用户
-         table_values_addr_gm.SetGlobalBuffer(table_value_addr + tile_idx * tile_size);
          DataCopyPad(move_local, table_values_addr_gm, copy_params, pad_params);
          move_queue.EnQue<V>(move_local);
          move_queue.DeQue<V>(move_local);
@@ -778,7 +773,6 @@
                      move_local, copy_params);
        } else {
          // 没找到 key，把用户的值写入 table
-         table_values_addr_gm.SetGlobalBuffer(table_value_addr + tile_idx * tile_size);
          DataCopyPad(move_local, param_values_gm[dst_offset + tile_idx * tile_size], copy_params, pad_params);
          move_queue.EnQue<V>(move_local);
          move_queue.DeQue<V>(move_local);
@@ -789,7 +783,6 @@
      }
    }
  }
-
 
  }  // namespace hkv
  }  // namespace npu
