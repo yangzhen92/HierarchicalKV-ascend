@@ -704,9 +704,10 @@
      __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
      uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys,
      __gm__ V* values, __gm__ S* scores, __gm__ V * __gm__ * d_dst_values,
-     __gm__ bool* founds, uint64_t n, uint64_t global_epoch,
-     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
-     uint64_t capacity_divisor_shift, uint64_t capacity) {
+     __gm__ K * __gm__ * d_dst_keys, __gm__ bool* founds, uint64_t n,
+     uint64_t global_epoch, uint32_t max_bucket_shift,
+     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
+     uint64_t capacity) {
    const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
    uint64_t cur_score = (Strategy == npu::hkv::EvictStrategyInternal::kLru ||
                          Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
