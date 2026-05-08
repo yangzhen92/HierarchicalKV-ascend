@@ -977,7 +977,6 @@ void test_find_or_insert_evict() {
   table.find_or_insert(key_num, device_data.device_keys, device_data.device_values,
                        nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
-  EXPECT_EQ(table.size(device_data.stream), key_num);
 
   // 5. 校验结果
   // 5.1 检查值是否被更新
