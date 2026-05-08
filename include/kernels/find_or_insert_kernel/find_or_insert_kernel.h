@@ -720,7 +720,7 @@
        capacity_divisor_magic, capacity_divisor_shift, capacity);
  }
 
- template <class V, bool UNLOCK_KEY>
+ template <class K, class V, bool UNLOCK_KEY>
  __global__ __vector__ void read_or_write_value_kernel(
      uint32_t former_num, uint64_t former_core_move_num,
      uint64_t tail_core_move_num, uint32_t tile_size, uint32_t num_tiles,
