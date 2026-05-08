@@ -719,16 +719,27 @@ void test_evict_strategy_customized_advanced(size_t max_hbm_for_vectors,
       TEST_KEY_NUM, INIT_CAPACITY, BUCKET_MAX_SIZE, 1, 0x3FFFFFFFFFFFFFFF,
       0xFFFFFFFFFFFFFFFD);
 
+  h_keys_test[4] = h_keys_base[72];
+  h_keys_test[5] = h_keys_base[73];
+  h_keys_test[6] = h_keys_base[74];
+  h_keys_test[7] = h_keys_base[75];
+
   // replace four new keys to lower scores, would not be inserted.
-  for (int i = 0; i < 4; ++i) {
-    h_scores_test[i] = base_score_start + i;
-  }
-  // replace three exist keys to new scores, just refresh the score for them.
+  h_scores_test[0] = 20;
+  h_scores_test[1] = 78;
+  h_scores_test[2] = 97;
+  h_scores_test[3] = 98;
+
+  // replace four exist keys to new scores, just refresh the score for them.
+  h_scores_test[4] = 99;
+  h_scores_test[5] = 1010;
+  h_scores_test[6] = 1020;
+  h_scores_test[7] = 1035;
+
   for (int i = 4; i < static_cast<int>(TEST_KEY_NUM); ++i) {
-    h_keys_test[i] = h_keys_base[i];
-    h_scores_test[i] = base_score_start + BASE_KEY_NUM + i;
     for (int j = 0; j < static_cast<int>(DIM); ++j) {
-      h_vectors_test[i * DIM + j] = h_vectors_base[i * DIM + j];
+      h_vectors_test[i * DIM + j] =
+          static_cast<V>(h_keys_test[i] * 0.00001);
     }
   }
 
