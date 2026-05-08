@@ -860,9 +860,6 @@ void test_find_or_insert_duplicate_keys(bool use_ddr, bool io_by_cpu) {
   constexpr size_t init_capacity = 128UL * 1024;
   constexpr size_t key_num = 1UL * 1024;
 
-  using K = uint64_t;
-  using V = float;
-  using S = uint64_t;
   size_t each_key_size = sizeof(K);
   size_t each_value_size = sizeof(V);
   size_t each_score_size = sizeof(S);
