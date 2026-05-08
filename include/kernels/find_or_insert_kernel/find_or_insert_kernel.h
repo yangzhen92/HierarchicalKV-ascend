@@ -726,7 +726,7 @@
  __global__ __vector__ void read_or_write_value_kernel(
      uint32_t former_num, uint64_t former_core_move_num,
      uint64_t tail_core_move_num, uint32_t tile_size, uint32_t num_tiles,
-     uint32_t dim, __gm__ V* param_values, uint64_t n,
+     uint32_t dim, __gm__ K* keys, __gm__ V* param_values, uint64_t n,
      __gm__ V * __gm__ * table_value_addrs, __gm__ K * __gm__ * d_dst_keys,
      __gm__ bool* founds) {
    uint64_t cur_block_idx = GetBlockIdx();

@@ -1569,7 +1569,7 @@ class HashTable : public HashTableBase<K, V, S> {
           reinterpret_cast<bool*>(temp_storage + n * sizeof(value_type*))};
       bool filter_condition = unique_key && !options_.io_by_cpu;
       if (filter_condition) {
-        size_t keys_size = n * sizeof(key_type);
+        size_t keys_size = n * sizeof(key_type*);
         auto dev_keys_ws{dev_mem_pool_->get_workspace<1>(keys_size, stream)};
         auto temp_keys_storage{dev_keys_ws.get<uint8_t*>(0)};
         key_type** d_dst_keys{
@@ -1588,8 +1588,9 @@ class HashTable : public HashTableBase<K, V, S> {
             <<<block_dim_, tiling.valid_ub_size, stream>>>(
                 tiling.former_num, tiling.former_core_move_num,
                 tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-                table_->dim, const_cast<value_type*>(values), n,
-                table_value_addrs, d_dst_keys, d_founds);
+                table_->dim, const_cast<key_type*>(keys),
+                const_cast<value_type*>(values), n, table_value_addrs,
+                d_dst_keys, d_founds);
       } else {
         find_or_insert_non_unique_kernel<K, V, S, false, evict_strategy>
             <<<block_dim_, 0, stream>>>(
@@ -1630,8 +1631,9 @@ class HashTable : public HashTableBase<K, V, S> {
               <<<block_dim_, tiling.valid_ub_size, stream>>>(
                   tiling.former_num, tiling.former_core_move_num,
                   tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-                  table_->dim, const_cast<value_type*>(values), n,
-                  table_value_addrs, nullptr, d_founds);
+                  table_->dim, const_cast<key_type*>(keys),
+                  const_cast<value_type*>(values), n, table_value_addrs,
+                  nullptr, d_founds);
         }
       }
     }
