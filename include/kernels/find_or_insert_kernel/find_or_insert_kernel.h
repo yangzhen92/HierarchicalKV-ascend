@@ -715,9 +715,10 @@
 
    asc_vf_call<find_or_insert_hybrid_kernel_vf<K, V, S, Strategy>>(
        dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets, buckets_size,
-       bucket_capacity, dim, keys, values, scores, d_dst_values, founds, n,
-       global_epoch, cur_score, GetBlockIdx(), thread_all, max_bucket_shift,
-       capacity_divisor_magic, capacity_divisor_shift, capacity);
+       bucket_capacity, dim, keys, values, scores, d_dst_values, d_dst_keys,
+       founds, n, global_epoch, cur_score, GetBlockIdx(), thread_all,
+       max_bucket_shift, capacity_divisor_magic, capacity_divisor_shift,
+       capacity);
  }
 
  template <class K, class V, bool UNLOCK_KEY>
