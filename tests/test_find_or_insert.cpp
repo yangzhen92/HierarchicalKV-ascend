@@ -932,7 +932,7 @@ void test_find_or_insert_evict() {
 
   constexpr size_t dim = Dim;
   constexpr size_t init_capacity = 128UL * 1024;
-  constexpr size_t key_num = 40UL * 1024;
+  constexpr size_t key_num = 100UL * 1024;
 
   size_t each_key_size = sizeof(K);
   size_t each_value_size = sizeof(V);
