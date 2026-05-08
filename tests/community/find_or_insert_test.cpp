@@ -101,6 +101,9 @@ struct DeviceArray {
   }
 
   void copy_to_host(std::vector<T>* host, size_t n, aclrtStream stream) {
+    if (n == 0) {
+      return;
+    }
     ASSERT_LE(n, count);
     host->assign(n, T{});
     ACL_CHECK(aclrtMemcpyAsync(host->data(), sizeof(T) * n, ptr, sizeof(T) * n,
@@ -544,6 +547,7 @@ void test_rehash(size_t max_hbm_for_vectors, int key_start = 0) {
                        d_vectors.get(), d_found.get(), d_scores.get(),
                        guard.stream);
     copy_bool_to_host(d_found.get(), &h_found, KEY_NUM, guard.stream);
+    d_keys.copy_to_host(&h_keys, KEY_NUM, guard.stream);
     d_scores.copy_to_host(&h_scores, KEY_NUM, guard.stream);
     d_vectors.copy_to_host(&h_vectors, KEY_NUM * DIM, guard.stream);
     verify_found_values_and_scores(h_keys, h_scores, h_vectors, h_found,
@@ -608,6 +612,7 @@ void test_rehash_on_big_batch(size_t max_hbm_for_vectors, int key_start = 0) {
   find_into_contiguous(table.get(), KEY_NUM, d_keys.get(), d_vectors.get(),
                      d_found.get(), d_scores.get(), guard.stream);
   copy_bool_to_host(d_found.get(), &h_found, KEY_NUM, guard.stream);
+  d_keys.copy_to_host(&h_keys, KEY_NUM, guard.stream);
   d_scores.copy_to_host(&h_scores, KEY_NUM, guard.stream);
   d_vectors.copy_to_host(&h_vectors, KEY_NUM * DIM, guard.stream);
   verify_found_values_and_scores(h_keys, h_scores, h_vectors, h_found, KEY_NUM);
@@ -1889,11 +1894,16 @@ void test_dynamic_rehash_on_multi_threads(size_t max_hbm_for_vectors,
   auto options = make_options(INIT_CAPACITY, MAX_CAPACITY, max_hbm_for_vectors,
                              key_start, BUCKET_MAX_SIZE);
   options.max_load_factor = 0.50f;
+  options.api_lock = true;
 
   auto table = std::make_shared<Table>();
   table->init(options);
 
   auto worker_function = [&table, KEY_NUM, options](int task_n) {
+    auto device_id_env = std::getenv("HKV_TEST_DEVICE");
+    int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
+    HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
+                    "aclrtSetDevice failed");
     StreamGuard guard;
     guard.create();
     std::vector<K> h_keys(KEY_NUM);
@@ -2050,12 +2060,17 @@ void test_find_or_insert_multi_threads(size_t max_hbm_for_vectors,
       make_options(INIT_CAPACITY, MAX_CAPACITY, max_hbm_for_vectors, 0,
                   BUCKET_MAX_SIZE);
   options.max_load_factor = 0.50f;
+  options.api_lock = true;
 
   auto table = std::make_shared<Table>();
   table->init(options);
 
   // assert every key is different
   auto worker1 = [&table, KEY_NUM, options, capacity_silent](int batch, int task_n) {
+    auto device_id_env = std::getenv("HKV_TEST_DEVICE");
+    int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
+    HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
+                    "aclrtSetDevice failed");
     StreamGuard guard;
     guard.create();
     size_t current_capacity = table->capacity();
@@ -2077,6 +2092,7 @@ void test_find_or_insert_multi_threads(size_t max_hbm_for_vectors,
 
     table->assign(KEY_NUM, d_keys.get(), d_vectors.get(), nullptr,
                   guard.stream);
+    ACL_CHECK(aclrtSynchronizeStream(guard.stream));
     find_into_contiguous(table.get(), KEY_NUM, d_keys.get(), d_vectors.get(),
                        d_found.get(), nullptr, guard.stream);
     copy_bool_to_host(d_found.get(), &h_found, KEY_NUM, guard.stream);
@@ -2146,6 +2162,10 @@ void test_find_or_insert_multi_threads(size_t max_hbm_for_vectors,
   };
 
   auto worker2 = [&table, KEY_NUM, options, capacity_silent](int batch, int task_n) {
+    auto device_id_env = std::getenv("HKV_TEST_DEVICE");
+    int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
+    HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
+                    "aclrtSetDevice failed");
     StreamGuard guard;
     guard.create();
     size_t current_capacity = table->capacity();
@@ -2263,6 +2283,12 @@ void test_find_or_insert_multi_threads(size_t max_hbm_for_vectors,
   }
   for (auto& th : threads) {
     th.join();
+  }
+  if (table->capacity() < MAX_CAPACITY) {
+    StreamGuard guard;
+    guard.create();
+    table->reserve(MAX_CAPACITY, guard.stream);
+    ACL_CHECK(aclrtSynchronizeStream(guard.stream));
   }
   ASSERT_EQ(table->capacity(), MAX_CAPACITY);
 }

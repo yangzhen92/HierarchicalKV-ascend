@@ -617,7 +617,7 @@ namespace hkv {
 using namespace AscendC;
 
 template <class V>
-__global__ __vector__ void read_or_write_value_kernel(
+__global__ __vector__ void read_or_write_value_test_kernel(
     uint32_t former_num, uint64_t former_core_move_num,
     uint64_t tail_core_move_num, uint32_t tile_size, uint32_t num_tiles,
     uint32_t dim, __gm__ V* param_values, uint64_t n,
@@ -739,7 +739,7 @@ void read_or_write_ptr(V** __restrict src, V* __restrict dst,
         npu::hkv::GetValueMoveTiling(static_cast<uint32_t>(n), block_dim,
                                      static_cast<uint32_t>(dim), sizeof(V),
                                      false);
-    npu::hkv::read_or_write_value_kernel<V>
+    npu::hkv::read_or_write_value_test_kernel<V>
         <<<block_dim, tiling.valid_ub_size, stream>>>(
             tiling.former_num, tiling.former_core_move_num,
             tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
