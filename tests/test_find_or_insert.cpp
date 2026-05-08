@@ -843,7 +843,8 @@ TEST(test_find_or_insert, dim_256_uint64_float_uint64_use_ddr_non_unique_io_by_c
   test_find_or_insert_with_types_and_dim<uint64_t, float, uint64_t, 256, false, true, true>();
 }
 
-TEST(test_find_or_insert, duplicate_keys) {
+template <class K, class V, class S>
+void test_find_or_insert_duplicate_keys(bool use_ddr, bool io_by_cpu) {
   // 1. 初始化
   init_env();
 
@@ -872,8 +873,13 @@ TEST(test_find_or_insert, duplicate_keys) {
       .max_capacity = init_capacity,
       .max_hbm_for_vectors = hbm_for_values,
       .dim = dim,
-      .io_by_cpu = false,
+      .io_by_cpu = io_by_cpu,
   };
+  if (io_by_cpu) {
+    options.max_hbm_for_vectors = 0;
+  } else if (use_ddr) {
+    options.max_hbm_for_vectors = init_capacity * each_value_size * dim / 2;
+  }
   using Table = HashTable<K, V>;
 
   Table table;
@@ -901,3 +907,16 @@ TEST(test_find_or_insert, duplicate_keys) {
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table.size(device_data.stream), 1);
 }
+
+TEST(test_find_or_insert, duplicate_keys) {
+  test_find_or_insert_duplicate_keys<uint64_t, float, uint64_t>(false, false);
+}
+
+TEST(test_find_or_insert, duplicate_keys_use_ddr_io_by_cpu) {
+  test_find_or_insert_duplicate_keys<uint64_t, float, uint64_t>(true, true);
+}
+
+TEST(test_find_or_insert, duplicate_keys_use_ddr) {
+  test_find_or_insert_duplicate_keys<uint64_t, float, uint64_t>(true, false);
+}
+
