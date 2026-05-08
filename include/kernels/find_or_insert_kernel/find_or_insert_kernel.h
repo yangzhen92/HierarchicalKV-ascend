@@ -31,7 +31,7 @@
  #include "simt_vf_dispatcher.h"
  #include "find_utils.h" 
  #include "simt_api/asc_simt.h"
- #include "../insert_or_assign/insert_or_assign_kernel.h"
+ #include "../insert_or_assign_kernel/insert_or_assign_kernel.h"
  
  namespace npu {
  namespace hkv {
