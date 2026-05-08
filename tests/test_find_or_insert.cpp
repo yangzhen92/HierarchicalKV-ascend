@@ -917,3 +917,89 @@ TEST(test_find_or_insert, duplicate_keys_use_ddr) {
   test_find_or_insert_duplicate_keys<uint64_t, float, uint64_t>(true, false);
 }
 
+template <typename K, typename V, typename S, size_t Dim, bool use_ddr = false>
+void test_find_or_insert_evict() {
+  // 1. 初始化
+  init_env();
+
+  size_t free_mem = 0;
+  size_t total_mem = 0;
+  constexpr size_t hbm_for_values = 1UL << 30;
+  ASSERT_EQ(aclrtGetMemInfo(ACL_HBM_MEM, &free_mem, &total_mem),
+            ACL_ERROR_NONE);
+  ASSERT_GT(free_mem, hbm_for_values)
+      << "free HBM is not enough free:" << free_mem << "need:" << hbm_for_values;
+
+  constexpr size_t dim = Dim;
+  constexpr size_t init_capacity = 128UL * 1024;
+  constexpr size_t key_num = 40UL * 1024;
+
+  size_t each_key_size = sizeof(K);
+  size_t each_value_size = sizeof(V);
+  size_t each_score_size = sizeof(S);
+
+  // 2. 建表
+  HashTableOptions options{
+      .init_capacity = init_capacity,
+      .max_capacity = init_capacity,
+      .max_hbm_for_vectors = hbm_for_values,
+      .dim = dim,
+      .io_by_cpu = false,
+  };
+  if (use_ddr) {
+    options.max_hbm_for_vectors = init_capacity * dim * each_value_size / 2;
+  }
+  using Table = HashTable<K, V, S>;
+
+  Table table;
+  table.init(options);
+  EXPECT_EQ(table.size(), 0);
+
+  // 3. 数据准备
+  // 3.1 host数据
+  vector<K> host_keys(key_num, 0);
+  vector<V> host_values(key_num * dim, 0);
+  vector<S> host_scores(key_num, 0);
+
+  // 3.2 申请hbm内存
+  DeviceData<K, V, S> device_data;
+  device_data.malloc(key_num, dim);
+
+  // 4. 第一次插值（插入新键）
+  // 4.1 生产连续值
+  create_continuous_keys<K, S, V, dim>(host_keys.data(), host_scores.data(),
+                                        host_values.data(), key_num);
+  device_data.copy_keys(host_keys, key_num);
+  device_data.copy_scores(host_scores, key_num);
+  device_data.copy_values(host_values, key_num, dim);
+
+  // 4.2 下发算子
+  table.find_or_insert(key_num, device_data.device_keys, device_data.device_values,
+                       nullptr, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  EXPECT_EQ(table.size(device_data.stream), key_num);
+
+  // 5. 校验结果
+  // 5.1 检查值是否被更新
+  vector<V> host_founds(key_num * dim, 0);
+  ASSERT_EQ(
+      aclrtMemcpy(host_founds.data(), key_num * each_value_size * dim,
+                  device_data.device_values, key_num * each_value_size * dim,
+                  ACL_MEMCPY_DEVICE_TO_HOST),
+      ACL_ERROR_NONE);
+  
+  for (size_t i = 0; i < key_num; i++) {
+    for (size_t j = 0; j < dim; j++) {
+      size_t idx = i * dim + j;
+      ASSERT_EQ(host_values[idx], host_founds[idx]);
+    }
+  }
+}
+
+TEST(test_find_or_insert, find_or_insert_evict) {
+  test_find_or_insert_evict<uint64_t, float, uint64_t, 16, false>();
+}
+
+TEST(test_find_or_insert, find_or_insert_evict_use_ddr) {
+  test_find_or_insert_evict<uint64_t, float, uint64_t, 16, true>();
+}
