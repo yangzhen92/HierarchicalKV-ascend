@@ -3011,11 +3011,30 @@ class HashTable : public HashTableBase<K, V, S> {
       const size_type batch_size = std::min(total_size - i, n);
       const size_type batch_size_align = ((batch_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
 
-      // Launch dump_kernel to export data to device memory
-      dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
-        d_table_, table_->buckets, d_keys,
-        d_values, d_scores, i, batch_size, batch_size_align,
-        d_count, value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
+      if (is_fast_mode()) {
+        // Launch dump_kernel to export data to device memory
+        dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
+            d_table_, table_->buckets, d_keys,
+            d_values, d_scores, i, batch_size, batch_size_align,
+            d_count, value_move_opt_.size, value_move_opt_.cg_size, value_move_opt_.dim);
+      } else {
+        size_t size_all = n * sizeof(value_type*);
+        auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
+        auto temp_storage{dev_ws.get<uint8_t*>(0)};
+        value_type** d_src_values{reinterpret_cast<value_type**>(temp_storage)};
+        dump_kernel_hybrid<K, V, S><<<block_dim_, DYNAMIC_UB_SIZE, stream>>>(
+            d_table_, table_->buckets, d_keys, d_src_values, d_scores, i, batch_size,
+            d_count, table_->dim);
+
+        uint64_t valid_ub_size = GetMixedOpUbSize();
+        uint32_t max_tile_size =
+            valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
+        HKV_CHECK(max_tile_size != 0,
+                  log_format("UB size %lu is too small.", valid_ub_size));
+        export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
+            block_dim_, table_->dim, max_tile_size, d_values, d_count,
+            d_src_values);
+      }
       NpuCheckError();
       // Copy counter from device to host
       size_type count;
