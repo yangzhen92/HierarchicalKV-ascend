@@ -460,7 +460,7 @@
      uint32_t dim, __gm__ const K* __restrict__ keys,
      __gm__ V* __restrict__ values, __gm__ S* __restrict__ scores,
      __gm__ V * __gm__ * __restrict__ d_dst_values,
-     __gm__ V * __gm__ * __restrict__ d_dst_keys,
+     __gm__ K * __gm__ * __restrict__ d_dst_keys,
      __gm__ bool* founds, uint64_t n, uint64_t global_epoch,
      uint64_t cur_score, uint32_t blockIdx, uint64_t thread_all,
      uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
