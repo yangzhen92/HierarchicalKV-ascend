@@ -1,11 +1,12 @@
 /*
  * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (C) 2026. Huawei Technologies Co., Ltd. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,13 +15,18 @@
  * limitations under the License.
  */
 
-#include <cuda_runtime_api.h>
 #include <gtest/gtest.h>
 #include <iostream>
-#include "merlin/allocator.cuh"
-#include "merlin/memory_pool.cuh"
+#include <memory>
+#include <typeinfo>
+#include "allocator.h"
+#include "memory_pool.h"
+#include "test_util.h"
 
-using namespace nv::merlin;
+using namespace community_test_util;
+using namespace npu::hkv;
+
+namespace {
 
 /**
  * Wrapper around another allocator that prints debug messages.
@@ -33,16 +39,17 @@ struct DebugAllocator final
   static constexpr const char* name{"DebugAllocator"};
 
   inline static type* alloc(size_t n, BaseAllocator* allocator,
-                            cudaStream_t stream = 0) {
+                            aclrtStream stream = 0) {
     type* ptr{Allocator::alloc(n, allocator, stream)};
     std::cout << Allocator::name << "[type_name = " << typeid(type).name()
               << "]: " << static_cast<void*>(ptr) << " allocated = " << n
-              << " x " << sizeof(type) << " bytes, stream = " << stream << '\n';
+              << " x " << sizeof(type) << " bytes, stream = " << stream
+              << '\n';
     return ptr;
   }
 
   inline static void free(type* ptr, BaseAllocator* allocator,
-                          cudaStream_t stream = 0) {
+                          aclrtStream stream = 0) {
     Allocator::free(ptr, allocator, stream);
     std::cout << Allocator::name << "[type_name = " << typeid(type).name()
               << "]: " << static_cast<void*>(ptr)
@@ -51,7 +58,9 @@ struct DebugAllocator final
 };
 
 void print_divider() {
-  for (size_t i{0}; i < 80; ++i) std::cout << '-';
+  for (size_t i{0}; i < 80; ++i) {
+    std::cout << '-';
+  }
   std::cout << '\n';
 }
 
@@ -65,200 +74,179 @@ void print_pool_options(const MemoryPoolOptions& opt) {
   std::cout.flush();
 }
 
-MemoryPoolOptions opt{
-    3,  //< max_stock
-    5,  //< max_pending
+constexpr MemoryPoolOptions kPoolOptions{
+    3,  // max_stock
+    5,  // max_pending
 };
 
 struct SomeType {
   int a;
   float b;
-
-  friend std::ostream& operator<<(std::ostream&, const SomeType&);
 };
 
-std::ostream& operator<<(std::ostream& os, const SomeType& obj) {
-  cudaPointerAttributes attr;
-  CUDA_CHECK(cudaPointerGetAttributes(&attr, &obj));
-
-  SomeType tmp;
-  if (attr.type == cudaMemoryTypeDevice) {
-    CUDA_CHECK(
-        cudaMemcpy(&tmp, &obj, sizeof(SomeType), cudaMemcpyDeviceToHost));
-  } else {
-    tmp = obj;
-  }
-
-  os << "a = " << tmp.a << ", b = " << tmp.b;
-  return os;
+void expect_host_value(const SomeType& value, int a, float b) {
+  EXPECT_EQ(value.a, a);
+  EXPECT_FLOAT_EQ(value.b, b);
 }
 
-void test_standard_allocator() {
+SomeType copy_from_device(const SomeType* device_ptr) {
+  SomeType host_value{};
+  EXPECT_EQ(aclrtMemcpy(&host_value, sizeof(SomeType), device_ptr,
+                        sizeof(SomeType), ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
+  return host_value;
+}
+
+void copy_to_device(SomeType* device_ptr, const SomeType& host_value) {
+  ASSERT_EQ(aclrtMemcpy(device_ptr, sizeof(SomeType), &host_value,
+                        sizeof(SomeType), ACL_MEMCPY_HOST_TO_DEVICE),
+            ACL_ERROR_NONE);
+}
+
+class MemoryPoolTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    init_env();
+    allocator_ = std::make_unique<DefaultAllocator>();
+  }
+
+  std::unique_ptr<DefaultAllocator> allocator_;
+};
+
+void test_standard_allocator(DefaultAllocator* allocator) {
   using Allocator = DebugAllocator<StandardAllocator<SomeType>>;
-  std::shared_ptr<DefaultAllocator> default_allocator(new DefaultAllocator());
 
   {
-    auto ptr{Allocator::make_unique(1, default_allocator.get())};
+    auto ptr{Allocator::make_unique(1, allocator)};
     ASSERT_NE(ptr.get(), nullptr);
 
-    std::cout << "Sync UPtr after alloc: " << *ptr << std::endl;
     ptr->a = 47;
-    ptr->b = 11;
-    std::cout << "Sync UPtr after set: " << *ptr << std::endl;
+    ptr->b = 11.0f;
+    expect_host_value(*ptr, 47, 11.0f);
 
     ptr.reset();
     ASSERT_EQ(ptr.get(), nullptr);
   }
 
   {
-    auto ptr{Allocator::make_unique(1, default_allocator.get(), nullptr)};
+    auto ptr{Allocator::make_unique(1, allocator, nullptr)};
     ASSERT_NE(ptr.get(), nullptr);
 
-    std::cout << "Async UPtr after alloc: " << *ptr << std::endl;
     ptr->a = 47;
-    ptr->b = 11;
-    std::cout << "Async UPtr after set: " << *ptr << std::endl;
+    ptr->b = 11.0f;
+    expect_host_value(*ptr, 47, 11.0f);
 
     ptr.reset();
     ASSERT_EQ(ptr.get(), nullptr);
   }
 
   {
-    auto ptr{Allocator::make_shared(1, default_allocator.get())};
+    auto ptr{Allocator::make_shared(1, allocator)};
     ASSERT_NE(ptr.get(), nullptr);
 
-    std::cout << "SPtr after alloc: " << *ptr << std::endl;
     ptr->a = 47;
-    ptr->b = 11;
-    std::cout << "SPtr after set: " << *ptr << std::endl;
+    ptr->b = 11.0f;
+    expect_host_value(*ptr, 47, 11.0f);
 
     ptr.reset();
     ASSERT_EQ(ptr.get(), nullptr);
   }
 }
 
-void test_host_allocator() {
+void test_host_allocator(DefaultAllocator* allocator) {
   using Allocator = DebugAllocator<HostAllocator<SomeType>>;
-  std::shared_ptr<DefaultAllocator> default_allocator(new DefaultAllocator());
 
   {
-    auto ptr{Allocator::make_unique(1, default_allocator.get())};
+    auto ptr{Allocator::make_unique(1, allocator)};
     ASSERT_NE(ptr.get(), nullptr);
 
-    std::cout << "Sync UPtr after alloc: " << *ptr << std::endl;
     ptr->a = 47;
-    ptr->b = 11;
-    std::cout << "Sync UPtr after set: " << *ptr << std::endl;
+    ptr->b = 11.0f;
+    expect_host_value(*ptr, 47, 11.0f);
 
     ptr.reset();
     ASSERT_EQ(ptr.get(), nullptr);
   }
 
   {
-    auto ptr{Allocator::make_unique(1, default_allocator.get(), nullptr)};
+    auto ptr{Allocator::make_unique(1, allocator, nullptr)};
     ASSERT_NE(ptr.get(), nullptr);
 
-    std::cout << "Async UPtr after alloc: " << *ptr << std::endl;
     ptr->a = 47;
-    ptr->b = 11;
-    std::cout << "Async UPtr after set: " << *ptr << std::endl;
+    ptr->b = 11.0f;
+    expect_host_value(*ptr, 47, 11.0f);
 
     ptr.reset();
     ASSERT_EQ(ptr.get(), nullptr);
   }
 
   {
-    auto ptr{Allocator::make_shared(1, default_allocator.get())};
+    auto ptr{Allocator::make_shared(1, allocator)};
     ASSERT_NE(ptr.get(), nullptr);
 
-    std::cout << "SPtr after alloc: " << *ptr << std::endl;
     ptr->a = 47;
-    ptr->b = 11;
-    std::cout << "SPtr after set: " << *ptr << std::endl;
+    ptr->b = 11.0f;
+    expect_host_value(*ptr, 47, 11.0f);
 
     ptr.reset();
     ASSERT_EQ(ptr.get(), nullptr);
   }
 }
 
-void test_device_allocator() {
+void test_device_allocator(DefaultAllocator* allocator) {
   using Allocator = DebugAllocator<DeviceAllocator<SomeType>>;
-  std::shared_ptr<DefaultAllocator> default_allocator(new DefaultAllocator());
 
-  int num_devices;
-  CUDA_CHECK(cudaGetDeviceCount(&num_devices));
-  MERLIN_CHECK(num_devices > 0,
-               "Need at least one CUDA capable device for running this test.");
-
-  CUDA_CHECK(cudaSetDevice(num_devices - 1));
-
-  cudaStream_t stream;
-  CUDA_CHECK(cudaStreamCreate(&stream));
+  aclrtStream stream = nullptr;
+  ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
   {
-    auto ptr{Allocator::make_unique(1, default_allocator.get())};
+    auto ptr{Allocator::make_unique(1, allocator)};
     ASSERT_NE(ptr.get(), nullptr);
 
-    std::cout << "Sync UPtr after alloc: " << *ptr << std::endl;
-    const SomeType tmp{47, 11};
-
-    std::cout << "Sync UPtr after alloc get ptr: " << ptr.get() << std::endl;
-    CUDA_CHECK(cudaMemset(ptr.get(), 0, sizeof(SomeType)));
-    CUDA_CHECK(
-        cudaMemcpy(ptr.get(), &tmp, sizeof(SomeType), cudaMemcpyHostToDevice));
-    std::cout << "Sync UPtr after set: " << *ptr << std::endl;
+    copy_to_device(ptr.get(), SomeType{47, 11.0f});
+    expect_host_value(copy_from_device(ptr.get()), 47, 11.0f);
 
     ptr.reset();
     ASSERT_EQ(ptr.get(), nullptr);
   }
 
   {
-    auto ptr{Allocator::make_unique(1, default_allocator.get(), stream)};
+    auto ptr{Allocator::make_unique(1, allocator, stream)};
     ASSERT_NE(ptr.get(), nullptr);
 
-    std::cout << "Async UPtr after alloc: " << *ptr << std::endl;
-    const SomeType tmp{47, 11};
-    CUDA_CHECK(
-        cudaMemcpy(ptr.get(), &tmp, sizeof(SomeType), cudaMemcpyHostToDevice));
-    std::cout << "Async UPtr after set: " << *ptr << std::endl;
+    copy_to_device(ptr.get(), SomeType{47, 11.0f});
+    expect_host_value(copy_from_device(ptr.get()), 47, 11.0f);
 
     ptr.reset();
     ASSERT_EQ(ptr.get(), nullptr);
   }
 
   {
-    auto ptr{Allocator::make_shared(1, default_allocator.get(), stream)};
+    auto ptr{Allocator::make_shared(1, allocator, stream)};
     ASSERT_NE(ptr.get(), nullptr);
 
-    std::cout << "SPtr after alloc: " << *ptr << std::endl;
-    const SomeType tmp{47, 11};
-    CUDA_CHECK(
-        cudaMemcpy(ptr.get(), &tmp, sizeof(SomeType), cudaMemcpyHostToDevice));
-    std::cout << "SPtr after set: " << *ptr << std::endl;
+    copy_to_device(ptr.get(), SomeType{47, 11.0f});
+    expect_host_value(copy_from_device(ptr.get()), 47, 11.0f);
 
     ptr.reset();
     ASSERT_EQ(ptr.get(), nullptr);
   }
 
-  CUDA_CHECK(cudaStreamDestroy(stream));
+  ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
 }
 
-void test_borrow_return_with_context(const bool use_custom_stream) {
-  int num_devices;
-  CUDA_CHECK(cudaGetDeviceCount(&num_devices));
-  MERLIN_CHECK(num_devices > 0,
-               "Need at least one CUDA capable device for running this test.");
-  CUDA_CHECK(cudaSetDevice(0));
-
-  cudaStream_t stream{0};
+void test_borrow_return_with_context(DefaultAllocator* allocator,
+                                     bool use_custom_stream) {
+  aclrtStream stream{0};
   if (use_custom_stream) {
-    CUDA_CHECK(cudaStreamCreate(&stream));
+    ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
   }
 
-  std::shared_ptr<DefaultAllocator> default_allocator(new DefaultAllocator());
+  print_pool_options(kPoolOptions);
+
   {
-    MemoryPool<DebugAllocator<DeviceAllocator<SomeType>>> pool(
-        opt, default_allocator.get());
+    MemoryPool<DebugAllocator<DeviceAllocator<SomeType>>> pool(kPoolOptions,
+                                                               allocator);
     const size_t buffer_size{256L * 1024};
 
     // Initial status.
@@ -321,8 +309,8 @@ void test_borrow_return_with_context(const bool use_custom_stream) {
     // 1. If this thread is slower than the driver.
     //    Upon return we will see a partial deallocation before inserting the
     //    last buffer into the pending queue.
-    // 2. If this the driver is slower than this thread queuing/querying events.
-    //    Either 0-3 buffers in stock partial dallocation
+    // 2. If the driver is slower than this thread queuing/querying events.
+    //    Either 0-3 buffers in stock partial deallocation,
     //    1-5 buffers pending. Hence there is no good way to check.
     {
       auto ws{pool.get_workspace<6>(buffer_size, stream)};
@@ -358,13 +346,17 @@ void test_borrow_return_with_context(const bool use_custom_stream) {
     ASSERT_EQ(pool.num_pending(), 0);
 
     // Increase stock to 3 buffers.
-    { auto ws{pool.get_workspace<3>(buffer_size, stream)}; }
+    {
+      auto ws{pool.get_workspace<3>(buffer_size, stream)};
+    }
     pool.await_pending(stream);
     ASSERT_EQ(pool.current_stock(), 3);
     ASSERT_EQ(pool.num_pending(), 0);
 
     // Pin 1 of the 3 buffers and release it to make it pending.
-    { auto ws{pool.get_workspace<1>(buffer_size, stream)}; }
+    {
+      auto ws{pool.get_workspace<1>(buffer_size, stream)};
+    }
     ASSERT_EQ(pool.current_stock(), 2);
     ASSERT_EQ(pool.num_pending(), 1);
     std::cout << ".:: Ensure 2 stock + 1 pending situation ::.\n"
@@ -402,22 +394,17 @@ void test_borrow_return_with_context(const bool use_custom_stream) {
     ASSERT_EQ(pool.num_pending(), 0);
   }
 
-  if (stream) {
-    CUDA_CHECK(cudaStreamDestroy(stream));
+  if (stream != 0) {
+    ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
   }
 }
 
-void test_borrow_return_lost_context() {
-  int num_devices;
-  CUDA_CHECK(cudaGetDeviceCount(&num_devices));
-  MERLIN_CHECK(num_devices > 0,
-               "Need at least one CUDA capable device for running this test.");
-  CUDA_CHECK(cudaSetDevice(0));
+void test_borrow_return_lost_context(DefaultAllocator* allocator) {
+  print_pool_options(kPoolOptions);
 
-  std::shared_ptr<DefaultAllocator> default_allocator(new DefaultAllocator());
   {
-    MemoryPool<DebugAllocator<DeviceAllocator<SomeType>>> pool{
-        opt, default_allocator.get()};
+    MemoryPool<DebugAllocator<DeviceAllocator<SomeType>>> pool(kPoolOptions,
+                                                               allocator);
     const size_t buffer_size{256L * 1024};
 
     // Initial status.
@@ -427,15 +414,15 @@ void test_borrow_return_lost_context() {
 
     // Borrow and return one buffer (unique ptr).
     {
-      cudaStream_t stream;
-      CUDA_CHECK(cudaStreamCreate(&stream));
+      aclrtStream stream = nullptr;
+      ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
       auto buffer{pool.get_unique(buffer_size, stream)};
       std::cout << ".:: Borrow 1 (unique) ::.\n" << pool << std::endl;
       ASSERT_EQ(pool.current_stock(), 0);
       ASSERT_EQ(pool.num_pending(), 0);
 
-      CUDA_CHECK(cudaStreamDestroy(stream));
+      ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
     }
     std::cout << ".:: Return 1 (unique) ::.\n" << pool << std::endl;
     ASSERT_EQ(pool.current_stock(), 1);
@@ -443,15 +430,15 @@ void test_borrow_return_lost_context() {
 
     // Borrow and return one buffer (shared ptr).
     {
-      cudaStream_t stream;
-      CUDA_CHECK(cudaStreamCreate(&stream));
+      aclrtStream stream = nullptr;
+      ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
       auto buffer{pool.get_shared(buffer_size)};
       std::cout << ".:: Borrow 1 (shared) ::.\n" << pool << std::endl;
       ASSERT_EQ(pool.current_stock(), 0);
       ASSERT_EQ(pool.num_pending(), 0);
 
-      CUDA_CHECK(cudaStreamDestroy(stream));
+      ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
     }
     std::cout << ".:: Return 1 (shared) ::.\n" << pool << std::endl;
     ASSERT_EQ(pool.current_stock(), 1);
@@ -459,15 +446,15 @@ void test_borrow_return_lost_context() {
 
     // Borrow static workspace with less than `max_stock` buffers.
     {
-      cudaStream_t stream;
-      CUDA_CHECK(cudaStreamCreate(&stream));
+      aclrtStream stream = nullptr;
+      ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
       auto ws{pool.get_workspace<2>(buffer_size)};
       std::cout << ".:: Borrow 2 (static) ::.\n" << pool << std::endl;
       ASSERT_EQ(pool.current_stock(), 0);
       ASSERT_EQ(pool.num_pending(), 0);
 
-      CUDA_CHECK(cudaStreamDestroy(stream));
+      ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
     }
     std::cout << ".:: Return 2 (static) ::.\n" << pool << std::endl;
     ASSERT_EQ(pool.current_stock(), 2);
@@ -475,15 +462,15 @@ void test_borrow_return_lost_context() {
 
     // Borrow dynamic workspace with less than `max_stock` buffers.
     {
-      cudaStream_t stream;
-      CUDA_CHECK(cudaStreamCreate(&stream));
+      aclrtStream stream = nullptr;
+      ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
       auto ws{pool.get_workspace(2, buffer_size)};
       std::cout << ".:: Borrow 2 (dynamic) ::.\n" << pool << std::endl;
       ASSERT_EQ(pool.current_stock(), 0);
       ASSERT_EQ(pool.num_pending(), 0);
 
-      CUDA_CHECK(cudaStreamDestroy(stream));
+      ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
     }
 
     std::cout << ".:: Return 2 (dynamic) ::.\n" << pool << std::endl;
@@ -499,69 +486,81 @@ void test_borrow_return_lost_context() {
 
     // Borrow workspace that exceeds base pool size.
     {
-      cudaStream_t stream;
-      CUDA_CHECK(cudaStreamCreate(&stream));
+      aclrtStream stream = nullptr;
+      ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
       auto ws{pool.get_workspace<6>(buffer_size)};
       std::cout << ".:: Borrow 6 (static) ::.\n" << pool << std::endl;
       ASSERT_EQ(pool.current_stock(), 0);
       ASSERT_EQ(pool.num_pending(), 0);
 
-      CUDA_CHECK(cudaStreamDestroy(stream));
+      ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
     }
     std::cout << ".:: Return 6 (static) ::.\n" << pool << std::endl;
-    ASSERT_EQ(pool.current_stock(), opt.max_stock);
+    ASSERT_EQ(pool.current_stock(), kPoolOptions.max_stock);
     ASSERT_EQ(pool.num_pending(), 0);
 
     // Borrow a buffer that is smaller than the current buffer size.
     {
-      cudaStream_t stream;
-      CUDA_CHECK(cudaStreamCreate(&stream));
+      aclrtStream stream = nullptr;
+      ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
       auto ws{pool.get_unique(buffer_size / 2)};
       std::cout << ".:: Borrow 1 (smaller) ::.\n" << pool << std::endl;
-      ASSERT_EQ(pool.current_stock(), opt.max_stock - 1);
+      ASSERT_EQ(pool.current_stock(), kPoolOptions.max_stock - 1);
       ASSERT_EQ(pool.num_pending(), 0);
 
-      CUDA_CHECK(cudaStreamDestroy(stream));
+      ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
     }
     std::cout << ".:: Return 1 (smaller) ::.\n" << pool << std::endl;
-    ASSERT_EQ(pool.current_stock(), opt.max_stock);
+    ASSERT_EQ(pool.current_stock(), kPoolOptions.max_stock);
     ASSERT_EQ(pool.num_pending(), 0);
 
     // Borrow a buffer that is bigger than the current buffer size.
     {
-      cudaStream_t stream;
-      CUDA_CHECK(cudaStreamCreate(&stream));
+      aclrtStream stream = nullptr;
+      ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
       auto ws{pool.get_unique(buffer_size + 37)};
       std::cout << ".:: Borrow 1 (bigger) ::.\n" << pool << std::endl;
       ASSERT_EQ(pool.current_stock(), 0);
       ASSERT_EQ(pool.num_pending(), 0);
 
-      CUDA_CHECK(cudaStreamDestroy(stream));
+      ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
     }
-    std::cout << ".:: Return 1 (smaller) ::.\n" << pool << std::endl;
+    std::cout << ".:: Return 1 (bigger) ::.\n" << pool << std::endl;
     ASSERT_EQ(pool.current_stock(), 1);
     ASSERT_EQ(pool.num_pending(), 0);
   }
 }
 
-TEST(MemoryPoolTest, standard_allocator) { test_standard_allocator(); }
-TEST(MemoryPoolTest, host_allocator) { test_host_allocator(); }
-TEST(MemoryPoolTest, device_allocator) { test_device_allocator(); }
-TEST(MemoryPoolTest, borrow_return_default_context) {
-  test_borrow_return_with_context(false);
-}
-TEST(MemoryPoolTest, borrow_return_custom_context) {
-  test_borrow_return_with_context(true);
+TEST_F(MemoryPoolTest, standard_allocator) {
+  test_standard_allocator(allocator_.get());
 }
 
-TEST(MemoryPoolTest, test_borrow_return_lost_context) {
+TEST_F(MemoryPoolTest, host_allocator) {
+  test_host_allocator(allocator_.get());
+}
+
+TEST_F(MemoryPoolTest, device_allocator) {
+  test_device_allocator(allocator_.get());
+}
+
+TEST_F(MemoryPoolTest, borrow_return_default_context) {
+  test_borrow_return_with_context(allocator_.get(), false);
+}
+
+TEST_F(MemoryPoolTest, borrow_return_custom_context) {
+  test_borrow_return_with_context(allocator_.get(), true);
+}
+
+TEST_F(MemoryPoolTest, test_borrow_return_lost_context) {
   std::cout << "Unfortunately, there is currently no reliable way to test "
                "safely whether a\n"
             << "stream is alive. Keeping the test around for manual tests.\n";
   if (false) {
-    test_borrow_return_lost_context();
+    test_borrow_return_lost_context(allocator_.get());
   }
 }
+
+}  // namespace
