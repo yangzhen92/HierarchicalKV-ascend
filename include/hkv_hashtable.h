@@ -1560,7 +1560,7 @@ class HashTable : public HashTableBase<K, V, S> {
                 table_->capacity_divisor_magic, table_->capacity_divisor_shift);
       }
     } else {
-      size_t size_all = n * sizeof(value_type*)+ n * sizeof(bool);
+      size_t size_all = n * sizeof(value_type*) + n * sizeof(bool);
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
       auto temp_storage{dev_ws.get<uint8_t*>(0)};
       value_type** table_value_addrs{
@@ -1572,15 +1572,14 @@ class HashTable : public HashTableBase<K, V, S> {
         size_t keys_size = n * sizeof(key_type*);
         auto dev_keys_ws{dev_mem_pool_->get_workspace<1>(keys_size, stream)};
         auto temp_keys_storage{dev_keys_ws.get<uint8_t*>(0)};
-        key_type** d_dst_keys{
-            reinterpret_cast<key_type**>(temp_keys_storage)};
+        key_type** d_dst_keys{reinterpret_cast<key_type**>(temp_keys_storage)};
         find_or_insert_hybrid_kernel<K, V, S, evict_strategy>
             <<<block_dim_, 0, stream>>>(
                 table_->buckets, table_->buckets_size, options_.max_bucket_size,
-                options_.dim, keys, values, scores, table_value_addrs, d_dst_keys, d_founds,
-                n, global_epoch_, table_->max_bucket_shift,
-                table_->capacity_divisor_magic, table_->capacity_divisor_shift,
-                table_->capacity);
+                options_.dim, keys, values, scores, table_value_addrs,
+                d_dst_keys, d_founds, n, global_epoch_,
+                table_->max_bucket_shift, table_->capacity_divisor_magic,
+                table_->capacity_divisor_shift, table_->capacity);
 
         auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
                                          sizeof(value_type), false);
