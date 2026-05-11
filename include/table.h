@@ -197,14 +197,12 @@ void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
 
   (*table)->num_of_memory_slices += num_of_memory_slices;
   uint32_t bucket_max_size = static_cast<uint32_t>((*table)->bucket_max_size);
-  size_t local_bucket_memory_size = bucket_max_size * (sizeof(K) + sizeof(S));
   // Align to the cache line size.
   constexpr uint32_t CACHE_LINE_SIZE = 128U / sizeof(uint8_t);
   uint32_t reserve_size =
       bucket_max_size < CACHE_LINE_SIZE ? CACHE_LINE_SIZE : bucket_max_size;
-  local_bucket_memory_size += reserve_size * sizeof(uint8_t);
 
-  size_t actual_bucket_memory_size = local_bucket_memory_size;
+  size_t actual_bucket_memory_size = 0;
   if (provider != nullptr) {
     provider->ensure_buckets_for_range(start, end,
                                        (*table)->num_of_buckets_per_alloc,
@@ -226,10 +224,6 @@ void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
 
     if (provider != nullptr) {
       address = provider->get_bucket_address(i);
-    } else {
-      // Backward compatibility: use allocator when no provider
-      allocator->alloc(MemoryType::Device, (void**)&(address),
-                       actual_bucket_memory_size * num_of_buckets);
     }
 
     allocate_bucket_others_kernel<K, V, S><<<1, 0, 0>>>((*table)->buckets,
