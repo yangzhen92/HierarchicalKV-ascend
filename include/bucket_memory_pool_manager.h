@@ -89,7 +89,7 @@ class BucketMemoryPoolManager : public IBucketAddressProvider {
         size_t num_of_buckets =
             std::min(end - i, static_cast<size_t>(num_of_buckets_per_alloc_));
         uint8_t* address = nullptr;
-        NPU_CHECK(aclrtMalloc((void**)&address,
+        NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&address),
                               bucket_memory_size * num_of_buckets,
                               bucket_malloc_flag_));
         bucket_memory_pool_bases_.push_back(address);

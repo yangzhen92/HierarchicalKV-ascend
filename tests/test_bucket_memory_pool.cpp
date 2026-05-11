@@ -539,14 +539,15 @@ TEST_F(BucketMemoryPoolTest, test_whitespace_handling) {
   ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
 }
 
-// 测试使用最大max_capacity建表5次，内存使用正常
-TEST_F(BucketMemoryPoolTest, test_alloc_5_table) {
+// 测试使用最大max_capacity建表多次，内存使用不越界
+TEST_F(BucketMemoryPoolTest, test_multi_table) {
   setenv("HKV_NPU_ALLOC_CONF", " buckets_mem_pool = enable ; page_table = 2m ", 1);
   
   constexpr size_t dim = 8;
   constexpr size_t init_capacity = 128UL * 1024;
-  constexpr size_t max_capacity = std::numeric_limits<size_t>::max();
+  constexpr size_t max_capacity = std::numeric_limits<uint32_t>::max();
   constexpr size_t key_num = 1024;
+  constexpr size_t TABLE_NUM = 5;
   
   HashTableOptions options{
       .init_capacity = init_capacity,
@@ -557,9 +558,9 @@ TEST_F(BucketMemoryPoolTest, test_alloc_5_table) {
   };
   
   using Table = HashTable<K, V>;
-  for (int i = 0; i < 10; i ++) {
-    Table table;
-    table.init(options);
-    EXPECT_EQ(table.size(), 0);
+  vector<Table> table(TABLE_NUM);
+  for (int i = 0; i < TABLE_NUM; i ++) {
+    table[i].init(options);
+    EXPECT_EQ(table[i].size(), 0);
   }
 }
