@@ -90,6 +90,7 @@ HierarchicalKV-ascend（下称HKV）是一个基于昇腾平台，面向推荐�
 | __max_load_factor\*__        | float  | 0.5f   | 触发rehash的最大负载率                               |
 | __device_id__                | int    | -1     | 设备id，为`-1`时，设置为`aclrtGetDevice`返回的设备id |
 | __num_of_buckets_per_alloc__ | int    | 1      | 申请桶内存时，单次申请的桶数                         |
+| __api_lock__                 | bool   | false  | 指示一旦进入 API 是否锁定表的标志, 当使用多线程调用API为时，需要配置为true保证数据一致性 |
 
 *以上为当前支持的全量选项，部分`HashTableOptions`中的选项正在支持中，敬请期待。*
 
@@ -161,7 +162,7 @@ int main(int args, char *argv[])
 ### 构建依赖
   - [CANN开发套件包](https://hiascend.com/document/redirect/CannCommunityInstSoftware)
 
-  - [googletest](https://github.com/google/googletest)
+  - [googletest](https://gitcode.com/gh_mirrors/googl/googletest)
 
 ### 快速构建
 
@@ -190,16 +191,12 @@ cd HierarchicalKV-ascend
 
 #### 编译运行
 ```bash
-bash run.sh -v [SOC_VERSION] -d [DEVICE_ID]
+bash run.sh -d [DEVICE_ID]
 ```
-- SOC_VERSION：AI处理器的型号，默认值为`Ascend950PR_9579`。在服务器执行npu-smi info -t board -i id -c chip_id命令进行查询，获取`Chip Name`和
-`NPU Name`信息，实际配置值为`{Chip Name}_{NPU Name}`。例如Chip Name取值为Ascend950PR，NPU Name取值为957c，实际配置值为Ascend950PR_957c。其中：
-  - id：设备id，通过npu-smi info -l命令查出的NPU ID即为设备id。
-  - chip_id：芯片id，通过npu-smi info -m命令查出的Chip ID即为芯片id。
 - DEVICE_ID：样例执行的npu的卡号，默认值为0。
 - **其他参数说明请使用`-h`获取帮助信息。**
 
 示例：
 ```bash
-bash run.sh -v Ascend950PR_9579 -d 3
+bash run.sh -d 3
 ```

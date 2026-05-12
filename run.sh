@@ -6,15 +6,15 @@ CURRENT_DIR=$(
 
 INSTALL_PREFIX="${CURRENT_DIR}/out"
 
-SHORT=h,r:,v:,i:,b:,p:,d:,c,t:
-LONG=help,run-mode:,soc-version:,install-path:,build-type:,install-prefix:,device:,compile-only,enable-test:
+SHORT=h,r:,i:,b:,p:,d:,c,t:,g
+LONG=help,run-mode:,install-path:,build-type:,install-prefix:,device:,compile-only,enable-test:,skip-disabled-test
 OPTS=$(getopt -a --options $SHORT --longoptions $LONG -- "$@")
 eval set -- "$OPTS"
-SOC_VERSION="Ascend950PR_9579"
 COMPILE_ONLY=0
 ENABLE_TEST=1
 RUN_MODE="npu"
 BUILD_TYPE="Release"
+RUN_DISABLED=1
 
 show_help() {
     cat << EOF
@@ -24,13 +24,13 @@ Usage: ${0##*} [OPTIONS] [ARGUMENTS]
 OPTIONS（可选参数）：
     -h, --help                打印帮助信息并退出
     -r, --run-mode MODE       指定编译方式MODE，可选择CPU仿真、NPU上板。支持参数为[sim / npu]，默认值为npu。
-    -v, --soc-version VERSION 指定昇腾AI处理器型号VERSION，默认值为Ascend950PR_9579。
     -i, --install-path PATH   指定cann的安装路径PATH，默认值为环境变量ASCEND_INSTALL_PATH。
     -b, --build-type TYPE     指定构建类型TYPE，默认值为"Release"。
     -p, --install-prefix PATH 指定安装路径PATH，默认为当前路径下的out目录。
     -d, --device DEVICE_ID    指定芯片卡号DEVICE_ID，设置环境变量HKV_TEST_DEVICE，默认值为0。testcase、benchmark以及demo将指定芯片上执行。
     -c, --compile-only        仅编译安装HKV工程，不执行用例。
     -t, --enable-test SHIFT   指定测试开关SHIFT，支持参数为[0 / 1]，0表示不执行testcase，1表示执行testcase。
+    -g, --skip-disabled-test  不执行gtest中DISABLED_用例。
 EOF
     exit 0
 }
@@ -42,10 +42,6 @@ while :; do
         ;;
     -r | --run-mode)
         RUN_MODE="$2"
-        shift 2
-        ;;
-    -v | --soc-version)
-        SOC_VERSION="$2"
         shift 2
         ;;
     -i | --install-path)
@@ -76,6 +72,10 @@ while :; do
         fi
         shift 2
         ;;
+    -g | --skip-disabled-test)
+        RUN_DISABLED=0
+        shift
+        ;;
     --)
         shift
         break
@@ -87,9 +87,9 @@ while :; do
     esac
 done
 
-RUN_MODE_LIST="sim npu"
+RUN_MODE_LIST="npu"
 if [[ " $RUN_MODE_LIST " != *" $RUN_MODE "* ]]; then
-    echo "[ERROR]: RUN_MODE error, This sample only support specify sim or npu!"
+    echo "[ERROR]: RUN_MODE error, This sample only support specify npu!"
     exit -1
 fi
 
@@ -110,23 +110,15 @@ echo "_ASCEND_INSTALL_PATH [$_ASCEND_INSTALL_PATH]"
 
 export ASCEND_TOOLKIT_HOME=${_ASCEND_INSTALL_PATH}
 export ASCEND_HOME_PATH=${_ASCEND_INSTALL_PATH}
-echo "[INFO]: Current compile soc version is ${SOC_VERSION}"
 source ${_ASCEND_INSTALL_PATH}/bin/setenv.bash
-if [ "${RUN_MODE}" = "sim" ]; then
-    # in case of running op in simulator, use stub .so instead
-    export LD_LIBRARY_PATH=${_ASCEND_INSTALL_PATH}/tools/simulator/${SOC_VERSION}/lib:$LD_LIBRARY_PATH
-fi
 
 set -e
 rm -rf build ${INSTALL_PREFIX}
 mkdir -p build
 cmake -B build \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
-    -DRUN_MODE=${RUN_MODE} \
-    -DSOC_VERSION=${SOC_VERSION} \
     -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
     -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-    -DASCEND_CANN_PACKAGE_PATH=${_ASCEND_INSTALL_PATH} \
     -DBUILD_SHARED_LIBS=ON \
     -DENABLE_TEST=${ENABLE_TEST}
 cmake --build build -j 16 --verbose
@@ -141,7 +133,12 @@ export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:${INSTALL_PREFIX}/lib64:${_ASCEND_I
 echo "======================ctest======================"
 if [ $ENABLE_TEST -eq 1 ]; then
     export LD_LIBRARY_PATH=$(pwd)/build/lib:$LD_LIBRARY_PATH
-    pushd build && ctest -V
+    pushd build
+    if [ "$RUN_DISABLED" -eq 1 ]; then
+        GTEST_ALSO_RUN_DISABLED_TESTS=1 ctest -V
+    else
+        ctest -V
+    fi
     popd
 fi
 
@@ -149,7 +146,3 @@ fi
     ${INSTALL_PREFIX}/bin/hkv_benchmark > hkv_benchmark_run.log
     ${INSTALL_PREFIX}/bin/hkv_demo > hkv_demo_run.log
 )
-# tidy folder by delete log files
-if [ "${RUN_MODE}" = "sim" ]; then
-    rm -f *.log *.dump *.vcd *.toml *_log
-fi

@@ -45,9 +45,6 @@ using std::setw;
 using namespace npu::hkv;
 using namespace benchmark;
 
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
-
 enum class Test_Mode {
   pure_hbm = 0,
   hybrid = 1,
@@ -62,8 +59,6 @@ using S = uint64_t;
 using V = float;
 using EvictStrategy = npu::hkv::EvictStrategy;
 using TableOptions = npu::hkv::HashTableOptions;
-
-static uint32_t g_core_num_aiv = 0;
 
 constexpr uint32_t FLOAT_TYPR_BYTES = 4;
 constexpr int64_t RANDOM_MOD = 0;
@@ -565,6 +560,8 @@ float test_one_api(std::shared_ptr<Table>& table, const API_Select api,
   return throughput;
 }
 
+static Test_Mode test_mode = Test_Mode::pure_hbm;
+
 void print_title_a() {
   cout << endl
        << "|    \u03BB "
@@ -573,12 +570,14 @@ void print_title_a() {
        << "| find_or_insert* "
        << "| find_and_update "
        << "|   find* "
-       << "| export_batch "
+       << "| find_or_insert "
        << "| assign "
        << "| assign_scores "
-       << "| assign_values "
-       << "| insert_and_evict "
-       << "|  contains ";
+       << "| assign_values ";
+  if (test_mode == Test_Mode::pure_hbm) {
+    cout << "| insert_and_evict ";
+  }
+  cout << "|  contains ";
   cout << "|\n";
 
   //<< "| load_factor "
@@ -593,54 +592,84 @@ void print_title_a() {
        << "|----------------:"
        //<< "|   find* "
        << "|--------:"
-       //<< "| export_batch "
-       << "|-------------:"
+       //<< "| find_or_insert "
+       << "|---------------:"
        //<< "| assign "
        << "|-------:"
        //<< "| assign_scores "
        << "|--------------:"
        //<< "| assign_values "
-       << "|--------------:"
-       //<< "| insert_and_evict "
-       << "|-----------------:"
+       << "|--------------:";
+  if (test_mode == Test_Mode::pure_hbm) {
+    //<< "| insert_and_evict "
+    cout << "|-----------------:";
+  }
        //<< "|  contains "
-       << "|----------:";
+  cout << "|----------:";
   cout << "|\n";
 }
 
 void print_title_b() {
   cout << endl
        << "|    \u03BB "
+       << "| export_batch "
        << "| export_batch_if_v2 "
-       << "| export_batch_if "
-       << "|  contains "
-       << "| find_and_update ";
+       << "| export_batch_if ";
   cout << "|\n";
 
   //<< "| load_factor "
   cout << "|-----:"
+       //<< "| export_batch "
+       << "|-------------:"
        //<< "| export_batch_if_v2 "
        << "|-------------------:"
        //<< "| export_batch_if "
-       << "|----------------:"
-       //<< "|  contains "
-       << "|----------:"
-       //<< "| find_and_update "
        << "|----------------:";
   cout << "|\n";
 }
 
-void print_title_a_static() {
+void print_title_hybrid_a() {
   cout << endl
        << "|    \u03BB "
-       << "| find_or_insert ";
-  cout << "|\n";
+       << "| insert_or_assign "
+       << "|   find "
+       << "| find_or_insert "
+       << "| assign "
+       << "| assign_values "
+       << "|\n";
 
   //<< "| load_factor "
   cout << "|-----:"
+       //<< "| insert_or_assign "
+       << "|-----------------:"
+       //<< "|   find "
+       << "|-------:"
        //<< "| find_or_insert "
-       << "|---------------:";
-  cout << "|\n";
+       << "|---------------:"
+       //<< "| assign "
+       << "|-------:"
+       //<< "| assign_values "
+       << "|--------------:"
+       << "|\n";
+}
+
+void print_title_hybrid_b() {
+  cout << endl
+       << "|    \u03BB "
+       << "| export_batch "
+       << "| export_batch_if "
+       << "| export_batch_if_v2 "
+       << "|\n";
+
+  //<< "| load_factor "
+  cout << "|-----:"
+       //<< "| export_batch "
+       << "|-------------:"
+       //<< "| export_batch_if "
+       << "|----------------:"
+       //<< "| export_batch_if_v2 "
+       << "|-------------------:"
+       << "|\n";
 }
 
 void test_main(std::vector<API_Select>& apis, const size_t dim,
@@ -692,6 +721,10 @@ void test_main(std::vector<API_Select>& apis, const size_t dim,
           std::cout << rep(11);
           break;
         }
+        case API_Select::find_or_insert: {
+          std::cout << rep(9);
+          break;
+        }
         case API_Select::find: {
           std::cout << rep(1);
           break;
@@ -733,7 +766,7 @@ void test_main(std::vector<API_Select>& apis, const size_t dim,
           break;
         }
         case API_Select::export_batch_if: {
-          std::cout << rep(10);
+          std::cout << rep(6);
         }
         case API_Select::contains: {
           std::cout << rep(4);
@@ -790,7 +823,7 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
         API_Select::find_or_insert_ptr,
         API_Select::find_and_update,
         API_Select::find_ptr,
-        API_Select::export_batch,
+        API_Select::find_or_insert,
         API_Select::assign,
         API_Select::assign_scores,
         API_Select::assign_values,
@@ -798,8 +831,12 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
         API_Select::contains,
       };
       std::vector<API_Select> apis_b{
+        API_Select::export_batch,
         API_Select::export_batch_if_v2,
+        API_Select::export_batch_if,
       };
+      test_mode = Test_Mode::pure_hbm;
+
       cout << "### On pure HBM mode: " << endl;
       print_configuration(8, 128 * 1024 * 1024UL, 4);
       print_title_a();
@@ -846,6 +883,38 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
       cout << endl;
     }
 
+    {
+      std::vector<API_Select> apis_a{
+        API_Select::insert_or_assign,
+        API_Select::find,
+        API_Select::find_or_insert,
+        API_Select::assign,
+        API_Select::assign_values,
+      };
+
+      std::vector<API_Select> apis_b{
+        API_Select::export_batch,
+        API_Select::export_batch_if,
+        API_Select::export_batch_if_v2,
+      };
+      
+      cout << "### On HBM+HMEM hybrid mode: " << endl;
+      test_mode = Test_Mode::hybrid;
+      print_configuration(64, 128 * 1024 * 1024UL, 16);
+      print_title_hybrid_a();
+      test_main(apis_a, 64, 128 * 1024 * 1024UL, key_num_per_op, 16);
+      print_title_hybrid_b();
+      test_main(apis_b, 64, 128 * 1024 * 1024UL, key_num_per_op, 16);
+
+      print_configuration(64, 512 * 1024 * 1024UL, 32);
+      print_title_hybrid_a();
+      test_main(apis_a, 64, 512 * 1024 * 1024UL, key_num_per_op, 32);
+      print_title_hybrid_b();
+      test_main(apis_b, 64, 512 * 1024 * 1024UL, key_num_per_op, 32);
+
+      cout << endl;
+    }
+
     NPU_CHECK(aclrtSynchronizeDevice());
   } catch (const npu::hkv::NpuException& e) {
     cerr << e.what() << endl;
@@ -868,14 +937,6 @@ void query_memory() {
 }
 
 int32_t main(int32_t argc, char* argv[]) {
-  const char* socVersion = TOSTRING(SOC_VERSION);
-  auto ascendc_platform =
-      platform_ascendc::PlatformAscendCManager::GetInstance(socVersion);
-  HKV_CHECK(ascendc_platform != nullptr, "Get ascendc platform info failed, please check SOC_VERSION!");
-  g_core_num_aiv = ascendc_platform->GetCoreNumAiv();
-  std::cout << "Soc version: " << socVersion
-            << " aiv_num: " << g_core_num_aiv << std::endl;
-
   NPU_CHECK(aclInit(nullptr));
   auto device_id_env = std::getenv("HKV_TEST_DEVICE");
   int32_t device_id = 0;
@@ -886,10 +947,17 @@ int32_t main(int32_t argc, char* argv[]) {
     std::cout << "set env HKV_TEST_DEVICE error, using default device_id 0" << std::endl;
   }
   NPU_CHECK(aclrtSetDevice(device_id));
-  std::cout << "aclrtGetSocName:" << aclrtGetSocName() << " device_id:" << device_id << std::endl;
+  auto ascendc_platform =
+      platform_ascendc::PlatformAscendCManager::GetInstance();
+  HKV_CHECK(ascendc_platform != nullptr,
+            "Get ascendc platform info failed!");
+  uint32_t block_dim = ascendc_platform->GetCoreNumAiv();
+  std::cout << "Soc version:" << aclrtGetSocName()
+            << " device_id:" << device_id
+            << " aiv_num: " << block_dim << std::endl;
   query_memory();
 
-  benchmark_hkv_hashtable(g_core_num_aiv);
+  benchmark_hkv_hashtable(block_dim);
 
   NPU_CHECK(aclrtResetDevice(device_id));
   NPU_CHECK(aclFinalize());
