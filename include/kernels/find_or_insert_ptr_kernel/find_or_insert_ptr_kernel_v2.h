@@ -44,7 +44,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_lock_key_vf_v
     __gm__ int32_t* __restrict__ buckets_size, uint64_t buckets_num,
     uint32_t bucket_max_size, uint32_t dim, __gm__ const K* __restrict__ keys,
     __gm__ V* __restrict__ value_ptrs, __gm__ S* __restrict__ scores,
-    __gm__ K * __gm__ * __restrict__ key_ptrs, uint64_t n,
+    __gm__ K* __gm__* __restrict__ key_ptrs, uint64_t n,
     __gm__ bool* __restrict__ founds, uint64_t global_epoch, uint64_t cur_score,
     uint32_t blockIdx, uint64_t thread_all, uint32_t max_bucket_shift,
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
@@ -303,7 +303,7 @@ template <typename K>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_unlock_key_vf(
     __gm__ const K* __restrict__ keys,
-    __gm__ K * __gm__ * __restrict__ key_ptrs, uint64_t n, uint64_t thread_all,
+    __gm__ K* __gm__* __restrict__ key_ptrs, uint64_t n, uint64_t thread_all,
     uint32_t blockIdx) {
   uint64_t kv_idx = blockIdx * blockDim.x + threadIdx.x;
   K key;
@@ -326,7 +326,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_vf_v2(
     __gm__ const Table<K, V, S>* __restrict__ table,
     __gm__ Bucket<K, V, S>* buckets, const size_t bucket_max_size,
     const size_t buckets_num, const size_t dim,
-    __gm__ const K* __restrict__ keys, __gm__ V * __gm__ * __restrict__ vectors,
+    __gm__ const K* __restrict__ keys, __gm__ V* __gm__* __restrict__ vectors,
     __gm__ S* __restrict__ scores, S cur_score, __gm__ bool* __restrict__ found,
     const S global_epoch, const size_t n, uint32_t blockIdx,
     uint64_t thread_all, uint32_t max_bucket_shift,
@@ -406,7 +406,7 @@ __global__ __vector__ void find_or_insert_ptr_kernel_lock_key_v2(
     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
     uint64_t buckets_num, uint32_t bucket_capacity, uint32_t dim,
     __gm__ const K* keys, __gm__ void* value_ptrs, __gm__ S* scores,
-    __gm__ K * __gm__ * key_ptrs, uint64_t n, __gm__ bool* founds,
+    __gm__ K* __gm__* key_ptrs, uint64_t n, __gm__ bool* founds,
     uint64_t global_epoch, uint32_t max_bucket_shift,
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
     uint64_t n_align_warp, uint64_t capacity) {
@@ -427,7 +427,7 @@ __global__ __vector__ void find_or_insert_ptr_kernel_lock_key_v2(
 
 template <class K>
 __global__ __vector__ void find_or_insert_ptr_kernel_unlock_key_v2(
-    __gm__ const K* keys, __gm__ K * __gm__ * key_ptrs, uint64_t n) {
+    __gm__ const K* keys, __gm__ K* __gm__* key_ptrs, uint64_t n) {
   const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
   asc_vf_call<find_or_insert_ptr_kernel_unlock_key_vf<K>>(
       dim3{static_cast<uint32_t>(THREAD_NUM_512)}, keys, key_ptrs, n,
@@ -438,7 +438,7 @@ template <class K, class V, class S, int Strategy = -1>
 __global__ __vector__ void find_or_insert_ptr_kernel_v2(
     __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
     uint32_t bucket_max_size, uint64_t buckets_num, uint32_t dim,
-    __gm__ const K* keys, __gm__ V * __gm__ * vectors, __gm__ S* scores,
+    __gm__ const K* keys, __gm__ V* __gm__* vectors, __gm__ S* scores,
     __gm__ bool* found, uint64_t global_epoch, uint64_t n,
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
     uint64_t capacity_divisor_shift, uint64_t capacity) {
