@@ -1692,17 +1692,23 @@ class HashTable : public HashTableBase<K, V, S> {
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
 
     if (unique_key) {
-      bool is_key_ptr_valid = true;
       if (locked_key_ptrs == nullptr) {
-        is_key_ptr_valid = false;
+        find_or_insert_ptr_kernel_lock_key_v2<K, V, S, evict_strategy, false>
+            <<<block_dim_, 0, stream>>>(
+                table_->buckets, table_->buckets_size, table_->buckets_num,
+                options_.max_bucket_size, options_.dim, keys, values, scores,
+                locked_key_ptrs, n, founds, global_epoch_,
+                table_->max_bucket_shift, table_->capacity_divisor_magic,
+                table_->capacity_divisor_shift, n_align_warp, table_->capacity);
+      } else {
+        find_or_insert_ptr_kernel_lock_key_v2<K, V, S, evict_strategy, true>
+            <<<block_dim_, 0, stream>>>(
+                table_->buckets, table_->buckets_size, table_->buckets_num,
+                options_.max_bucket_size, options_.dim, keys, values, scores,
+                locked_key_ptrs, n, founds, global_epoch_,
+                table_->max_bucket_shift, table_->capacity_divisor_magic,
+                table_->capacity_divisor_shift, n_align_warp, table_->capacity);
       }
-      find_or_insert_ptr_kernel_lock_key_v2<K, V, S, evict_strategy, is_key_ptr_valid>
-          <<<block_dim_, 0, stream>>>(
-              table_->buckets, table_->buckets_size, table_->buckets_num,
-              options_.max_bucket_size, options_.dim, keys, values, scores,
-              locked_key_ptrs, n, founds, global_epoch_,
-              table_->max_bucket_shift, table_->capacity_divisor_magic,
-              table_->capacity_divisor_shift, n_align_warp, table_->capacity);
     } else {
       find_or_insert_ptr_kernel_v2<K, V, S, evict_strategy>
           <<<block_dim_, 0, stream>>>(
