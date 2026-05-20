@@ -37,7 +37,7 @@ namespace hkv {
 using namespace AscendC;
 
 template <typename K = uint64_t, typename V = float, typename S = uint64_t,
-          int Strategy = -1, int32_t EVICT_GROUP_SIZE = 16>
+          int Strategy = -1, bool IS_LOCKED_PTRS = false, int32_t EVICT_GROUP_SIZE = 16>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_lock_key_vf_v2(
     __gm__ Bucket<K, V, S>* __restrict__ buckets,
@@ -52,11 +52,6 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_lock_key_vf_v
   if ((buckets == nullptr) || (buckets_size == nullptr) || (keys == nullptr) ||
       (value_ptrs == nullptr) || (founds == nullptr)) {
     return;
-  }
-
-  bool is_key_ptr_valid = true;
-  if (key_ptrs == nullptr) {
-    is_key_ptr_valid = false;
   }
 
   using BUCKET = Bucket<K, V, S>;
@@ -82,7 +77,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_lock_key_vf_v
         occupy_result = OccupyResult::ILLEGAL;
         founds[kv_idx] = false;
         value_ptrs[kv_idx] = nullptr;
-        if (is_key_ptr_valid) {
+        if (IS_LOCKED_PTRS == true) {
           key_ptrs[kv_idx] = nullptr;
         }
       } else {
@@ -283,13 +278,13 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_lock_key_vf_v
     // 5. 抢占成功，写入value
     if (occupy_result == OccupyResult::REFUSED) {
       value_ptrs[kv_idx] = nullptr;
-      if (is_key_ptr_valid) {
+      if (IS_LOCKED_PTRS == true) {
         key_ptrs[kv_idx] = nullptr;
       }
     } else {
       value_ptrs[kv_idx] = bucket_values + key_pos * dim;
       __gm__ K* key_address = BUCKET::keys(bucket_keys, key_pos);
-      if (is_key_ptr_valid) {
+      if (IS_LOCKED_PTRS == true) {
         key_ptrs[kv_idx] = key_address;
       } else {
         *key_address = key;
@@ -401,7 +396,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_vf_v2(
   }
 }
 
-template <class K, class V, class S, int Strategy = -1>
+template <class K, class V, class S, int Strategy = -1, bool IS_LOCKED_PTRS = false>
 __global__ __vector__ void find_or_insert_ptr_kernel_lock_key_v2(
     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
     uint64_t buckets_num, uint32_t bucket_capacity, uint32_t dim,
@@ -417,7 +412,7 @@ __global__ __vector__ void find_or_insert_ptr_kernel_lock_key_v2(
                            : 0;
 
   asc_vf_call<
-      find_or_insert_ptr_kernel_lock_key_vf_v2<K, V, S, Strategy>>(
+      find_or_insert_ptr_kernel_lock_key_vf_v2<K, V, S, Strategy, IS_LOCKED_PTRS>>(
       dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets, buckets_size,
       buckets_num, bucket_capacity, dim, keys, value_ptrs, scores, key_ptrs, n,
       founds, global_epoch, cur_score, GetBlockIdx(), thread_all,
