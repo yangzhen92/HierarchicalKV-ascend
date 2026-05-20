@@ -1695,11 +1695,10 @@ class HashTable : public HashTableBase<K, V, S> {
       find_or_insert_ptr_kernel_lock_key_v2<K, V, S, evict_strategy>
           <<<block_dim_, 0, stream>>>(
               table_->buckets, table_->buckets_size, table_->buckets_num,
-              options_.max_bucket_size, value_move_opt_.dim, keys,
-              static_cast<void*>(values), scores, locked_key_ptrs, n, founds,
-              global_epoch_, value_move_opt_.size, table_->max_bucket_shift,
-              table_->capacity_divisor_magic, table_->capacity_divisor_shift,
-              n_align_warp, table_->capacity);
+              options_.max_bucket_size, options_.dim, keys, values, scores,
+              locked_key_ptrs, n, founds, global_epoch_,
+              table_->max_bucket_shift, table_->capacity_divisor_magic,
+              table_->capacity_divisor_shift, n_align_warp, table_->capacity);
     } else {
       find_or_insert_ptr_kernel_v2<K, V, S, evict_strategy>
           <<<block_dim_, 0, stream>>>(
