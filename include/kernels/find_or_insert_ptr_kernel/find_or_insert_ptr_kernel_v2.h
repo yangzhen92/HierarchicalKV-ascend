@@ -417,7 +417,7 @@ __global__ __vector__ void find_or_insert_ptr_kernel_lock_key_v2(
                            : 0;
 
   asc_vf_call<
-      find_or_insert_ptr_kernel_lock_key_vf_v2<K, V, S, DTYPE, Strategy>>(
+      find_or_insert_ptr_kernel_lock_key_vf_v2<K, V, S, Strategy>>(
       dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets, buckets_size,
       buckets_num, bucket_capacity, dim, keys, value_ptrs, scores, key_ptrs, n,
       founds, global_epoch, cur_score, GetBlockIdx(), thread_all,
