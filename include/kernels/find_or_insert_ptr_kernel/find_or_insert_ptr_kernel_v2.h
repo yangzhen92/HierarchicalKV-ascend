@@ -290,9 +290,9 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_lock_key_vf_v
       value_ptrs[kv_idx] = bucket_values + key_pos * dim;
       __gm__ K* key_address = BUCKET::keys(bucket_keys, key_pos);
       if (is_key_ptr_valid) {
-        *key_address = key;
-      } else {
         key_ptrs[kv_idx] = key_address;
+      } else {
+        *key_address = key;
       }
     }
     founds[kv_idx] = occupy_result == OccupyResult::DUPLICATE;
