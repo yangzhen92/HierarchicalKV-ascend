@@ -94,7 +94,7 @@
      __gm__ K* bucket_keys_ptr = bucket->keys_;
      __gm__ VecV* bucket_values_ptr = reinterpret_cast<__gm__ VecV*>(reinterpret_cast<__gm__ void*>(bucket->vectors));
      __gm__ S* bucket_scores_ptr = bucket->scores_;
- 
+
      // 3. 遍历桶，找key
      bool found = false;
      uint32_t target_pos = INVALID_KEY_POS;
