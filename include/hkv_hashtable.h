@@ -1691,11 +1691,7 @@ class HashTable : public HashTableBase<K, V, S> {
 
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
 
-    if (locked_key_ptrs != nullptr) {
-      if (!unique_key) {
-        throw std::invalid_argument(
-            "unique_key should be true and max_bucket_size should be larger.");
-      }
+    if (unique_key) {
       find_or_insert_ptr_kernel_lock_key_v2<K, V, S, evict_strategy>
           <<<block_dim_, 0, stream>>>(
               table_->buckets, table_->buckets_size, table_->buckets_num,
@@ -1704,29 +1700,6 @@ class HashTable : public HashTableBase<K, V, S> {
               global_epoch_, value_move_opt_.size, table_->max_bucket_shift,
               table_->capacity_divisor_magic, table_->capacity_divisor_shift,
               n_align_warp, table_->capacity);
-
-      NpuCheckError();
-      return;
-    }
-
-    if (unique_key) {
-      const size_type dev_ws_size{n * sizeof(key_type*)};
-      auto dev_ws{dev_mem_pool_->get_workspace<1>(dev_ws_size, stream)};
-      auto keys_ptr{dev_ws.get<key_type**>(0)};
-      NPU_CHECK(
-          aclrtMemsetAsync(keys_ptr, dev_ws_size, 0, dev_ws_size, stream));
-
-      find_or_insert_ptr_kernel_lock_key_v2<K, V, S, evict_strategy>
-          <<<block_dim_, 0, stream>>>(
-              table_->buckets, table_->buckets_size, table_->buckets_num,
-              options_.max_bucket_size, value_move_opt_.dim, keys,
-              static_cast<void*>(values), scores, keys_ptr, n, founds,
-              global_epoch_, value_move_opt_.size, table_->max_bucket_shift,
-              table_->capacity_divisor_magic, table_->capacity_divisor_shift,
-              n_align_warp, table_->capacity);
-
-      find_or_insert_ptr_kernel_unlock_key_v2<K>
-          <<<block_dim_, 0, stream>>>(keys, keys_ptr, n);
     } else {
       find_or_insert_ptr_kernel_v2<K, V, S, evict_strategy>
           <<<block_dim_, 0, stream>>>(

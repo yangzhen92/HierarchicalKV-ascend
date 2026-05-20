@@ -35,48 +35,35 @@
  namespace npu {
  namespace hkv {
  using namespace AscendC;
- 
- template <typename K = uint64_t, typename V = float, typename S = uint64_t, typename VecV = int32_t,
-           int Strategy = -1, int32_t EVICT_GROUP_SIZE = 16>
+
+ template <typename K = uint64_t, typename V = float, typename S = uint64_t,
+           typename VecV = int32_t, int Strategy = -1,
+           int32_t EVICT_GROUP_SIZE = 16>
  __simt_vf__ __aicore__
  LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_lock_key_vf_v2(
-     __gm__ Bucket<K, V, S>* buckets_gm, __gm__ int32_t* buckets_size_gm, uint64_t buckets_num,
-     uint32_t bucket_max_size, uint32_t dim, __gm__ const K* keys_gm,
-     __gm__ void* value_ptrs_gm, __gm__ S* scores_gm, __gm__ K * __gm__* key_ptrs_gm, uint64_t n,
-     __gm__ bool* founds_gm, uint64_t global_epoch, uint64_t cur_score,
-     uint32_t blockIdx, uint64_t thread_all, uint32_t max_bucket_shift,
-     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
-     uint64_t n_align_warp, uint64_t capacity) {
-   if (!buckets_gm) {
+     __gm__ Bucket<K, V, S>* __restrict__ buckets,
+     __gm__ int32_t* __restrict__ buckets_size, uint64_t buckets_num,
+     uint32_t bucket_max_size, uint32_t dim, __gm__ const K* __restrict__ keys,
+     __gm__ void* __restrict__ value_ptrs, __gm__ S* __restrict__ scores,
+     __gm__ K * __gm__ * __restrict__ key_ptrs, uint64_t n,
+     __gm__ bool* __restrict__ founds, uint64_t global_epoch,
+     uint64_t cur_score, uint32_t blockIdx, uint64_t thread_all,
+     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
+     uint64_t capacity_divisor_shift, uint64_t n_align_warp,
+     uint64_t capacity) {
+   if ((buckets == nullptr) || (buckets_size == nullptr) || (keys == nullptr) ||
+       (value_ptrs == nullptr) || (founds == nullptr)) {
      return;
    }
-   if (!buckets_size_gm) {
-     return;
+
+   bool is_key_ptr_valid = true;
+   if (key_ptrs == nullptr) {
+     is_key_ptr_valid = false;
    }
-   if (!keys_gm) {
-     return;
-   }
-   if (!value_ptrs_gm) {
-     return;
-   }
-   if (!founds_gm) {
-     return;
-   }
+   
    using BUCKET = Bucket<K, V, S>;
    using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
- 
-   __gm__ Bucket<K, V, S>* __restrict__ buckets =
-       reinterpret_cast<__gm__ Bucket<K, V, S>*>(buckets_gm);
-   __gm__ int32_t* __restrict__ buckets_size =
-       reinterpret_cast<__gm__ int32_t*>(buckets_size_gm);
-   __gm__ const K* __restrict__ keys =
-       reinterpret_cast<__gm__ const K*>(keys_gm);
-   __gm__ VecV* __gm__* __restrict__ value_ptrs =
-       reinterpret_cast<__gm__ VecV * __gm__*>(value_ptrs_gm);
-   __gm__ K* __gm__* __restrict__ key_ptrs =
-       reinterpret_cast<__gm__ K * __gm__*>(key_ptrs_gm);
-   __gm__ bool* __restrict__ founds = reinterpret_cast<__gm__ bool*>(founds_gm);
-   __gm__ S* __restrict__ scores = reinterpret_cast<__gm__ S*>(scores_gm);
+
    S score = static_cast<S>(EMPTY_SCORE);
    constexpr uint32_t STRIDE = sizeof(VecD_Comp) / sizeof(D);
  
@@ -97,7 +84,9 @@
          occupy_result = OccupyResult::ILLEGAL;
          founds[kv_idx] = false;
          value_ptrs[kv_idx] = nullptr;
-         key_ptrs[kv_idx] = nullptr;
+         if (is_key_ptr_valid) {
+           key_ptrs[kv_idx] = nullptr;
+         }
        } else {
          score = ScoreFunctor::desired_when_missed(scores, kv_idx, global_epoch,
                                                    cur_score);
@@ -296,11 +285,17 @@
      // 5. 抢占成功，写入value
      if (occupy_result == OccupyResult::REFUSED) {
        value_ptrs[kv_idx] = nullptr;
-       key_ptrs[kv_idx] = nullptr;
+       if (is_key_ptr_valid) {
+         key_ptrs[kv_idx] = nullptr;
+       }
      } else {
        value_ptrs[kv_idx] = bucket_values + key_pos * dim;
        __gm__ K* key_address = BUCKET::keys(bucket_keys, key_pos);
-       key_ptrs[kv_idx] = key_address;
+       if (is_key_ptr_valid) {
+         *key_address = key;
+       } else {
+         key_ptrs[kv_idx] = key_address;
+       }
      }
      founds[kv_idx] = occupy_result == OccupyResult::DUPLICATE;
    }
