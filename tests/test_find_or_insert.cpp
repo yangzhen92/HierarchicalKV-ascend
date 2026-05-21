@@ -465,18 +465,18 @@ TEST(test_find_or_insert_ptr, basic_function_with_locked_key_ptrs) {
   // 5.2 结果相同
   for (size_t i = 0; i < key_num; i++) {
     EXPECT_NE(host_found[i], host_found_again[i]);
-    if (host_found_again[i]) {
-      ASSERT_NE(real_values_ptr[i], nullptr);
-      vector<V> expect_values(dim, i);
-      vector<V> real_values(dim, 0);
-      ASSERT_EQ(aclrtMemcpy(real_values.data(), dim * each_value_size,
-                            real_values_ptr[i], dim * each_value_size,
-                            ACL_MEMCPY_HOST_TO_DEVICE),
-                ACL_ERROR_NONE);
-      EXPECT_EQ(real_values, expect_values);
-    } else {
+    if (!host_found_again[i]) {
       EXPECT_EQ(real_values_ptr[i], nullptr);
+      continue;
     }
+    ASSERT_NE(real_values_ptr[i], nullptr);
+    vector<V> expect_values(dim, i);
+    vector<V> real_values(dim, 0);
+    ASSERT_EQ(aclrtMemcpy(real_values.data(), dim * each_value_size,
+                          real_values_ptr[i], dim * each_value_size,
+                          ACL_MEMCPY_HOST_TO_DEVICE),
+              ACL_ERROR_NONE);
+    EXPECT_EQ(real_values, expect_values);
   }
 
   // 6. 释放内存
