@@ -74,7 +74,7 @@
          occupy_result = OccupyResult::ILLEGAL;
          founds[kv_idx] = false;
          value_ptrs[kv_idx] = nullptr;
-         if (IS_LOCK_KEY_PTRS) {
+         if constexpr (IS_LOCK_KEY_PTRS) {
            key_ptrs[kv_idx] = nullptr;
          }
        } else {
@@ -275,13 +275,13 @@
      // 5. 抢占成功，写入value
      if (occupy_result == OccupyResult::REFUSED) {
        value_ptrs[kv_idx] = nullptr;
-       if (IS_LOCK_KEY_PTRS) {
+       if constexpr (IS_LOCK_KEY_PTRS) {
          key_ptrs[kv_idx] = nullptr;
        }
      } else {
        value_ptrs[kv_idx] = bucket_values + key_pos * dim;
        __gm__ K* key_address = BUCKET::keys(bucket_keys, key_pos);
-       if (IS_LOCK_KEY_PTRS) {
+       if constexpr (IS_LOCK_KEY_PTRS) {
          key_ptrs[kv_idx] = key_address;
        } else {
          *key_address = key;
