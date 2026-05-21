@@ -284,7 +284,7 @@
        if constexpr (IS_LOCK_KEY_PTRS) {
          key_ptrs[kv_idx] = key_address;
        } else {
-         *key_address = key;
+         (void)asc_atomic_exch(key_address, key);
        }
      }
      founds[kv_idx] = occupy_result == OccupyResult::DUPLICATE;
