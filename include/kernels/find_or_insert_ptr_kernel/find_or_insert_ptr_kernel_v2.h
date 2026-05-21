@@ -96,8 +96,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_lock_key_vf_v
         int32_t cur_bucket_size = *bucket_size;
         __gm__ Bucket<K, V, S>* bucket = buckets + bkt_idx;
         bucket_keys = bucket->keys_;
-        bucket_values = reinterpret_cast<__gm__ V*>(
-            reinterpret_cast<__gm__ void*>(bucket->vectors));
+        bucket_values = bucket->vectors;
         bucket_scores = bucket->scores_;
 
         // 3. 遍历桶，找key/空位
