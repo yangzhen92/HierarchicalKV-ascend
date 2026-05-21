@@ -392,14 +392,16 @@
    }
  }
 
- template <class K, class V, class S, int Strategy = -1, bool IS_LOCK_KEY_PTRS = false>
+ template <class K, class V, class S, int Strategy = -1,
+           bool IS_LOCK_KEY_PTRS = false>
  __global__ __vector__ void find_or_insert_ptr_kernel_lock_key_v2(
-     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size, uint64_t buckets_num,
-     uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys, __gm__ void* value_ptrs,
-      __gm__ S* scores, __gm__ K * __gm__* key_ptrs, uint64_t n, __gm__ bool* founds,
-     uint64_t global_epoch, uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
-     uint64_t capacity_divisor_shift, uint64_t n_align_warp, uint64_t capacity) {
- 
+     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
+     uint64_t buckets_num, uint32_t bucket_capacity, uint32_t dim,
+     __gm__ const K* keys, __gm__ V * __gm__ * value_ptrs, __gm__ S* scores,
+     __gm__ K * __gm__ * key_ptrs, uint64_t n, __gm__ bool* founds,
+     uint64_t global_epoch, uint32_t max_bucket_shift,
+     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
+     uint64_t n_align_warp, uint64_t capacity) {
    const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
    uint64_t cur_score = (Strategy == npu::hkv::EvictStrategyInternal::kLru ||
                          Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
