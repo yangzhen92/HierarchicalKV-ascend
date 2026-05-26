@@ -37,14 +37,13 @@ namespace hkv {
 using namespace AscendC;
 
 template <typename K = uint64_t, typename V = float, typename S = uint64_t,
-          int Strategy = -1, bool IS_LOCK_KEY_PTRS = false,
-          int32_t EVICT_GROUP_SIZE = 16>
+          int Strategy = -1, int32_t EVICT_GROUP_SIZE = 16>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_lock_key_vf_v2(
     __gm__ Bucket<K, V, S>* __restrict__ buckets,
     __gm__ int32_t* __restrict__ buckets_size, uint64_t buckets_num,
     uint32_t bucket_max_size, uint32_t dim, __gm__ const K* __restrict__ keys,
-    __gm__ V* __gm__* __restrict__ value_ptrs, __gm__ S* __restrict__ scores,
+    __gm__ V * __gm__ * __restrict__ value_ptrs, __gm__ S* __restrict__ scores,
     __gm__ K * __gm__ * __restrict__ key_ptrs, uint64_t n,
     __gm__ bool* __restrict__ founds, uint64_t global_epoch, uint64_t cur_score,
     uint32_t blockIdx, uint64_t thread_all, uint32_t max_bucket_shift,
@@ -77,9 +76,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_lock_key_vf_v
         occupy_result = OccupyResult::ILLEGAL;
         founds[kv_idx] = false;
         value_ptrs[kv_idx] = nullptr;
-        if constexpr (IS_LOCK_KEY_PTRS) {
-          key_ptrs[kv_idx] = nullptr;
-        }
+        key_ptrs[kv_idx] = nullptr;
       } else {
         score = ScoreFunctor::desired_when_missed(scores, kv_idx, global_epoch,
                                                   cur_score);
@@ -277,17 +274,11 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_lock_key_vf_v
     // 5. 抢占成功，写入value
     if (occupy_result == OccupyResult::REFUSED) {
       value_ptrs[kv_idx] = nullptr;
-      if constexpr (IS_LOCK_KEY_PTRS) {
-        key_ptrs[kv_idx] = nullptr;
-      }
+      key_ptrs[kv_idx] = nullptr;
     } else {
       value_ptrs[kv_idx] = bucket_values + key_pos * dim;
       __gm__ K* key_address = BUCKET::keys(bucket_keys, key_pos);
-      if constexpr (IS_LOCK_KEY_PTRS) {
-        key_ptrs[kv_idx] = key_address;
-      } else {
-        (void)asc_atomic_exch(key_address, key);
-      }
+      key_ptrs[kv_idx] = key_address;
     }
     founds[kv_idx] = occupy_result == OccupyResult::DUPLICATE;
   }
@@ -295,7 +286,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_lock_key_vf_v
 
 template <typename K>
 __simt_vf__ __aicore__
-LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_unlock_key_vf(
+LAUNCH_BOUND(THREAD_NUM_2048) inline void find_or_insert_ptr_kernel_unlock_key_vf(
     __gm__ const K* __restrict__ keys, __gm__ K* __gm__* __restrict__ key_ptrs,
     uint64_t n, uint64_t thread_all, uint32_t blockIdx) {
   uint64_t kv_idx = blockIdx * blockDim.x + threadIdx.x;
@@ -394,8 +385,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_ptr_kernel_vf_v2(
   }
 }
 
-template <class K, class V, class S, int Strategy = -1,
-          bool IS_LOCK_KEY_PTRS = false>
+template <class K, class V, class S, int Strategy = -1>
 __global__ __vector__ void find_or_insert_ptr_kernel_lock_key_v2(
     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
     uint64_t buckets_num, uint32_t bucket_capacity, uint32_t dim,
@@ -410,8 +400,7 @@ __global__ __vector__ void find_or_insert_ptr_kernel_lock_key_v2(
                            ? static_cast<uint64_t>(GetSystemCycle())
                            : 0;
 
-  asc_vf_call<find_or_insert_ptr_kernel_lock_key_vf_v2<K, V, S, Strategy,
-                                                       IS_LOCK_KEY_PTRS>>(
+  asc_vf_call<find_or_insert_ptr_kernel_lock_key_vf_v2<K, V, S, Strategy>>(
       dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets, buckets_size,
       buckets_num, bucket_capacity, dim, keys, value_ptrs, scores, key_ptrs, n,
       founds, global_epoch, cur_score, GetBlockIdx(), thread_all,
@@ -422,9 +411,9 @@ __global__ __vector__ void find_or_insert_ptr_kernel_lock_key_v2(
 template <class K>
 __global__ __vector__ void find_or_insert_ptr_kernel_unlock_key_v2(
     __gm__ const K* keys, __gm__ K* __gm__* key_ptrs, uint64_t n) {
-  const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
+  const uint64_t thread_all = THREAD_NUM_2048 * GetBlockNum();
   asc_vf_call<find_or_insert_ptr_kernel_unlock_key_vf<K>>(
-      dim3{static_cast<uint32_t>(THREAD_NUM_512)}, keys, key_ptrs, n,
+      dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, keys, key_ptrs, n,
       thread_all, GetBlockIdx());
 }
 
