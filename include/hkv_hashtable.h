@@ -1712,8 +1712,6 @@ class HashTable : public HashTableBase<K, V, S> {
       const size_type dev_ws_size{n * sizeof(key_type*)};
       auto dev_ws{dev_mem_pool_->get_workspace<1>(dev_ws_size, stream)};
       auto keys_ptr{dev_ws.get<key_type**>(0)};
-      NPU_CHECK(
-          aclrtMemsetAsync(keys_ptr, dev_ws_size, 0, dev_ws_size, stream));
 
       find_or_insert_ptr_kernel_lock_key_v2<K, V, S, evict_strategy>
           <<<block_dim_, 0, stream>>>(
