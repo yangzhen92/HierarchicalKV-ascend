@@ -47,7 +47,6 @@
 #include "kernels/contains_kernel/contains_kernel.h"
 #include "kernels/assign_scores_kernel/assign_scores_kernel_with_filter.h"
 #include "kernels/find_or_insert_ptr_kernel/find_or_insert_ptr_kernel_v2.h"
-#include "kernels/find_or_insert_ptr_kernel/find_or_insert_ptr_kernel.h"
 #include "kernels/find_or_insert_kernel/find_or_insert_kernel.h"
 #include "kernels/insert_or_assign_kernel/insert_or_assign_kernel.h"
 #include "tiling_helper.h"
