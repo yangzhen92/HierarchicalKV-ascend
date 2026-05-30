@@ -372,7 +372,7 @@ __global__ __vector__ void export_batch_value_kernel_half_once(
       }
       src_values_gm.SetGlobalBuffer(src_value);
       move_queue.AllocTensor<V>(move_local);
-      DataCopyPad(move_local[move_idx * dim], src_values_gm, copy_in_params, pad_params);
+      DataCopyPad(move_local[tile_idx * dim], src_values_gm, copy_in_params, pad_params);
       move_queue.EnQue<V>(move_local);
       move_queue.DeQue<V>(move_local);
     }
