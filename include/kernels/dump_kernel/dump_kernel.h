@@ -363,12 +363,6 @@ __global__ __vector__ void export_batch_value_kernel_half_once(
         i + num_tiles > core_max_idx ? core_max_idx - i : num_tiles;
     DataCopyExtParams copy_params{
         1, static_cast<uint32_t>(move_in_num_once * sizeof(V) * dim), 0, 0, 0};
-    
-    // __gm__ V* src_value = d_src_values[i];
-    // if (src_value == nullptr) {
-    //   continue;
-    // }
-
     uint64_t dst_offset = i * dim;
     
     for (uint32_t tile_idx = 0; tile_idx < num_tiles; tile_idx++) {
@@ -377,11 +371,6 @@ __global__ __vector__ void export_batch_value_kernel_half_once(
         continue;
       }
       src_values_gm.SetGlobalBuffer(src_value);
-      uint32_t current_tile_size = (tile_idx == num_tiles - 1)
-                                       ? (dim - tile_idx * tile_size)
-                                       : tile_size;
-      
-
       move_queue.AllocTensor<V>(move_local);
       DataCopyPad(move_local[move_idx * dim], src_values_gm, copy_in_params, pad_params);
       move_queue.EnQue<V>(move_local);
