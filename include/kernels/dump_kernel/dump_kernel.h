@@ -365,7 +365,7 @@ __global__ __vector__ void export_batch_value_kernel_half_once(
         1, static_cast<uint32_t>(move_in_num_once * sizeof(V) * dim), 0, 0, 0};
     uint64_t dst_offset = i * dim;
     
-    for (uint32_t tile_idx = 0; tile_idx < num_tiles; tile_idx++) {
+    for (uint32_t tile_idx = 0; tile_idx < move_in_num_once; tile_idx++) {
       __gm__ V* src_value = d_src_values[i + tile_idx];
       if (src_value == nullptr) {
         continue;
