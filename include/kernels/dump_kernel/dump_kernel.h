@@ -345,38 +345,33 @@ __global__ __vector__ void export_batch_value_kernel_half_once(
   // pipe.InitBuffer(move_queue, DOUBLE_BUFFER, num_tiles * sizeof(V*));
   // pipe.InitBuffer(dst_queue, DOUBLE_BUFFER, num_tiles * sizeof(V) * dim);
   pipe.InitBuffer(move_queue, DOUBLE_BUFFER, num_tiles * sizeof(V) * dim);
-
   GlobalTensor<V> src_values_gm;
   GlobalTensor<V> dst_values_gm;
   LocalTensor<V> move_local;
   DataCopyPadExtParams<V> pad_params{true, 0, 0, 0};
-
-
+  
   dst_values_gm.SetGlobalBuffer(values);
   //src_values_gm.SetGlobalBuffer(d_src_values);
   DataCopyExtParams copy_in_params{
         1, static_cast<uint32_t>(sizeof(V) * dim), 0, 0, 0};
-
   uint64_t core_max_idx = core_start_idx + core_move_count;
   for (uint64_t i = core_start_idx; i < core_max_idx; i += num_tiles) {
     uint32_t move_in_num_once =
         i + num_tiles > core_max_idx ? core_max_idx - i : num_tiles;
     DataCopyExtParams copy_params{
         1, static_cast<uint32_t>(move_in_num_once * sizeof(V) * dim), 0, 0, 0};
-    uint64_t dst_offset = i * dim;
-    
+    move_queue.AllocTensor<V>(move_local);
     for (uint32_t tile_idx = 0; tile_idx < move_in_num_once; tile_idx++) {
       __gm__ V* src_value = d_src_values[i + tile_idx];
       if (src_value == nullptr) {
         continue;
       }
       src_values_gm.SetGlobalBuffer(src_value);
-      move_queue.AllocTensor<V>(move_local);
+      
       DataCopyPad(move_local[tile_idx * dim], src_values_gm, copy_in_params, pad_params);
       move_queue.EnQue<V>(move_local);
       move_queue.DeQue<V>(move_local);
     }
-
       DataCopyPad(dst_values_gm[core_start_idx * dim], move_local,
                   copy_params);
       move_queue.FreeTensor(move_local);
