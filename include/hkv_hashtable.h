@@ -2690,10 +2690,10 @@ class HashTable : public HashTableBase<K, V, S> {
 
       uint64_t valid_ub_size = GetMixedOpUbSize();
       uint32_t max_tile_size =
-          valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
+          valid_ub_size / (DOUBLE_BUFFER * (sizeof(value_type) * table_->dim));
       HKV_CHECK(max_tile_size != 0,
                 log_format("UB size %lu is too small.", valid_ub_size));
-      export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
+      export_batch_value_kernel_half_once<V><<<block_dim_, valid_ub_size, stream>>>(
           block_dim_, table_->dim, max_tile_size, values, d_counter,
           d_src_values);
     }
