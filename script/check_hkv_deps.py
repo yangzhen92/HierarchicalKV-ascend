@@ -21,12 +21,15 @@ import subprocess
 import sys
 import os
 import re
+import shutil
 from packaging.version import Version
+
 
 def run(cmd_args):
     """Run a command safely without shell. cmd_args is a list, e.g. ['uname', '-m']."""
-    p = subprocess.run(cmd_args, capture_output=True, text=True)
+    p = subprocess.run(cmd_args, capture_output=True, text=True, check=False)
     return p.stdout.strip(), p.returncode
+
 
 def check_version(actual, constraint):
     """Check if actual version satisfies the constraint like '>=3.0', '>2.5', '==1.0'."""
@@ -45,10 +48,12 @@ def check_version(actual, constraint):
     ops = {'>=': lambda a, b: a >= b, '>': lambda a, b: a > b, '==': lambda a, b: a == b}
     return ops.get(op, lambda a, b: False)(actual_v, req_v)
 
+
 def get_arch():
     out, _ = run(["uname", "-m"])
     arch_map = {"x86_64": "x86_64-linux", "aarch64": "aarch64-linux"}
     return arch_map.get(out, out)
+
 
 def get_cann_version():
     arch = get_arch()
@@ -60,15 +65,17 @@ def get_cann_version():
     for path in paths:
         if not os.path.exists(path):
             continue
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 if line.lower().startswith("version="):
                     return line.split("=", 1)[1].strip()
     return None
 
+
 def _get_compiler_version(name):
     out, rc = run([name, "-dumpfullversion"])
     return out if rc == 0 else None
+
 
 def _get_cmake_version():
     out, rc = run(["cmake", "--version"])
@@ -77,15 +84,18 @@ def _get_cmake_version():
     match = re.search(r'\d+\.\d+\.\d+', out.splitlines()[0])
     return match.group(0) if match else None
 
+
 _COMMON_VERSION_HANDLERS = {
     "gcc": _get_compiler_version,
     "g++": _get_compiler_version,
     "cmake": lambda _: _get_cmake_version(),
 }
 
+
 def get_common_version(name):
     handler = _COMMON_VERSION_HANDLERS.get(name)
     return handler(name) if handler else None
+
 
 def _check_item(name, constraint, actual):
     """Check one dependency. Returns True if pass. Prints [PASS]/[FAIL]."""
@@ -98,6 +108,7 @@ def _check_item(name, constraint, actual):
     print(f"[{tag}] {name} {actual}{extra}")
     return ok
 
+
 def main():
     root_dir = os.path.join(os.path.dirname(__file__), "..")
     yaml_path = os.path.join(root_dir, "dependencies.yaml")
@@ -105,7 +116,7 @@ def main():
         print(f"[FAIL] {yaml_path} not found")
         sys.exit(1)
 
-    with open(yaml_path) as f:
+    with open(yaml_path, encoding="utf-8") as f:
         deps = yaml.safe_load(f)
 
     print("========== HKV Dependency Check ==========")
@@ -132,12 +143,14 @@ def main():
     # build and install HKV from source
     print("========== Building HKV ==========")
     # set default local_rank_size to 0
-    rc = subprocess.run(["bash", os.path.join(root_dir, "run.sh"), "-c", "-d", "0"]).returncode
+    bash = shutil.which("bash") or "/bin/bash"
+    rc = subprocess.run([bash, os.path.join(root_dir, "run.sh"), "-c", "-d", "0"], cwd=root_dir, check=False).returncode
     if rc != 0:
         print("[FAIL] HKV build failed")
         sys.exit(1)
 
     print("HKV installed")
+
 
 if __name__ == "__main__":
     main()
