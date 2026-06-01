@@ -142,7 +142,7 @@ def main():
 
     # build and install HKV from source
     print("========== Building HKV ==========")
-    # set default local_rank_size to 0
+    # set default device_id to 0
     bash = shutil.which("bash") or "/bin/bash"
     rc = subprocess.run([bash, os.path.join(root_dir, "run.sh"), "-c", "-d", "0"], cwd=root_dir, check=False).returncode
     if rc != 0:
