@@ -3133,8 +3133,8 @@ class HashTable : public HashTableBase<K, V, S> {
                   log_format("UB size %lu is too small.", valid_ub_size));
         export_batch_value_kernel_half_once<V>
             <<<block_dim_, valid_ub_size, stream>>>(block_dim_, table_->dim,
-                                                    max_tile_size, values,
-                                                    d_counter, d_src_values);
+                                                    max_tile_size, d_values,
+                                                    d_count, d_src_values);
       }
       NpuCheckError();
       // Copy counter from device to host
