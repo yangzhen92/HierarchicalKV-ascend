@@ -15,14 +15,18 @@
 # limitations under the License.
 # ==============================================================================
 
-#!/usr/bin/env python3
-import yaml
 import subprocess
 import sys
 import os
 import re
 import shutil
-from packaging.version import Version
+
+try:
+    import yaml
+    from packaging.version import Version
+except ImportError as e:
+    print(f"[FAIL] Missing python module: {e.name}.")
+    sys.exit(1)
 
 
 def run(cmd_args):
@@ -53,6 +57,21 @@ def get_arch():
     out, _ = run(["uname", "-m"])
     arch_map = {"x86_64": "x86_64-linux", "aarch64": "aarch64-linux"}
     return arch_map.get(out, out)
+
+
+def check_npu_supported(npu_name):
+    """Check if NPU chip is supported by scanning platform_config/*.ini files."""
+    arch = get_arch()
+    platform_dir = f"/usr/local/Ascend/ascend-toolkit/latest/{arch}/data/platform_config"
+    if not os.path.isdir(platform_dir):
+        return False
+    try:
+        for filename in os.listdir(platform_dir):
+            if filename.endswith(".ini") and npu_name.lower() in filename.lower():
+                return True
+    except OSError:
+        return False
+    return False
 
 
 def get_cann_version():
@@ -135,6 +154,14 @@ def main():
                 fail = 1
         elif name == "hdk":
             print(f"[SKIP] {name} version check")
+
+    # supported_npu
+    for npu_name in deps.get("supported_npu", []):
+        if check_npu_supported(npu_name):
+            print(f"[PASS] supported npu: {npu_name}")
+        else:
+            print(f"[FAIL] unsupported npu: {npu_name}")
+            fail = 1
 
     if fail:
         print("Dependency check failed, abort")
