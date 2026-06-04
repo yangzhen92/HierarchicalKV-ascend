@@ -900,11 +900,42 @@ void benchmark_hkv_hashtable(uint32_t block_dim) {
       
       cout << "### On HBM+HMEM hybrid mode: " << endl;
       test_mode = Test_Mode::hybrid;
+
+      print_configuration(32, 256 * 1024 * 1024UL, 16);
+      print_title_hybrid_a();
+      test_main(apis_a, 32, 256 * 1024 * 1024UL, key_num_per_op, 16);
+      print_title_hybrid_b();
+      test_main(apis_b, 32, 256 * 1024 * 1024UL, key_num_per_op, 16);
+
       print_configuration(64, 128 * 1024 * 1024UL, 16);
       print_title_hybrid_a();
       test_main(apis_a, 64, 128 * 1024 * 1024UL, key_num_per_op, 16);
       print_title_hybrid_b();
       test_main(apis_b, 64, 128 * 1024 * 1024UL, key_num_per_op, 16);
+
+      print_configuration(128, 64 * 1024 * 1024UL, 16);
+      print_title_hybrid_a();
+      test_main(apis_a, 128, 64 * 1024 * 1024UL, key_num_per_op, 16);
+      print_title_hybrid_b();
+      test_main(apis_b, 128, 64 * 1024 * 1024UL, key_num_per_op, 16);
+
+      print_configuration(256, 32 * 1024 * 1024UL, 16);
+      print_title_hybrid_a();
+      test_main(apis_a, 256, 32 * 1024 * 1024UL, key_num_per_op, 16);
+      print_title_hybrid_b();
+      test_main(apis_b, 256, 32 * 1024 * 1024UL, key_num_per_op, 16);
+
+      print_configuration(512, 16 * 1024 * 1024UL, 16);
+      print_title_hybrid_a();
+      test_main(apis_a, 512, 16 * 1024 * 1024UL, key_num_per_op, 16);
+      print_title_hybrid_b();
+      test_main(apis_b, 512, 16 * 1024 * 1024UL, key_num_per_op, 16);
+
+      print_configuration(1024, 16 * 1024 * 1024UL, 16);
+      print_title_hybrid_a();
+      test_main(apis_a, 1024, 16 * 1024 * 1024UL, key_num_per_op, 16);
+      print_title_hybrid_b();
+      test_main(apis_b, 1024, 16 * 1024 * 1024UL, key_num_per_op, 16);
 
       print_configuration(64, 512 * 1024 * 1024UL, 32);
       print_title_hybrid_a();
