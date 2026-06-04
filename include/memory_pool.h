@@ -26,43 +26,42 @@
 #include <thread>
 #include <tuple>
 #include <vector>
-
 #include "allocator.h"
 #include "debug.h"
 
-namespace npu
-{
-namespace hkv
-{
+namespace npu {
+namespace hkv {
 
 /**
  * Allocators are used by the memory pool (and maybe other classes) to create
  * RAII complient containers for buffers allocated in different memory areas.
  */
 template <class T, class Allocator>
-struct AllocatorBase
-{
-    using type = T;
-    using sync_unique_ptr = std::unique_ptr<type, std::function<void(type*)>>;
-    using async_unique_ptr = std::unique_ptr<type, std::function<void(type*)>>;
-    using shared_ptr = std::shared_ptr<type>;
+struct AllocatorBase {
+  using type = T;
+  using sync_unique_ptr = std::unique_ptr<type, std::function<void(type*)>>;
+  using async_unique_ptr = std::unique_ptr<type, std::function<void(type*)>>;
+  using shared_ptr = std::shared_ptr<type>;
 
-    inline static sync_unique_ptr make_unique(size_t n, BaseAllocator* allocator)
-    {
-        return {Allocator::alloc(n, allocator), [allocator](type* p) { Allocator::free(p, allocator); }};
-    }
+  inline static sync_unique_ptr make_unique(size_t n,
+                                            BaseAllocator* allocator) {
+    return {Allocator::alloc(n, allocator),
+            [allocator](type* p) { Allocator::free(p, allocator); }};
+  }
 
-    inline static async_unique_ptr make_unique(size_t n, BaseAllocator* allocator, aclrtStream stream)
-    {
-        return {Allocator::alloc(n, allocator, stream),
-                [stream, allocator](type* p) { Allocator::free(p, allocator); }};
-    }
+  inline static async_unique_ptr make_unique(size_t n, BaseAllocator* allocator,
+                                             aclrtStream stream) {
+    return {Allocator::alloc(n, allocator, stream),
+            [stream, allocator](type* p) { Allocator::free(p, allocator); }};
+  }
 
-    inline static shared_ptr make_shared(size_t n, BaseAllocator* allocator, aclrtStream stream = 0)
-    {
-        return {Allocator::alloc(n, allocator, stream),
-                [stream, allocator](type* p) { Allocator::free(p, allocator, stream); }};
-    }
+  inline static shared_ptr make_shared(size_t n, BaseAllocator* allocator,
+                                       aclrtStream stream = 0) {
+    return {Allocator::alloc(n, allocator, stream),
+            [stream, allocator](type* p) {
+              Allocator::free(p, allocator, stream);
+            }};
+  }
 };
 
 /**
@@ -71,46 +70,44 @@ struct AllocatorBase
  * proper allocator implementation should look like.
  */
 template <class T>
-struct StandardAllocator final : AllocatorBase<T, StandardAllocator<T>>
-{
-    using type = typename AllocatorBase<T, StandardAllocator<T>>::type;
+struct StandardAllocator final : AllocatorBase<T, StandardAllocator<T>> {
+  using type = typename AllocatorBase<T, StandardAllocator<T>>::type;
 
-    static constexpr const char* name{"StandardAllocator"};
+  static constexpr const char* name{"StandardAllocator"};
 
-    inline static type* alloc(size_t n, BaseAllocator* allocator, aclrtStream stream = 0)
-    {
-        type* ptr;
-        allocator->alloc(MemoryType::Host, &ptr, n * sizeof(T));
-        return ptr;
-    }
+  inline static type* alloc(size_t n, BaseAllocator* allocator,
+                            aclrtStream stream = 0) {
+    type* ptr;
+    allocator->alloc(MemoryType::Host, &ptr, n * sizeof(T));
+    return ptr;
+  }
 
-    inline static void free(type* ptr, BaseAllocator* allocator, aclrtStream stream = 0)
-    {
-        allocator->free(MemoryType::Host, ptr);
-    }
+  inline static void free(type* ptr, BaseAllocator* allocator,
+                          aclrtStream stream = 0) {
+    allocator->free(MemoryType::Host, ptr);
+  }
 };
 
 /**
  * Claim/release buffers in pinned host memory.
  */
 template <class T>
-struct HostAllocator final : AllocatorBase<T, HostAllocator<T>>
-{
-    using type = typename AllocatorBase<T, HostAllocator<T>>::type;
+struct HostAllocator final : AllocatorBase<T, HostAllocator<T>> {
+  using type = typename AllocatorBase<T, HostAllocator<T>>::type;
 
-    static constexpr const char* name{"HostAllocator"};
+  static constexpr const char* name{"HostAllocator"};
 
-    inline static type* alloc(size_t n, BaseAllocator* allocator, aclrtStream stream = 0)
-    {
-        type* ptr;
-        allocator->alloc(MemoryType::Pinned, &ptr, n * sizeof(T));
-        return ptr;
-    }
+  inline static type* alloc(size_t n, BaseAllocator* allocator,
+                            aclrtStream stream = 0) {
+    type* ptr;
+    allocator->alloc(MemoryType::Pinned, &ptr, n * sizeof(T));
+    return ptr;
+  }
 
-    inline static void free(type* ptr, BaseAllocator* allocator, aclrtStream stream = 0)
-    {
-        allocator->free(MemoryType::Pinned, ptr);
-    }
+  inline static void free(type* ptr, BaseAllocator* allocator,
+                          aclrtStream stream = 0) {
+    allocator->free(MemoryType::Pinned, ptr);
+  }
 };
 
 /**
@@ -118,34 +115,32 @@ struct HostAllocator final : AllocatorBase<T, HostAllocator<T>>
  * device was used, and throw if NPU runtime API response is negative.
  */
 template <class T>
-struct DeviceAllocator final : AllocatorBase<T, DeviceAllocator<T>>
-{
-    using type = typename AllocatorBase<T, DeviceAllocator<T>>::type;
+struct DeviceAllocator final : AllocatorBase<T, DeviceAllocator<T>> {
+  using type = typename AllocatorBase<T, DeviceAllocator<T>>::type;
 
-    static constexpr const char* name{"DeviceAllocator"};
+  static constexpr const char* name{"DeviceAllocator"};
 
-    inline static type* alloc(size_t n, BaseAllocator* allocator, aclrtStream stream = 0)
-    {
-        type* ptr;
+  inline static type* alloc(size_t n, BaseAllocator* allocator,
+                            aclrtStream stream = 0) {
+    type* ptr;
 
-        allocator->alloc_async(MemoryType::Device, &ptr, n * sizeof(T), stream);
-        return ptr;
-    }
+    allocator->alloc_async(MemoryType::Device, &ptr, n * sizeof(T), stream);
+    return ptr;
+  }
 
-    inline static void free(type* ptr, BaseAllocator* allocator, aclrtStream stream = 0)
-    {
-        allocator->free_async(MemoryType::Device, ptr, stream);
-    }
+  inline static void free(type* ptr, BaseAllocator* allocator,
+                          aclrtStream stream = 0) {
+    allocator->free_async(MemoryType::Device, ptr, stream);
+  }
 };
 
 /**
  * Helper structure to configure a memory pool.
  */
-struct MemoryPoolOptions
-{
-    size_t max_stock{4};     ///< Amount of buffers to keep in reserve.
-    size_t max_pending{16};  ///< Maximum amount of awaitable buffers. If this
-                             ///< limit is exceeded threads will start to block.
+struct MemoryPoolOptions {
+  size_t max_stock{4};     ///< Amount of buffers to keep in reserve.
+  size_t max_pending{16};  ///< Maximum amount of awaitable buffers. If this
+                           ///< limit is exceeded threads will start to block.
 };
 
 /**
@@ -206,480 +201,432 @@ std::ostream& operator<<(std::ostream&, const MemoryPool<Allocator>&);
  * is queued for destruction.
  */
 template <class Allocator>
-class MemoryPool final
-{
+class MemoryPool final {
+ public:
+  using pool_type = MemoryPool<Allocator>;
+  using alloc_type = typename Allocator::type;
+  template <class Container>
+  class Workspace {
    public:
-    using pool_type = MemoryPool<Allocator>;
-    using alloc_type = typename Allocator::type;
-    template <class Container>
-    class Workspace
-    {
-       public:
-        inline Workspace() : pool_{nullptr}, buffer_size_{0}, stream_{0} {}
+    inline Workspace() : pool_{nullptr}, buffer_size_{0}, stream_{0} {}
 
-        inline Workspace(pool_type* pool, aclrtStream stream) : pool_{pool}, buffer_size_{0}, stream_{stream} {}
+    inline Workspace(pool_type* pool, aclrtStream stream)
+        : pool_{pool}, buffer_size_{0}, stream_{stream} {}
 
-        Workspace(const Workspace&) = delete;
+    Workspace(const Workspace&) = delete;
 
-        Workspace& operator=(const Workspace&) = delete;
+    Workspace& operator=(const Workspace&) = delete;
 
-        inline Workspace(Workspace&& other)
-            : pool_{other.pool_},
-              buffer_size_{other.buffer_size_},
-              stream_{other.stream_},
-              buffers_{std::move(other.buffers_)}
-        {
-        }
+    inline Workspace(Workspace&& other)
+        : pool_{other.pool_},
+          buffer_size_{other.buffer_size_},
+          stream_{other.stream_},
+          buffers_{std::move(other.buffers_)} {}
 
-        inline Workspace& operator=(Workspace&& other)
-        {
-            if (pool_)
-            {
-                pool_->put_raw(buffers_.begin(), buffers_.end(), buffer_size_, stream_);
-            }
-            pool_ = other.pool_;
-            buffer_size_ = other.buffer_size_;
-            stream_ = other.stream_;
-            buffers_ = std::move(other.buffers_);
-            other.pool_ = nullptr;
-            return *this;
-        }
-
-        inline ~Workspace()
-        {
-            if (pool_)
-            {
-                pool_->put_raw(buffers_.begin(), buffers_.end(), buffer_size_, stream_);
-            }
-        }
-
-        template <class T>
-        constexpr void at(const size_t n, T* ptr) const
-        {
-            *ptr = at<T>(n);
-        }
-
-        template <class T>
-        constexpr T at(const size_t n) const
-        {
-            return reinterpret_cast<T>(buffers_.at(n));
-        }
-
-        template <class T>
-        constexpr void get(const size_t n, T* ptr) const
-        {
-            *ptr = get<T>(n);
-        }
-
-        template <class T>
-        constexpr T get(const size_t n) const
-        {
-            return reinterpret_cast<T>(buffers_[n]);
-        }
-
-        constexpr alloc_type* operator[](const size_t n) const { return buffers_[n]; }
-
-       protected:
-        pool_type* pool_;
-        size_t buffer_size_;
-        aclrtStream stream_;
-        Container buffers_;
-    };
-
-    template <size_t N>
-    class StaticWorkspace final : public Workspace<std::array<alloc_type*, N>>
-    {
-       public:
-        using base_type = Workspace<std::array<alloc_type*, N>>;
-
-        friend class MemoryPool<Allocator>;
-
-        inline StaticWorkspace() : base_type() {}
-
-        StaticWorkspace(const StaticWorkspace&) = delete;
-
-        StaticWorkspace& operator=(const StaticWorkspace&) = delete;
-
-        inline StaticWorkspace(StaticWorkspace&& other) : base_type(std::move(other)) {}
-
-        inline StaticWorkspace& operator=(StaticWorkspace&& other)
-        {
-            base_type::operator=(std::move(other));
-            return *this;
-        }
-
-       private:
-        inline StaticWorkspace(pool_type* pool, size_t requested_buffer_size, aclrtStream stream)
-            : base_type(pool, stream)
-        {
-            auto& buffers = this->buffers_;
-            this->buffer_size_ = pool->get_raw(buffers.begin(), buffers.end(), requested_buffer_size, stream);
-        }
-    };
-
-    class DynamicWorkspace final : public Workspace<std::vector<alloc_type*>>
-    {
-       public:
-        using base_type = Workspace<std::vector<alloc_type*>>;
-
-        friend class MemoryPool<Allocator>;
-
-        inline DynamicWorkspace() : base_type() {}
-
-        DynamicWorkspace(const DynamicWorkspace&) = delete;
-
-        DynamicWorkspace& operator=(const DynamicWorkspace&) = delete;
-
-        inline DynamicWorkspace(DynamicWorkspace&& other) : base_type(std::move(other)) {}
-
-        inline DynamicWorkspace& operator=(DynamicWorkspace&& other)
-        {
-            base_type::operator=(std::move(other));
-            return *this;
-        }
-
-       private:
-        inline DynamicWorkspace(pool_type* pool, size_t n, size_t requested_buffer_size, aclrtStream stream)
-            : base_type(pool, stream)
-        {
-            auto& buffers = this->buffers_;
-            buffers.resize(n);
-            this->buffer_size_ = pool->get_raw(buffers.begin(), buffers.end(), requested_buffer_size, stream);
-        }
-    };
-
-    MemoryPool(const MemoryPoolOptions& options, BaseAllocator* allocator) : options_{options}, allocator_{allocator}
-    {
-        // Create initial buffer stock.
-        stock_.reserve(options_.max_stock);
-
-        // Create enough events, so we have one per potentially pending buffer.
-        ready_events_.resize(options_.max_pending);
-        for (auto& ready_event : ready_events_)
-        {
-            NPU_CHECK(aclrtCreateEvent(&ready_event));
-        }
-
-        // Preallocate pending.
-        pending_.reserve(options_.max_pending);
+    inline Workspace& operator=(Workspace&& other) {
+      if (pool_) {
+        pool_->put_raw(buffers_.begin(), buffers_.end(), buffer_size_, stream_);
+      }
+      pool_ = other.pool_;
+      buffer_size_ = other.buffer_size_;
+      stream_ = other.stream_;
+      buffers_ = std::move(other.buffers_);
+      other.pool_ = nullptr;
+      return *this;
     }
 
-    ~MemoryPool()
-    {
-        // Make sure all queued tasks are complete.
-        await_pending();
-
-        // Free event and buffer memory.
-        for (auto& ready_event : ready_events_)
-        {
-            NPU_CHECK(aclrtDestroyEvent(ready_event));
-        }
-
-        // Any remaining buffers need to be properly unallocated.
-        deplete_stock();
+    inline ~Workspace() {
+      if (pool_) {
+        pool_->put_raw(buffers_.begin(), buffers_.end(), buffer_size_, stream_);
+      }
     }
-
-    inline size_t buffer_size() const { return buffer_size_; }
-
-    inline size_t max_batch_size(size_t max_item_size) const { return buffer_size_ / max_item_size; }
 
     template <class T>
-    inline size_t max_batch_size() const
-    {
-        return max_batch_size(sizeof(T));
+    constexpr void at(const size_t n, T* ptr) const {
+      *ptr = at<T>(n);
     }
 
-    size_t current_stock() const
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return stock_.size();
+    template <class T>
+    constexpr T at(const size_t n) const {
+      return reinterpret_cast<T>(buffers_.at(n));
     }
 
-    size_t num_pending() const
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return pending_.size();
+    template <class T>
+    constexpr void get(const size_t n, T* ptr) const {
+      *ptr = get<T>(n);
     }
 
-    void await_pending(aclrtStream stream = 0)
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        while (!pending_.empty())
-        {
-            collect_pending_unsafe(stream);
-            if (pending_.empty())
-            {
-                break;
-            }
-            std::this_thread::yield();
-        }
+    template <class T>
+    constexpr T get(const size_t n) const {
+      return reinterpret_cast<T>(buffers_[n]);
     }
 
-    void deplete_stock()
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        for (auto& ptr : stock_)
-        {
-            Allocator::free(ptr, allocator_);
-        }
-        stock_.clear();
+    constexpr alloc_type* operator[](const size_t n) const {
+      return buffers_[n];
     }
 
-    inline std::unique_ptr<alloc_type, std::function<void(alloc_type*)>> get_unique(size_t requested_buffer_size,
-                                                                                    aclrtStream stream = 0)
-    {
-        alloc_type* ptr;
-        const size_t allocation_size = get_raw(&ptr, (&ptr) + 1, requested_buffer_size, stream);
-        return {ptr,
-                [this, allocation_size, stream](alloc_type* p) { put_raw(&p, (&p) + 1, allocation_size, stream); }};
-    }
+   protected:
+    pool_type* pool_;
+    size_t buffer_size_;
+    aclrtStream stream_;
+    Container buffers_;
+  };
 
-    inline std::shared_ptr<alloc_type> get_shared(size_t requested_buffer_size, aclrtStream stream = 0)
-    {
-        alloc_type* ptr;
-        const size_t allocation_size = get_raw(&ptr, (&ptr) + 1, requested_buffer_size, stream);
-        return {ptr,
-                [this, allocation_size, stream](alloc_type* p) { put_raw(&p, (&p) + 1, allocation_size, stream); }};
-    }
+  template <size_t N>
+  class StaticWorkspace final : public Workspace<std::array<alloc_type*, N>> {
+   public:
+    using base_type = Workspace<std::array<alloc_type*, N>>;
 
-    template <size_t N>
-    inline StaticWorkspace<N> get_workspace(size_t requested_buffer_size, aclrtStream stream = 0)
-    {
-        return {this, requested_buffer_size, stream};
-    }
+    friend class MemoryPool<Allocator>;
 
-    inline DynamicWorkspace get_workspace(size_t n, size_t requested_buffer_size, aclrtStream stream = 0)
-    {
-        return {this, n, requested_buffer_size, stream};
-    }
+    inline StaticWorkspace() : base_type() {}
 
-    friend std::ostream& operator<< <Allocator>(std::ostream&, const MemoryPool&);
+    StaticWorkspace(const StaticWorkspace&) = delete;
+
+    StaticWorkspace& operator=(const StaticWorkspace&) = delete;
+
+    inline StaticWorkspace(StaticWorkspace&& other)
+        : base_type(std::move(other)) {}
+
+    inline StaticWorkspace& operator=(StaticWorkspace&& other) {
+      base_type::operator=(std::move(other));
+      return *this;
+    }
 
    private:
-    inline void collect_pending_unsafe(aclrtStream stream)
-    {
-        auto it{std::remove_if(pending_.begin(), pending_.end(),
-                               [this, stream](const std::tuple<alloc_type*, size_t, aclrtEvent>& pending)
-                               {
-                                   aclrtEventRecordedStatus state;
-                                   NPU_CHECK(aclrtQueryEventStatus(std::get<2>(pending), &state));
-                                   switch (state)
-                                   {
-                                       case ACL_EVENT_RECORDED_STATUS_COMPLETE:
-                                           // Stock buffers and destroy those that are no
-                                           // longer needed, but only if the allocation_size
-                                           // is still the same as the current buffer_size.
-                                           if (stock_.size() < options_.max_stock &&
-                                               std::get<1>(pending) == buffer_size_)
-                                           {
-                                               stock_.emplace_back(std::get<0>(pending));
-                                           }
-                                           else
-                                           {
-                                               Allocator::free(std::get<0>(pending), allocator_, stream);
-                                           }
-                                           ready_events_.emplace_back(std::get<2>(pending));
-                                           return true;
-                                       case ACL_EVENT_RECORDED_STATUS_NOT_READY:
-                                           return false;
-                                       default:
-                                           // NPU_CHECK(state);
-                                           return false;
-                                   }
-                               })};
-        pending_.erase(it, pending_.end());
+    inline StaticWorkspace(pool_type* pool, size_t requested_buffer_size,
+                           aclrtStream stream)
+        : base_type(pool, stream) {
+      auto& buffers = this->buffers_;
+      this->buffer_size_ = pool->get_raw(buffers.begin(), buffers.end(),
+                                         requested_buffer_size, stream);
+    }
+  };
+
+  class DynamicWorkspace final : public Workspace<std::vector<alloc_type*>> {
+   public:
+    using base_type = Workspace<std::vector<alloc_type*>>;
+
+    friend class MemoryPool<Allocator>;
+
+    inline DynamicWorkspace() : base_type() {}
+
+    DynamicWorkspace(const DynamicWorkspace&) = delete;
+
+    DynamicWorkspace& operator=(const DynamicWorkspace&) = delete;
+
+    inline DynamicWorkspace(DynamicWorkspace&& other)
+        : base_type(std::move(other)) {}
+
+    inline DynamicWorkspace& operator=(DynamicWorkspace&& other) {
+      base_type::operator=(std::move(other));
+      return *this;
     }
 
-    inline void clear_stock_unsafe(aclrtStream stream)
-    {
-        for (auto& ptr : stock_)
-        {
-            Allocator::free(ptr, allocator_, stream);
-        }
-        stock_.clear();
+   private:
+    inline DynamicWorkspace(pool_type* pool, size_t n,
+                            size_t requested_buffer_size, aclrtStream stream)
+        : base_type(pool, stream) {
+      auto& buffers = this->buffers_;
+      buffers.resize(n);
+      this->buffer_size_ = pool->get_raw(buffers.begin(), buffers.end(),
+                                         requested_buffer_size, stream);
+    }
+  };
+
+  MemoryPool(const MemoryPoolOptions& options, BaseAllocator* allocator)
+      : options_{options}, allocator_{allocator} {
+    // Create initial buffer stock.
+    stock_.reserve(options_.max_stock);
+
+    // Create enough events, so we have one per potentially pending buffer.
+    ready_events_.resize(options_.max_pending);
+    for (auto& ready_event : ready_events_) {
+      NPU_CHECK(aclrtCreateEvent(&ready_event));
     }
 
-    template <class Iterator>
-    inline size_t get_raw(Iterator first, Iterator const last, size_t requested_buffer_size, aclrtStream stream)
-    {
-        // Get pre-allocated buffers if stock available.
-        size_t allocation_size;
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
+    // Preallocate pending.
+    pending_.reserve(options_.max_pending);
+  }
 
-            // If requested_buffer_size is within current buffer_size margins can
-            // reuse current buffers.
-            if (requested_buffer_size <= buffer_size_)
-            {
-                while (first != last)
-                {
-                    // If no buffers available, try to make some available.
-                    if (stock_.empty())
-                    {
-                        collect_pending_unsafe(stream);
-                        if (stock_.empty())
-                        {
-                            // No buffers available.
-                            break;
-                        }
-                    }
+  ~MemoryPool() {
+    // Make sure all queued tasks are complete.
+    await_pending();
 
-                    // Just take the next available buffer.
-                    *first++ = stock_.back();
-                    stock_.pop_back();
-                }
-            }
-            else
-            {
-                // Drop the stock because we need more memory and those buffers have
-                // become useless to that end.
-                clear_stock_unsafe(stream);
-                buffer_size_ = requested_buffer_size;
-            }
-
-            allocation_size = buffer_size_;
-        }
-
-        // Forge new buffers until request can be filled.
-        for (; first != last; ++first)
-        {
-            *first = Allocator::alloc(allocation_size, allocator_, stream);
-        }
-
-        return allocation_size;
+    // Free event and buffer memory.
+    for (auto& ready_event : ready_events_) {
+      NPU_CHECK(aclrtDestroyEvent(ready_event));
     }
 
-    template <class Iterator>
-    inline void put_raw(Iterator first, Iterator const last, size_t allocation_size, aclrtStream stream)
+    // Any remaining buffers need to be properly unallocated.
+    deplete_stock();
+  }
+
+  inline size_t buffer_size() const { return buffer_size_; }
+
+  inline size_t max_batch_size(size_t max_item_size) const {
+    return buffer_size_ / max_item_size;
+  }
+
+  template <class T>
+  inline size_t max_batch_size() const {
+    return max_batch_size(sizeof(T));
+  }
+
+  size_t current_stock() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return stock_.size();
+  }
+
+  size_t num_pending() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return pending_.size();
+  }
+
+  void await_pending(aclrtStream stream = 0) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    while (!pending_.empty()) {
+      collect_pending_unsafe(stream);
+      if (pending_.empty()) {
+        break;
+      }
+      std::this_thread::yield();
+    }
+  }
+
+  void deplete_stock() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& ptr : stock_) {
+      Allocator::free(ptr, allocator_);
+    }
+    stock_.clear();
+  }
+
+  inline std::unique_ptr<alloc_type, std::function<void(alloc_type*)>>
+  get_unique(size_t requested_buffer_size, aclrtStream stream = 0) {
+    alloc_type* ptr;
+    const size_t allocation_size =
+        get_raw(&ptr, (&ptr) + 1, requested_buffer_size, stream);
+    return {ptr, [this, allocation_size, stream](alloc_type* p) {
+              put_raw(&p, (&p) + 1, allocation_size, stream);
+            }};
+  }
+
+  inline std::shared_ptr<alloc_type> get_shared(size_t requested_buffer_size,
+                                                aclrtStream stream = 0) {
+    alloc_type* ptr;
+    const size_t allocation_size =
+        get_raw(&ptr, (&ptr) + 1, requested_buffer_size, stream);
+    return {ptr, [this, allocation_size, stream](alloc_type* p) {
+              put_raw(&p, (&p) + 1, allocation_size, stream);
+            }};
+  }
+
+  template <size_t N>
+  inline StaticWorkspace<N> get_workspace(size_t requested_buffer_size,
+                                          aclrtStream stream = 0) {
+    return {this, requested_buffer_size, stream};
+  }
+
+  inline DynamicWorkspace get_workspace(size_t n, size_t requested_buffer_size,
+                                        aclrtStream stream = 0) {
+    return {this, n, requested_buffer_size, stream};
+  }
+
+  friend std::ostream& operator<< <Allocator>(std::ostream&, const MemoryPool&);
+
+ private:
+  inline void collect_pending_unsafe(aclrtStream stream) {
+    auto it{std::remove_if(
+        pending_.begin(), pending_.end(), [this, stream](const std::tuple<alloc_type*, size_t, aclrtEvent>& pending) {
+          aclrtEventRecordedStatus state;
+          NPU_CHECK(aclrtQueryEventStatus(std::get<2>(pending), &state));
+          switch (state) {
+            case ACL_EVENT_RECORDED_STATUS_COMPLETE:
+              // Stock buffers and destroy those that are no
+              // longer needed, but only if the allocation_size
+              // is still the same as the current buffer_size.
+              if (stock_.size() < options_.max_stock &&
+                  std::get<1>(pending) == buffer_size_) {
+                stock_.emplace_back(std::get<0>(pending));
+              } else {
+                Allocator::free(std::get<0>(pending), allocator_, stream);
+              }
+              ready_events_.emplace_back(std::get<2>(pending));
+              return true;
+            case ACL_EVENT_RECORDED_STATUS_NOT_READY:
+              return false;
+            default:
+              // NPU_CHECK(state);
+              return false;
+          }
+        })};
+    pending_.erase(it, pending_.end());
+  }
+
+  inline void clear_stock_unsafe(aclrtStream stream) {
+    for (auto& ptr : stock_) {
+      Allocator::free(ptr, allocator_, stream);
+    }
+    stock_.clear();
+  }
+
+  template <class Iterator>
+  inline size_t get_raw(Iterator first, Iterator const last,
+                        size_t requested_buffer_size, aclrtStream stream) {
+    // Get pre-allocated buffers if stock available.
+    size_t allocation_size;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+      std::lock_guard<std::mutex> lock(mutex_);
 
-        // If allocation_size of the workspace differs from the current buffer_size
-        // (i.e., somebody else requested a larger buffer since the original request
-        // occured), the provided buffers are incompatible and have to be discarded.
-        if (allocation_size != buffer_size_)
-        {
-            while (first != last)
-            {
-                Allocator::free(*first++, allocator_);
+      // If requested_buffer_size is within current buffer_size margins can
+      // reuse current buffers.
+      if (requested_buffer_size <= buffer_size_) {
+        while (first != last) {
+          // If no buffers available, try to make some available.
+          if (stock_.empty()) {
+            collect_pending_unsafe(stream);
+            if (stock_.empty()) {
+              // No buffers available.
+              break;
             }
-            return;
+          }
+
+          // Just take the next available buffer.
+          *first++ = stock_.back();
+          stock_.pop_back();
         }
+      } else {
+        // Drop the stock because we need more memory and those buffers have
+        // become useless to that end.
+        clear_stock_unsafe(stream);
+        buffer_size_ = requested_buffer_size;
+      }
 
-        // If the workspace that borrowed a stream was moved out of the RAII scope
-        // where it was created, it could happen that the stream was destroyed when
-        // we return the buffer ownership. This will prevent that.
-        //
-        // Note that `aclrtStreamQuery` isn't designed to track stream destruction.
-        // This check is a last resort, and may not work reliably. The recommended
-        // best practice is to simply ensure streams you use are alive and well.
-        aclrtStreamStatus status;
-        if (aclrtStreamQuery(stream, &status) == 0)
-        {
-            for (; first != last; ++first)
-            {
-                // Avoid adding already deallocated buffers.
-                if (*first == nullptr)
-                {
-                    continue;
-                }
-
-                // Spin lock if too many pending buffers (i.e., let CPU wait for GPU).
-                while (ready_events_.empty())
-                {
-                    collect_pending_unsafe(stream);
-                    if (!ready_events_.empty())
-                    {
-                        break;
-                    }
-                    std::this_thread::yield();
-                }
-
-                // Queue buffer.
-                aclrtEvent ready_event{ready_events_.back()};
-                ready_events_.pop_back();
-                NPU_CHECK(aclrtRecordEvent(ready_event, stream));
-                pending_.emplace_back(*first, allocation_size, ready_event);
-            }
-        }
-        else
-        {
-            // Without stream context, we must force a hard sync with the GPU.
-            NPU_CHECK(aclrtSynchronizeDevice());
-
-            for (; first != last; ++first)
-            {
-                // Avoid adding already deallocated buffers.
-                if (*first == nullptr)
-                {
-                    continue;
-                }
-
-                // Stock buffers and destroy those that are no longer needed.
-                if (stock_.size() < options_.max_stock)
-                {
-                    stock_.emplace_back(*first);
-                }
-                else
-                {
-                    Allocator::free(*first, allocator_);
-                }
-            }
-        }
+      allocation_size = buffer_size_;
     }
 
-    const MemoryPoolOptions options_;
+    // Forge new buffers until request can be filled.
+    for (; first != last; ++first) {
+      *first = Allocator::alloc(allocation_size, allocator_, stream);
+    }
 
-    mutable std::mutex mutex_;
-    size_t buffer_size_{1};
-    std::vector<alloc_type*> stock_;
-    std::vector<aclrtEvent> ready_events_;
+    return allocation_size;
+  }
 
-    std::vector<std::tuple<alloc_type*, size_t, aclrtEvent>> pending_;
-    BaseAllocator* allocator_;
+  template <class Iterator>
+  inline void put_raw(Iterator first, Iterator const last,
+                      size_t allocation_size, aclrtStream stream) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // If allocation_size of the workspace differs from the current buffer_size
+    // (i.e., somebody else requested a larger buffer since the original request
+    // occured), the provided buffers are incompatible and have to be discarded.
+    if (allocation_size != buffer_size_) {
+      while (first != last) {
+        Allocator::free(*first++, allocator_);
+      }
+      return;
+    }
+
+    // If the workspace that borrowed a stream was moved out of the RAII scope
+    // where it was created, it could happen that the stream was destroyed when
+    // we return the buffer ownership. This will prevent that.
+    //
+    // Note that `aclrtStreamQuery` isn't designed to track stream destruction.
+    // This check is a last resort, and may not work reliably. The recommended
+    // best practice is to simply ensure streams you use are alive and well.
+    aclrtStreamStatus status;
+    if (aclrtStreamQuery(stream, &status) == 0) {
+      for (; first != last; ++first) {
+        // Avoid adding already deallocated buffers.
+        if (*first == nullptr) {
+          continue;
+        }
+
+        // Spin lock if too many pending buffers (i.e., let CPU wait for GPU).
+        while (ready_events_.empty()) {
+          collect_pending_unsafe(stream);
+          if (!ready_events_.empty()) {
+            break;
+          }
+          std::this_thread::yield();
+        }
+
+        // Queue buffer.
+        aclrtEvent ready_event{ready_events_.back()};
+        ready_events_.pop_back();
+        NPU_CHECK(aclrtRecordEvent(ready_event, stream));
+        pending_.emplace_back(*first, allocation_size, ready_event);
+      }
+    } else {
+      // Without stream context, we must force a hard sync with the GPU.
+      NPU_CHECK(aclrtSynchronizeDevice());
+
+      for (; first != last; ++first) {
+        // Avoid adding already deallocated buffers.
+        if (*first == nullptr) {
+          continue;
+        }
+
+        // Stock buffers and destroy those that are no longer needed.
+        if (stock_.size() < options_.max_stock) {
+          stock_.emplace_back(*first);
+        } else {
+          Allocator::free(*first, allocator_);
+        }
+      }
+    }
+  }
+
+  const MemoryPoolOptions options_;
+
+  mutable std::mutex mutex_;
+  size_t buffer_size_{1};
+  std::vector<alloc_type*> stock_;
+  std::vector<aclrtEvent> ready_events_;
+
+  std::vector<std::tuple<alloc_type*, size_t, aclrtEvent>> pending_;
+  BaseAllocator* allocator_;
 };
 
 template <class Allocator>
-std::ostream& operator<<(std::ostream& os, const MemoryPool<Allocator>& pool)
-{
-    std::lock_guard<std::mutex> lock(pool.mutex_);
+std::ostream& operator<<(std::ostream& os, const MemoryPool<Allocator>& pool) {
+  std::lock_guard<std::mutex> lock(pool.mutex_);
 
-    for (size_t i{0}; i < 80; ++i)
-    {
-        os << '-';
-    }
+  for (size_t i{0}; i < 80; ++i) {
+    os << '-';
+  }
 
-    // Current stock.
-    os << "\nStock =\n";
-    for (size_t i{0}; i < pool.stock_.size(); ++i)
-    {
-        os << "[ " << i << " ] buffer " << static_cast<void*>(pool.stock_[i]) << ", size = " << pool.buffer_size_
-           << '\n';
-    }
+  // Current stock.
+  os << "\nStock =\n";
+  for (size_t i{0}; i < pool.stock_.size(); ++i) {
+    os << "[ " << i << " ] buffer " << static_cast<void*>(pool.stock_[i])
+       << ", size = " << pool.buffer_size_ << '\n';
+  }
 
-    // Pending buffers.
-    os << "\nPending =\n";
-    for (size_t i{0}; i < pool.pending_.size(); ++i)
-    {
-        os << "[ " << i << " ] buffer = " << static_cast<void*>(std::get<0>(pool.pending_[i]))
-           << ", size = " << std::get<1>(pool.pending_[i])
-           << ", ready_event = " << static_cast<void*>(std::get<2>(pool.pending_[i])) << '\n';
-    }
+  // Pending buffers.
+  os << "\nPending =\n";
+  for (size_t i{0}; i < pool.pending_.size(); ++i) {
+    os << "[ " << i
+       << " ] buffer = " << static_cast<void*>(std::get<0>(pool.pending_[i]))
+       << ", size = " << std::get<1>(pool.pending_[i]) << ", ready_event = "
+       << static_cast<void*>(std::get<2>(pool.pending_[i])) << '\n';
+  }
 
-    // Available ready events.
-    os << "\nReady Events =\n";
-    for (size_t i{0}; i < pool.ready_events_.size(); ++i)
-    {
-        os << "[ " << i << " ] " << static_cast<void*>(pool.ready_events_[i]) << '\n';
-    }
+  // Available ready events.
+  os << "\nReady Events =\n";
+  for (size_t i{0}; i < pool.ready_events_.size(); ++i) {
+    os << "[ " << i << " ] " << static_cast<void*>(pool.ready_events_[i])
+       << '\n';
+  }
 
-    for (size_t i{0}; i < 80; ++i)
-    {
-        os << '-';
-    }
+  for (size_t i{0}; i < 80; ++i) {
+    os << '-';
+  }
 
-    os << '\n';
-    return os;
+  os << '\n';
+  return os;
 }
 
 }  // namespace hkv
