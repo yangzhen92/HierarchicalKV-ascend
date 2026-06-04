@@ -985,6 +985,9 @@ class HashTable : public HashTableBase<K, V, S> {
       NPU_CHECK(aclrtGetDevice(&(options_.device_id)));
     }
 
+    // Allocate device-side counters for mutex after device context is ready.
+    mutex_.init();
+
     HKV_CHECK((options_.max_bucket_size >= 16),
               "Bucket size should be greater than or equal to 16");
     HKV_CHECK(ispow2(static_cast<uint32_t>(options_.max_bucket_size)),
