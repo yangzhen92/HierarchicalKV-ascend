@@ -1171,13 +1171,8 @@ class HashTable : public HashTableBase<K, V, S> {
                 n_align_warp, d_dst_values, d_dst_keys);
 
         // 2. io：搬运value，释放lock
-        auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
-                                         sizeof(value_type), false);
-        write_kernel<K, V, true><<<block_dim_, tiling.valid_ub_size, stream>>>(
-            tiling.former_num, tiling.former_core_move_num,
-            tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-            table_->dim, const_cast<key_type*>(keys),
-            const_cast<value_type*>(values), n, d_dst_values, d_dst_keys);
+        launch_write_kernel<true>(n, stream, keys, values, d_dst_values,
+                                  d_dst_keys);
       } else {
         size_t dst_ptr_size = n * sizeof(value_type*);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(dst_ptr_size, stream)};
@@ -1210,14 +1205,8 @@ class HashTable : public HashTableBase<K, V, S> {
           NPU_CHECK(aclrtSynchronizeStream(stream));
           write_by_cpu<V>(h_dst_values, h_values, table_->dim, n);
         } else {
-          auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
-                                           sizeof(value_type), false);
-          write_kernel<K, V, false>
-              <<<block_dim_, tiling.valid_ub_size, stream>>>(
-                  tiling.former_num, tiling.former_core_move_num,
-                  tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-                  table_->dim, const_cast<key_type*>(keys),
-                  const_cast<value_type*>(values), n, d_dst_values, nullptr);
+          launch_write_kernel<false>(n, stream, keys, values, d_dst_values,
+                                     nullptr);
         }
       }
     }
@@ -1890,13 +1879,8 @@ class HashTable : public HashTableBase<K, V, S> {
           table_->capacity_divisor_magic, table_->capacity_divisor_shift,
           n_align_warp, d_dst_values, d_dst_keys);
 
-        auto tiling =
-          GetValueMoveTiling(n, block_dim_, table_->dim, sizeof(value_type), false);
-        write_kernel<K, V, true><<<block_dim_, tiling.valid_ub_size, stream>>>(
-          tiling.former_num, tiling.former_core_move_num,
-          tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-          table_->dim, const_cast<key_type*>(keys),
-          const_cast<value_type*>(values), n, d_dst_values, d_dst_keys);
+        launch_write_kernel<true>(n, stream, keys, values, d_dst_values,
+                                  d_dst_keys);
       } else {
         size_t dst_ptr_size = n * sizeof(value_type*);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(dst_ptr_size, stream)};
@@ -1926,14 +1910,8 @@ class HashTable : public HashTableBase<K, V, S> {
           NPU_CHECK(aclrtSynchronizeStream(stream));
           write_by_cpu<V>(h_dst_values, h_values, table_->dim, n);
         } else {
-          auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
-                                           sizeof(value_type), false);
-          write_kernel<K, V, false>
-              <<<block_dim_, tiling.valid_ub_size, stream>>>(
-                  tiling.former_num, tiling.former_core_move_num,
-                  tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-                  table_->dim, const_cast<key_type*>(keys),
-                  const_cast<value_type*>(values), n, d_dst_values, nullptr);
+          launch_write_kernel<false>(n, stream, keys, values, d_dst_values,
+                                     nullptr);
         }
       }
     }
@@ -2062,13 +2040,8 @@ class HashTable : public HashTableBase<K, V, S> {
           table_->capacity_divisor_magic, table_->capacity_divisor_shift,
           n_align_warp, d_dst_values, d_dst_keys);
 
-        auto tiling =
-          GetValueMoveTiling(n, block_dim_, table_->dim, sizeof(value_type), false);
-        write_kernel<K, V, true><<<block_dim_, tiling.valid_ub_size, stream>>>(
-          tiling.former_num, tiling.former_core_move_num,
-          tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-          table_->dim, const_cast<key_type*>(keys),
-          const_cast<value_type*>(values), n, d_dst_values, d_dst_keys);
+        launch_write_kernel<true>(n, stream, keys, values, d_dst_values,
+                                  d_dst_keys);
       } else {
         size_t dst_ptr_size = n * sizeof(value_type*);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(dst_ptr_size, stream)};
@@ -2099,14 +2072,8 @@ class HashTable : public HashTableBase<K, V, S> {
           NPU_CHECK(aclrtSynchronizeStream(stream));
           write_by_cpu<V>(h_dst_values, h_values, table_->dim, n);
         } else {
-          auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
-                                           sizeof(value_type), false);
-          write_kernel<K, V, false>
-              <<<block_dim_, tiling.valid_ub_size, stream>>>(
-                  tiling.former_num, tiling.former_core_move_num,
-                  tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-                  table_->dim, const_cast<key_type*>(keys),
-                  const_cast<value_type*>(values), n, d_dst_values, nullptr);
+          launch_write_kernel<false>(n, stream, keys, values, d_dst_values,
+                                     nullptr);
         }
       }
     }
@@ -3397,6 +3364,33 @@ class HashTable : public HashTableBase<K, V, S> {
       return 8;
     }
     return 1;
+  }
+
+  template <bool UNLOCK_KEY>
+  inline void launch_write_kernel(const size_type n, aclrtStream stream,
+                                  const key_type* keys,
+                                  const value_type* values,
+                                  value_type** d_dst_values,
+                                  key_type** d_dst_keys) {
+    if (UseHalfUbWriteKernel(table_->dim, sizeof(value_type), !UNLOCK_KEY)) {
+      auto tiling = GetHalfUBValueMoveTiling(n, block_dim_, table_->dim,
+                                             sizeof(value_type), !UNLOCK_KEY);
+      write_with_half_ub_kernel<K, V, UNLOCK_KEY>
+          <<<block_dim_, tiling.valid_ub_size, stream>>>(
+              tiling.former_num, tiling.former_core_move_num,
+              tiling.tail_core_move_num, tiling.num_tiles, table_->dim,
+              const_cast<key_type*>(keys), const_cast<value_type*>(values), n,
+              d_dst_values, d_dst_keys);
+    } else {
+      auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
+                                       sizeof(value_type), !UNLOCK_KEY);
+      write_kernel<K, V, UNLOCK_KEY>
+          <<<block_dim_, tiling.valid_ub_size, stream>>>(
+              tiling.former_num, tiling.former_core_move_num,
+              tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
+              table_->dim, const_cast<key_type*>(keys),
+              const_cast<value_type*>(values), n, d_dst_values, d_dst_keys);
+    }
   }
 
  private:
