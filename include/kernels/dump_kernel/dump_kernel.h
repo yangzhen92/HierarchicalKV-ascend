@@ -341,9 +341,6 @@ __global__ __vector__ void export_batch_value_kernel_half_once(
 
   TPipe pipe;
   TQueBind<TPosition::VECIN, TPosition::VECOUT, 0> move_queue;
-  // TQueBind<TPosition::VECIN, TPosition::VECOUT, 0> dst_queue;
-  // pipe.InitBuffer(move_queue, DOUBLE_BUFFER, num_tiles * sizeof(V*));
-  // pipe.InitBuffer(dst_queue, DOUBLE_BUFFER, num_tiles * sizeof(V) * dim);
   pipe.InitBuffer(move_queue, DOUBLE_BUFFER, num_tiles * sizeof(V) * dim);
   GlobalTensor<V> src_values_gm;
   GlobalTensor<V> dst_values_gm;
@@ -351,7 +348,6 @@ __global__ __vector__ void export_batch_value_kernel_half_once(
   DataCopyPadExtParams<V> pad_params{true, 0, 0, 0};
 
   dst_values_gm.SetGlobalBuffer(values);
-  // src_values_gm.SetGlobalBuffer(d_src_values);
   DataCopyExtParams copy_in_params{1, static_cast<uint32_t>(sizeof(V) * dim), 0,
                                    0, 0};
   uint64_t core_max_idx = core_start_idx + core_move_count;
