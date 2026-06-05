@@ -3374,7 +3374,7 @@ class HashTable : public HashTableBase<K, V, S> {
   template <bool UNLOCK_KEY>
   inline void launch_export_batch_kernel(const size_type n, aclrtStream stream,
                                          const key_type* keys,
-                                         const value_type* values,
+                                         value_type* values,
                                          value_type** d_src_values,
                                          size_type* count) const {
     constexpr uint32_t ALIGN_SIZE = 32;  // ub地址32字节对齐
