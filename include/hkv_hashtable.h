@@ -3375,7 +3375,8 @@ class HashTable : public HashTableBase<K, V, S> {
   inline void launch_export_batch_kernel(const size_type n, aclrtStream stream,
                                          const key_type* keys,
                                          const value_type* values,
-                                         value_type** d_src_values, size_type* count) {
+                                         value_type** d_src_values,
+                                         size_type* count) const {
     constexpr uint32_t ALIGN_SIZE = 32;  // ub地址32字节对齐
     uint32_t tensor_size = table_->dim * sizeof(value_type);
     bool is_align = (tensor_size % ALIGN_SIZE == 0);
