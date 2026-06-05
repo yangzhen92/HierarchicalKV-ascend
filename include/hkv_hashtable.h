@@ -3405,6 +3405,8 @@ class HashTable : public HashTableBase<K, V, S> {
           block_dim_, table_->dim, max_tile_size, values, count, d_src_values);
     }
   }
+  
+  template <bool UNLOCK_KEY>
   inline void launch_write_kernel(const size_type n, aclrtStream stream,
                                   const key_type* keys,
                                   const value_type* values,
