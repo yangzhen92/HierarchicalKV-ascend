@@ -2572,7 +2572,8 @@ class HashTable : public HashTableBase<K, V, S> {
           d_table_, table_->buckets, keys, d_src_values, scores, offset, n,
           d_counter, table_->dim);
 
-      launch_export_batch_kernel<false>(n, stream, keys, values, d_src_values, d_counter);
+      launch_export_batch_kernel<false>(n, stream, keys, values, d_src_values,
+                                        d_counter);
     }
     NpuCheckError();
   }
@@ -2679,7 +2680,8 @@ class HashTable : public HashTableBase<K, V, S> {
               d_table_, table_->buckets, pattern, threshold, keys, d_src_values,
               scores, offset, n, d_counter, table_->dim);
 
-      launch_export_batch_kernel<false>(n, stream, keys, values, d_src_values, d_counter);
+      launch_export_batch_kernel<false>(n, stream, keys, values, d_src_values,
+                                        d_counter);
     }
     NpuCheckError();
   }
@@ -2746,7 +2748,8 @@ class HashTable : public HashTableBase<K, V, S> {
               pred, d_table_, table_->buckets, keys, d_src_values, scores,
               offset, n, d_counter, table_->dim);
 
-      launch_export_batch_kernel<false>(n, stream, keys, values, d_src_values, d_counter);
+      launch_export_batch_kernel<false>(n, stream, keys, values, d_src_values,
+                                        d_counter);
     }
     NpuCheckError();
   }
@@ -3098,7 +3101,8 @@ class HashTable : public HashTableBase<K, V, S> {
             d_table_, table_->buckets, d_keys, d_src_values, d_scores, i,
             batch_size, d_count, table_->dim);
 
-        launch_export_batch_kernel<false>(n, stream, d_keys, d_values, d_src_values, d_count);
+        launch_export_batch_kernel<false>(n, stream, d_keys, d_values,
+                                          d_src_values, d_count);
       }
       NpuCheckError();
       // Copy counter from device to host
@@ -3405,7 +3409,7 @@ class HashTable : public HashTableBase<K, V, S> {
           block_dim_, table_->dim, max_tile_size, values, count, d_src_values);
     }
   }
-  
+
   template <bool UNLOCK_KEY>
   inline void launch_write_kernel(const size_type n, aclrtStream stream,
                                   const key_type* keys,
