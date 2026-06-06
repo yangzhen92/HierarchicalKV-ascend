@@ -167,7 +167,7 @@ template <class K, class V, class S>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_kernel_hybrid_vf(
     __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
-    __gm__ K* d_key, __gm__ V * __gm__ * dst_val, __gm__ S* d_score,
+    __gm__ K* d_key, __gm__ V * __gm__* dst_val, __gm__ S* d_score,
     const size_t offset, const size_t search_length,
     const uint64_t total_thread_num, __gm__ size_t* d_dump_counter,
     __ubuf__ uint32_t* block_acc, __ubuf__ uint32_t* global_acc,
@@ -224,7 +224,7 @@ LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_kernel_hybrid_vf(
 template <class K, class V, class S>
 __global__ __vector__ void dump_kernel_hybrid(
     __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
-    __gm__ K* keys, __gm__ V * __gm__ * src_vals, __gm__ S* scores,
+    __gm__ K* keys, __gm__ V * __gm__* src_vals, __gm__ S* scores,
     const size_t offset, const size_t search_length,
     __gm__ size_t* dump_counter, uint32_t dim) {
   const uint64_t total_thread_num = THREAD_NUM_2048 * GetBlockNum();
@@ -256,7 +256,7 @@ __global__ __vector__ void dump_kernel_hybrid(
 template <class V>
 __global__ __vector__ void export_batch_value_kernel(
     uint32_t block_dim, uint32_t dim, uint32_t max_tile_size, __gm__ V* values,
-    __gm__ size_t* dump_counter, __gm__ V * __gm__ * d_src_values) {
+    __gm__ size_t* dump_counter, __gm__ V * __gm__* d_src_values) {
   size_t n = *dump_counter;
   uint64_t tail_core_move_num = n / block_dim;
   uint64_t former_core_move_num = tail_core_move_num + 1;
@@ -320,7 +320,7 @@ __global__ __vector__ void export_batch_value_kernel(
 template <class V>
 __global__ __vector__ void export_batch_value_kernel_half_once(
     uint32_t block_dim, uint32_t dim, uint32_t max_tile_size, __gm__ V* values,
-    __gm__ size_t* dump_counter, __gm__ V * __gm__ * d_src_values) {
+    __gm__ size_t* dump_counter, __gm__ V * __gm__* d_src_values) {
   size_t n = *dump_counter;
   uint64_t tail_core_move_num = n / block_dim;
   uint64_t former_core_move_num = tail_core_move_num + 1;
