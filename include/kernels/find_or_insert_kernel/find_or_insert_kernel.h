@@ -816,6 +816,8 @@ __global__ __vector__ void read_or_write_value_kernel_half_once(
   GlobalTensor<V> param_values_gm;
   LocalTensor<V> move_local;
   DataCopyPadExtParams<V> pad_params{true, 0, 0, 0};
+  DataCopyExtParams copy_params{1, static_cast<uint32_t>(dim * sizeof(V)), 0, 0,
+                                0};
 
   param_values_gm.SetGlobalBuffer(param_values);
   uint64_t core_max_idx = core_start_idx + core_move_count;
