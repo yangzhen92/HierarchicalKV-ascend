@@ -629,7 +629,8 @@ TEST(BasicPropertiesTest, PureHbmModeQuery) {
 
   {
     auto table = helper.create_table<EvictStrategy::kLru>(
-        INIT_CAPACITY * 4, INIT_CAPACITY * 4, MAX_BUCKET_SIZE, TWO_MB); // 4 * INIT_CAPACITY = MAX_CAPACITY
+        INIT_CAPACITY * 4, INIT_CAPACITY * 4, MAX_BUCKET_SIZE,
+        TWO_MB);  // 4 * INIT_CAPACITY = MAX_CAPACITY
     HashTableBase<K, V, S>* base = table.get();
     EXPECT_FALSE(base->is_pure_hbm_mode())
         << "Table should report non-pure HBM when value storage is mixed HBM "
@@ -656,5 +657,18 @@ TEST(BasicPropertiesTest, PureHbmModeQuery) {
     EXPECT_FALSE(base->is_pure_hbm_mode())
         << "Table should report non-pure HBM after expansion allocates new "
            "value storage in DDR";
+  }
+}
+
+TEST(BasicPropertiesTest, DISABLED_SizeQuery) {
+  const size_t INIT_CAPACITY = 1UL * 1024 * 1024 * 1024;
+
+  HashTableTestHelper<K, V, S> helper(1);
+  auto table =
+      helper.create_table<EvictStrategy::kLru>(INIT_CAPACITY, INIT_CAPACITY);
+  HashTableBase<K, V, S>* base = table.get();
+  for (int32_t i = 0; i < 20; i++) {
+    size_t size = table->size(helper.get_stream());
+    NPU_CHECK(aclrtSynchronizeStream(helper.get_stream()));
   }
 }
