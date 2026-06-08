@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文档易用性评估报告 — [站点名称]</title>
+<style>
+  :root {
+    --grade-a: #16a34a;
+    --grade-b: #2563eb;
+    --grade-c: #d97706;
+    --grade-d: #dc2626;
+    --grade-e: #991b1b;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --text-secondary: #64748b;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+  }
+
+  .container { max-width: 1080px; margin: 0 auto; }
+
+  h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.25rem; margin: 2rem 0 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; }
+
+  .subtitle { color: var(--text-secondary); margin-bottom: 2rem; }
+
+  /* ── 概览卡片 ── */
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .overview-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+  }
+
+  .overview-card .label { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+  .overview-card .value { font-size: 1.25rem; font-weight: 600; margin-top: 0.25rem; }
+
+  .total-score-card {
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .total-score-card .score { font-size: 3rem; font-weight: 700; }
+  .total-score-card .grade-label { font-size: 1.1rem; font-weight: 600; margin-top: 0.25rem; }
+
+  /* ── 等级徽章 ── */
+  .grade { display: inline-block; padding: 0.15em 0.6em; border-radius: 4px; font-weight: 600; font-size: 0.85rem; color: #fff; }
+  .grade-a { background: var(--grade-a); }
+  .grade-b { background: var(--grade-b); }
+  .grade-c { background: var(--grade-c); }
+  .grade-d { background: var(--grade-d); }
+
+  /* ── 维度评分条 ── */
+  .dimension-bars { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 2rem; }
+
+  .dim-row { display: grid; grid-template-columns: 160px 50px 1fr 60px 44px; align-items: center; gap: 0.75rem; }
+  .dim-name { font-weight: 500; font-size: 0.9rem; }
+  .dim-weight { font-size: 0.8rem; color: var(--text-secondary); text-align: right; }
+  .bar-track { height: 20px; background: #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 10px; transition: width 0.6s ease; }
+  .dim-score { font-weight: 600; text-align: right; font-size: 0.95rem; }
+
+  /* ── 维度详情卡片 ── */
+  .dim-detail {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .dim-detail-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+  .dim-detail-header h3 { margin: 0; }
+
+  .pros, .cons { margin: 0.5rem 0; padding-left: 1.25rem; }
+  .pros li::marker { content: "✓ "; color: var(--grade-a); }
+  .cons li::marker { content: "✗ "; color: var(--grade-d); }
+  .evidence { font-size: 0.85rem; color: var(--text-secondary); font-style: italic; margin-top: 0.25rem; }
+
+  /* ── 表格 ── */
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  th, td { padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: #f1f5f9; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  tr:hover td { background: #f8fafc; }
+  td a { color: #2563eb; text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+
+  /* ── 改进建议 ── */
+  .priority-unusable { border-left: 4px solid var(--grade-e); padding-left: 1rem; margin-bottom: 1rem; }
+  .priority-hard { border-left: 4px solid var(--grade-d); padding-left: 1rem; margin-bottom: 1rem; }
+  .priority-attention { border-left: 4px solid var(--grade-c); padding-left: 1rem; margin-bottom: 1rem; }
+  .priority-optimize { border-left: 4px solid var(--grade-b); padding-left: 1rem; margin-bottom: 1rem; }
+  .priority-benchmark { border-left: 4px solid var(--grade-a); padding-left: 1rem; margin-bottom: 1rem; }
+
+  .priority-label { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.25rem; }
+  .priority-unusable .priority-label { color: var(--grade-e); }
+  .priority-hard .priority-label { color: var(--grade-d); }
+  .priority-attention .priority-label { color: var(--grade-c); }
+  .priority-optimize .priority-label { color: var(--grade-b); }
+  .priority-benchmark .priority-label { color: var(--grade-a); }
+
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.3rem 0; }
+
+  @media print {
+    body { padding: 0; background: #fff; }
+    .bar-fill { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .grade { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ============================== 评估概览 ============================== -->
+<h1>文档易用性评估报告</h1>
+<p class="subtitle">[文档集名称] — [YYYY-MM-DD]</p>
+
+<div class="overview-grid">
+  <div class="overview-card">
+    <div class="label">文档路径</div>
+    <div class="value">[目录路径]</div>
+  </div>
+  <div class="overview-card">
+    <div class="label">文档文件数</div>
+    <div class="value">[N]</div>
+  </div>
+  <div class="overview-card">
+    <div class="label">文档类型</div>
+    <div class="value">[API 参考 / 教程 / 综合文档 / ...]</div>
+  </div>
+</div>
+
+<div class="total-score-card">
+  <div class="score" style="color: [等级颜色];">[加权总分]</div>
+  <div class="grade-label"><span class="grade [grade-x]">[等级]</span> [好用/易用/可用/难用/不可用]</div>
+</div>
+
+<!-- ============================== 维度评分总览 ============================== -->
+<h2>维度评分总览</h2>
+
+<!--
+  填写说明：
+  - 将 [分] 替换为实际分数（0-10 制）
+  - bar-fill 的 width 设为 "[分×10]%"
+  - bar-fill 的 background 按等级使用对应 CSS 变量：
+    A(8-10] → var(--grade-a)  B(6-8] → var(--grade-b)
+    C(4-6]  → var(--grade-c)  D(2-4]   → var(--grade-d)  E[0-2] → var(--grade-d)
+  - grade 徽章使用对应的 grade-a/b/c/d class
+-->
+
+<div class="dimension-bars">
+  <div class="dim-row">
+    <span class="dim-name">完整性</span>
+    <span class="dim-weight">33.3%</span>
+    <div class="bar-track"><div class="bar-fill" style="width:[分×10]%; background:var(--grade-x);"></div></div>
+    <span class="dim-score">[分]</span>
+    <span class="grade grade-x">[等级]</span>
+  </div>
+  <div class="dim-row">
+    <span class="dim-name">正确性</span>
+    <span class="dim-weight">33.3%</span>
+    <div class="bar-track"><div class="bar-fill" style="width:[分×10]%; background:var(--grade-x);"></div></div>
+    <span class="dim-score">[分]</span>
+    <span class="grade grade-x">[等级]</span>
+  </div>
+  <div class="dim-row">
+    <span class="dim-name">易理解</span>
+    <span class="dim-weight">33.3%</span>
+    <div class="bar-track"><div class="bar-fill" style="width:[分×10]%; background:var(--grade-x);"></div></div>
+    <span class="dim-score">[分]</span>
+    <span class="grade grade-x">[等级]</span>
+  </div>
+</div>
+
+<!-- ============================== 各维度详细分析 ============================== -->
+<h2>各维度详细分析</h2>
+
+<!--
+  对每个维度重复以下卡片结构。
+  - 将 [grade-x] 替换为 grade-a / grade-b / grade-c / grade-d
+  - 在 pros 和 cons 列表中填入具体条目
+  - 问题项请附上页面 URL 作为链接
+-->
+
+<div class="dim-detail">
+  <div class="dim-detail-header">
+    <h3>1. 完整性（33.3%）</h3>
+    <span class="grade [grade-x]">[分] · [等级]</span>
+  </div>
+  <p class="evidence">[评分依据]</p>
+  <h4>优点</h4>
+  <ul class="pros">
+    <li>[具体优点]</li>
+  </ul>
+  <h4>问题</h4>
+  <ul class="cons">
+    <li>[具体问题] — [文件路径]</li>
+  </ul>
+</div>
+
+<div class="dim-detail">
+  <div class="dim-detail-header">
+    <h3>2. 正确性（33.3%）</h3>
+    <span class="grade [grade-x]">[分] · [等级]</span>
+  </div>
+  <p class="evidence">[评分依据]</p>
+  <h4>优点</h4>
+  <ul class="pros">
+    <li>[具体优点]</li>
+  </ul>
+  <h4>问题</h4>
+  <ul class="cons">
+    <li>[具体问题] — [文件路径]</li>
+  </ul>
+</div>
+
+<div class="dim-detail">
+  <div class="dim-detail-header">
+    <h3>3. 易理解（33.3%）</h3>
+    <span class="grade [grade-x]">[分] · [等级]</span>
+  </div>
+  <p class="evidence">[评分依据]</p>
+  <h4>优点</h4>
+  <ul class="pros">
+    <li>[具体优点]</li>
+  </ul>
+  <h4>问题</h4>
+  <ul class="cons">
+    <li>[具体问题] — [文件路径]</li>
+  </ul>
+</div>
+
+<!-- ============================== 完整问题列表 ============================== -->
+<h2>完整问题列表（共 [N] 条）</h2>
+
+<!--
+  此区域列出所有 SubAgent 发现的全部问题，不做去重、不合并。
+  按「文件路径 → 维度 → 章节」排序。
+  单文档深度评估模式下此列表会显著更长。
+-->
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:40px">#</th>
+      <th style="width:100px">维度</th>
+      <th style="width:140px">文件</th>
+      <th style="width:100px">章节/位置</th>
+      <th>问题描述</th>
+      <th style="width:80px">问题等级</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td><span class="grade grade-x">[维度]</span></td>
+      <td>[文件名]</td>
+      <td>[章节标题或行号]</td>
+      <td>[具体问题描述，附证据]</td>
+      <td><span class="grade grade-x">[等级]</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ============================== 文件级评分明细 ============================== -->
+<h2>文件级评分明细</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>文件标题</th>
+      <th>文件路径</th>
+      <th>类型</th>
+      <th>完整性</th>
+      <th>正确性</th>
+      <th>易理解</th>
+      <th>加权总分</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>[文件标题]</td>
+      <td>[文件路径]</td>
+      <td>[类型]</td>
+      <td>[分]</td>
+      <td>[分]</td>
+      <td>[分]</td>
+      <td>[分]</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ============================== 改进建议 ============================== -->
+<h2>改进建议（按优先级排序）</h2>
+
+<div class="priority-unusable">
+  <div class="priority-label">紧急修复项（不可用：[0-2] 分）— 需全面重写，立即启动修订</div>
+  <ul>
+    <li>[具体建议，附文件路径]</li>
+  </ul>
+</div>
+
+<div class="priority-hard">
+  <div class="priority-label">重点修订项（难用：(2-4] 分）— 列入重点修订计划，指定负责人和截止日期</div>
+  <ul>
+    <li>[具体建议，附文件路径]</li>
+  </ul>
+</div>
+
+<div class="priority-attention">
+  <div class="priority-label">需关注项（可用：(4-6] 分）— 制定改进计划，优先修复</div>
+  <ul>
+    <li>[具体建议，附文件路径]</li>
+  </ul>
+</div>
+
+<div class="priority-optimize">
+  <div class="priority-label">优化建议（易用：(6-8] 分）— 针对低分子项小幅优化</div>
+  <ul>
+    <li>[优化方向]</li>
+  </ul>
+</div>
+
+<div class="priority-benchmark">
+  <div class="priority-label">标杆文档（好用：(8-10] 分）— 作为标杆推广，定期复查</div>
+  <ul>
+    <li>[推广建议]</li>
+  </ul>
+</div>
+
+<!-- ============================== 附录 ============================== -->
+<h2>附录：文档文件清单</h2>
+
+<table>
+  <thead>
+    <tr><th>#</th><th>文件标题</th><th>文件路径</th><th>文件类型</th><th>状态</th></tr>
+  </thead>
+  <tbody>
+    <!-- 状态：已评估 / 读取失败 / 已跳过 -->
+    <tr>
+      <td>1</td>
+      <td>[标题]</td>
+      <td>[路径]</td>
+      <td>[MD/PDF]</td>
+      <td>[状态]</td>
+    </tr>
+  </tbody>
+</table>
+
+</div><!-- /.container -->
+</body>
+</html>

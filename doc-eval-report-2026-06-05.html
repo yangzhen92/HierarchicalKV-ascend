@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文档易用性评估报告 — README.md</title>
+<style>
+  :root {
+    --grade-a: #16a34a; --grade-b: #2563eb; --grade-c: #d97706; --grade-d: #dc2626; --grade-e: #991b1b;
+    --bg: #f8fafc; --card: #ffffff; --border: #e2e8f0; --text: #1e293b; --text-secondary: #64748b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6; padding: 2rem;
+  }
+  .container { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.25rem; margin: 2rem 0 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; }
+  .subtitle { color: var(--text-secondary); margin-bottom: 2rem; }
+  .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .overview-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; }
+  .overview-card .label { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+  .overview-card .value { font-size: 1.25rem; font-weight: 600; margin-top: 0.25rem; }
+  .total-score-card { background: var(--card); border: 2px solid var(--border); border-radius: 12px; padding: 1.5rem; text-align: center; margin-bottom: 2rem; }
+  .total-score-card .score { font-size: 3rem; font-weight: 700; }
+  .total-score-card .grade-label { font-size: 1.1rem; font-weight: 600; margin-top: 0.25rem; }
+  .grade { display: inline-block; padding: 0.15em 0.6em; border-radius: 4px; font-weight: 600; font-size: 0.85rem; color: #fff; }
+  .grade-a { background: var(--grade-a); } .grade-b { background: var(--grade-b); } .grade-c { background: var(--grade-c); } .grade-d { background: var(--grade-d); } .grade-e { background: var(--grade-e); }
+  .dimension-bars { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 2rem; }
+  .dim-row { display: grid; grid-template-columns: 160px 50px 1fr 60px 44px; align-items: center; gap: 0.75rem; }
+  .dim-name { font-weight: 500; font-size: 0.9rem; }
+  .dim-weight { font-size: 0.8rem; color: var(--text-secondary); text-align: right; }
+  .bar-track { height: 20px; background: #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 10px; transition: width 0.6s ease; }
+  .dim-score { font-weight: 600; text-align: right; font-size: 0.95rem; }
+  .dim-detail { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+  .dim-detail-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+  .dim-detail-header h3 { margin: 0; }
+  .pros, .cons { margin: 0.5rem 0; padding-left: 1.25rem; }
+  .pros li::marker { content: "✓ "; color: var(--grade-a); }
+  .cons li::marker { content: "✗ "; color: var(--grade-d); }
+  .evidence { font-size: 0.85rem; color: var(--text-secondary); font-style: italic; margin-top: 0.25rem; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  th, td { padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: #f1f5f9; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  tr:hover td { background: #f8fafc; }
+  td a { color: #2563eb; text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  .priority-unusable { border-left: 4px solid var(--grade-e); padding-left: 1rem; margin-bottom: 1rem; }
+  .priority-hard { border-left: 4px solid var(--grade-d); padding-left: 1rem; margin-bottom: 1rem; }
+  .priority-attention { border-left: 4px solid var(--grade-c); padding-left: 1rem; margin-bottom: 1rem; }
+  .priority-optimize { border-left: 4px solid var(--grade-b); padding-left: 1rem; margin-bottom: 1rem; }
+  .priority-label { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.25rem; }
+  .priority-unusable .priority-label { color: var(--grade-e); } .priority-hard .priority-label { color: var(--grade-d); }
+  .priority-attention .priority-label { color: var(--grade-c); } .priority-optimize .priority-label { color: var(--grade-b); }
+  ul { padding-left: 1.25rem; } li { margin: 0.3rem 0; }
+  .term-table td:first-child { font-family: Consolas, monospace; font-weight: 600; }
+  @media print { body { padding: 0; background: #fff; } .bar-fill { print-color-adjust: exact; -webkit-print-color-adjust: exact; } .grade { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>文档易用性评估报告</h1>
+<p class="subtitle">README.md — 单文档深度评估 — 2026-06-05</p>
+
+<div class="overview-grid">
+  <div class="overview-card"><div class="label">文档路径</div><div class="value">README.md</div></div>
+  <div class="overview-card"><div class="label">文档类型</div><div class="value">README</div></div>
+  <div class="overview-card"><div class="label">评估模式</div><div class="value">单文档深度评估</div></div>
+  <div class="overview-card"><div class="label">评估日期</div><div class="value">2026-06-05</div></div>
+</div>
+
+<div class="total-score-card">
+  <div class="score" style="color: var(--grade-c);">4.8</div>
+  <div class="grade-label"><span class="grade grade-c">可用</span> 内容存在部分缺失，存在模糊点需要实验验证</div>
+</div>
+
+<h2>维度评分总览</h2>
+
+<div class="dimension-bars">
+  <div class="dim-row">
+    <span class="dim-name">完整性</span><span class="dim-weight">33.3%</span>
+    <div class="bar-track"><div class="bar-fill" style="width:30%; background:var(--grade-d);"></div></div>
+    <span class="dim-score">3.0</span><span class="grade grade-d">难用</span>
+  </div>
+  <div class="dim-row">
+    <span class="dim-name">正确性</span><span class="dim-weight">33.3%</span>
+    <div class="bar-track"><div class="bar-fill" style="width:70%; background:var(--grade-b);"></div></div>
+    <span class="dim-score">7.0</span><span class="grade grade-b">易用</span>
+  </div>
+  <div class="dim-row">
+    <span class="dim-name">易理解</span><span class="dim-weight">33.3%</span>
+    <div class="bar-track"><div class="bar-fill" style="width:45%; background:var(--grade-c);"></div></div>
+    <span class="dim-score">4.5</span><span class="grade grade-c">可用</span>
+  </div>
+</div>
+
+<!-- ============================== 维度1：完整性 ============================== -->
+<h2>各维度详细分析</h2>
+
+<div class="dim-detail">
+  <div class="dim-detail-header">
+    <h3>1. 完整性（33.3%）</h3>
+    <span class="grade grade-d">3.0 · 难用</span>
+  </div>
+  <p class="evidence">安装和基本用法所需的关键信息大量缺失：版本配套全空、代码示例存在缺陷且缺关键步骤、错误码完全缺失、CANN/OS/编译器版本要求均未说明。</p>
+
+  <h4>逐子项检查</h4>
+  <table>
+    <thead><tr><th>子项</th><th>判定</th><th>关键证据</th></tr></thead>
+    <tbody>
+      <tr><td>1.1 产品支持情况</td><td>⚠️ 部分通过</td><td>提及"Ascend950系列"，但未列出具体NPU型号、HBM容量要求</td></tr>
+      <tr><td>1.2 版本配套信息</td><td>❌ 不通过</td><td>完全缺失：CANN/googletest无版本号，OS/GCC/CMake版本全无</td></tr>
+      <tr><td>1.3 参数/术语说明</td><td>⚠️ 部分通过</td><td>淘汰策略和环境变量说明详细；但API参数全依赖外部链接</td></tr>
+      <tr><td>1.4 操作步骤</td><td>❌ 不通过</td><td>代码示例步骤4（"使用table进行相关操作"）为空壳注释，操作链断裂</td></tr>
+      <tr><td>1.5 依赖/约束说明</td><td>⚠️ 部分通过</td><td>仅2条使用约束（key_type/score_type），缺少OS/编译器/C++标准约束</td></tr>
+      <tr><td>1.6 错误码/告警</td><td>❌ 不通过</td><td>完全缺失，无编译错误码或常见问题处理</td></tr>
+      <tr><td>1.7 调用示例</td><td>❌ 不通过</td><td>代码示例存在typ和缺失头文件；核心API调用（insert/erase/find）完全未展示</td></tr>
+      <tr><td>1.8 资源获取渠道</td><td>⚠️ 部分通过</td><td>有CANN/googletest链接；但NVIDIA API文档链接来自已归档项目</td></tr>
+    </tbody>
+  </table>
+
+  <h4>优点</h4>
+  <ul class="pros">
+    <li>环境变量配置章节质量突出：HKV_NPU_ALLOC_CONF 的格式、可选值、约束和示例均完整清晰 — README.md L93-L118</li>
+    <li>淘汰策略说明详细：五种策略的 score 计算方式使用了位段分解、纳秒精度等技术细节 — README.md L44-L50</li>
+    <li>外部文档引用有层次：通过 doc/原生API支持度.md 独立维护 API 兼容矩阵，避免 README 过于冗长</li>
+    <li>目录结构使用树形图展示，直观清晰 — README.md L138-L147</li>
+    <li>一键运行入口便捷：bash run.sh -d 降低了入门门槛 — README.md L187</li>
+  </ul>
+
+  <h4>问题（按严重度排序）</h4>
+  <ul class="cons">
+    <li>【🔴严重】代码示例中 int main(int args, ...) → 应为 argc，且缺少对应 ACL 头文件 #include — README.md L63</li>
+    <li>【🔴严重】"如何使用"步骤4为空壳注释，未展示任何 insert_or_assign / find 等核心 API 调用 — README.md L87-L88</li>
+    <li>【🔴严重】CANN 最低版本要求、OS 支持列表、GCC 版本、CMake 版本全部缺失 — README.md L155-L159</li>
+    <li>【🔴严重】NPU_CHECK 宏未定义，缺少 #include "debug.h" 或等价头文件 — README.md L67</li>
+    <li>【🟡中等】"使用约束"仅2条，缺少 value_type 限制、C++17 标准要求、accum_or_assign 的数据类型限制</li>
+    <li>【🟡中等】run.sh 的其他参数（-r 仿真模式、-c 仅编译等）未展开说明，仅一句"使用-h获取帮助"</li>
+    <li>【🟢轻微】目录结构缺少 script/ 和 pre-commit/ 目录</li>
+  </ul>
+</div>
+
+<!-- ============================== 维度2：正确性 ============================== -->
+<div class="dim-detail">
+  <div class="dim-detail-header">
+    <h3>2. 正确性（33.3%）</h3>
+    <span class="grade grade-b">7.0 · 易用</span>
+  </div>
+  <p class="evidence">内容基本正确，参数名与源码完全一致，所有链接可访问。存在非关键问题（main 签名非标准惯例、find_or_insert 笔误重复），不影响整体使用。</p>
+
+  <h4>逐子项检查</h4>
+  <table>
+    <thead><tr><th>子项</th><th>判定</th><th>关键证据</th></tr></thead>
+    <tbody>
+      <tr><td>2.1 描述准确性</td><td>⚠️ 部分通过</td><td>L53 "插值类API"列表中 find_or_insert 重复出现两次，其余描述准确</td></tr>
+      <tr><td>2.2 链接有效性</td><td>⚠️ 部分通过</td><td>8个链接均可访问；L12 .git 后缀不标准；L156 CANN 重定向链接有潜在风险</td></tr>
+      <tr><td>2.3 示例代码正确性</td><td>⚠️ 部分通过</td><td>L63 int main(int args, ...) 违反 C++ 标准惯例（应为 argc）；其余 API 调用与源码一致</td></tr>
+      <tr><td>2.4 拼写准确性</td><td>✅ 通过</td><td>HBM、HOST DDR、EvictStrategy、HashTable 等所有术语拼写与源码完全一致</td></tr>
+      <tr><td>2.5 标点符号规范</td><td>⚠️ 部分通过</td><td>中西文空格、成对标点、代码围栏均规范；L53 末尾"等等"前有冗余重复</td></tr>
+      <tr><td>2.6 安全敏感信息</td><td>✅ 通过</td><td>无密码、密钥、内网IP、个人邮箱等敏感信息</td></tr>
+      <tr><td>2.7 参数名一致性</td><td>✅ 通过</td><td>代码中 init_capacity/max_capacity/dim/max_hbm_for_vectors 等与源码字段名完全一致</td></tr>
+    </tbody>
+  </table>
+
+  <h4>逐链接验证</h4>
+  <table>
+    <thead><tr><th>#</th><th>链接</th><th>位置</th><th>状态</th><th>风险</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>github.com/NVIDIA-Merlin/HierarchicalKV.git</td><td>L12</td><td>✅ 可访问</td><td>🟡 .git 后缀不标准</td></tr>
+      <tr><td>2</td><td>gitcode.com/Ascend/HierarchicalKV-ascend</td><td>L1</td><td>✅ 可访问</td><td>🟢 无</td></tr>
+      <tr><td>3</td><td>nvidia-merlin.github.io/HierarchicalKV/master/api/</td><td>L39</td><td>✅ 可访问</td><td>🟡 项目已归档</td></tr>
+      <tr><td>4</td><td>hiascend.com/document/redirect/CannCommunityInstSoftware</td><td>L156</td><td>⚠️ 重定向</td><td>🟡 依赖跳转</td></tr>
+      <tr><td>5</td><td>gitcode.com/gh_mirrors/googl/googletest</td><td>L158</td><td>✅ 可访问</td><td>🟢 无</td></tr>
+      <tr><td>6-7</td><td>zread.ai / deepwiki.com (badge)</td><td>L5-L6</td><td>✅ 格式正确</td><td>🟢 无</td></tr>
+      <tr><td>8</td><td>doc/原生API支持度.md</td><td>L37</td><td>✅ 文件存在</td><td>🟢 无</td></tr>
+    </tbody>
+  </table>
+
+  <h4>优点</h4>
+  <ul class="pros">
+    <li>参数名与源码完全一致：init_capacity、max_capacity、dim、max_hbm_for_vectors 等经源码交叉验证无误</li>
+    <li>所有术语拼写正确：HBM、HOST DDR、EvictStrategy、HashTable、Embedding、TLB 等</li>
+    <li>淘汰策略枚举值与源码一致：kLru/kLfu/kEpochLru/kEpochLfu/kCustomized</li>
+    <li>环境变量名与源码一致：HKV_NPU_ALLOC_CONF、HKV_TEST_DEVICE、ASCEND_INSTALL_PATH</li>
+    <li>内部链接 doc/原生API支持度.md 文件存在且路径正确</li>
+  </ul>
+
+  <h4>问题</h4>
+  <ul class="cons">
+    <li>【🔴P0】L63 int main(int args, char *argv[]) → 应为 int main(int argc, char *argv[])，NVIDIA原版正确使用了argc，昇腾版移植时错误改为args — README.md L63</li>
+    <li>【🟡P1】L53 "插值类API"列表中 find_or_insert 重复出现两次 — README.md L53</li>
+    <li>【🟡P1】L12 GitHub 链接使用 .git 后缀，建议去掉改为网页浏览URL — README.md L12</li>
+    <li>【🟢P2】L156 CANN 下载链接为重定向型 URL，存在因网站改版失效的风险</li>
+  </ul>
+</div>
+
+<!-- ============================== 维度3：易理解 ============================== -->
+<div class="dim-detail">
+  <div class="dim-detail-header">
+    <h3>3. 易理解（33.3%）</h3>
+    <span class="grade grade-c">4.5 · 可用</span>
+  </div>
+  <p class="evidence">架构合理、渐进路径存在但质量不足。核心扣分在术语大面积缺失解释（12个术语中8个无定义），以及淘汰策略命名不一致。</p>
+
+  <h4>逐子项检查</h4>
+  <table>
+    <thead><tr><th>子项</th><th>判定</th><th>关键证据</th></tr></thead>
+    <tbody>
+      <tr><td>3.1 术语解释</td><td>❌ 不通过</td><td>12个核心术语中仅4个有解释（通过率33%）：HBM、HOST DDR、epoch、Embedding、TLB Miss、aclInit、NPU_CHECK 均无定义</td></tr>
+      <tr><td>3.2 前后一致性</td><td>❌ 不通过</td><td>淘汰策略表格用 __Lru__，代码用 kLru；L53 find_or_insert 重复</td></tr>
+      <tr><td>3.3 架构/大纲</td><td>✅ 通过</td><td>前言→概述→特性→API→淘汰策略→代码→环境变量→约束→构建，符合认知流程</td></tr>
+      <tr><td>3.4 渐进式学习</td><td>⚠️ 部分通过</td><td>路径存在但术语缺失导致"概念输入"阶段断裂；API说明过度依赖外部链接</td></tr>
+      <tr><td>3.5 内容易理解</td><td>⚠️ 部分通过</td><td>中文表达流畅，淘汰策略表清晰；但epoch位运算描述对非底层开发者不友好</td></tr>
+      <tr><td>3.6 冗余内容</td><td>❌ 不通过</td><td>L53 find_or_insert 同句出现两次，属于编辑疏忽</td></tr>
+      <tr><td>3.7 代码可读性</td><td>⚠️ 部分通过</td><td>缩进规范、注释清晰；但模板参数 K/V/S 过于简短，L63 args 非标准</td></tr>
+    </tbody>
+  </table>
+
+  <h4>术语逐个核对（12个）</h4>
+  <table class="term-table">
+    <thead><tr><th>术语</th><th>首次出现</th><th>有解释？</th><th>判定</th></tr></thead>
+    <tbody>
+      <tr><td>HBM</td><td>L23</td><td>无全称（High Bandwidth Memory）</td><td>❌</td></tr>
+      <tr><td>HOST DDR</td><td>L24</td><td>无解释</td><td>❌</td></tr>
+      <tr><td>HKV</td><td>L12/L16</td><td>L16 "（下称HKV）"</td><td>✅</td></tr>
+      <tr><td>bucket（桶）</td><td>L43</td><td>括号加注</td><td>✅</td></tr>
+      <tr><td>evict（淘汰）</td><td>L43</td><td>括号加注</td><td>✅</td></tr>
+      <tr><td>score（分数）</td><td>L43</td><td>括号加注</td><td>✅</td></tr>
+      <tr><td>epoch</td><td>L48-L49</td><td>无解释</td><td>❌</td></tr>
+      <tr><td>Embedding</td><td>L17</td><td>无解释</td><td>❌</td></tr>
+      <tr><td>TLB Miss</td><td>L103</td><td>无解释</td><td>❌</td></tr>
+      <tr><td>aclInit</td><td>L66</td><td>无解释</td><td>❌</td></tr>
+      <tr><td>NPU_CHECK</td><td>L67</td><td>无解释</td><td>❌</td></tr>
+      <tr><td>kLru vs __Lru__</td><td>L74/L46</td><td>命名不一致</td><td>❌</td></tr>
+    </tbody>
+  </table>
+
+  <h4>优点</h4>
+  <ul class="pros">
+    <li>章节顺序符合"概念→行为→动手"的认知流程，整体架构合理</li>
+    <li>代码示例步骤编号清晰（0-5），中文注释降低了阅读门槛</li>
+    <li>淘汰策略表格设计直观，5种策略的 score 含义一目了然</li>
+    <li>目录结构使用树形图，直观清晰</li>
+    <li>环境变量配置用表格 + bash 示例，实用性强</li>
+  </ul>
+
+  <h4>问题</h4>
+  <ul class="cons">
+    <li>【🔴严重】HBM、HOST DDR 两个核心硬件术语无全称或解释，且"关键特性"是高曝光位置 — README.md L23-L24</li>
+    <li>【🔴严重】淘汰策略命名不统一：表格 __Lru__ vs 代码 kLru，读者会困惑 — README.md L46 vs L74</li>
+    <li>【🟡中等】epoch、Embedding、TLB Miss 等专业术语无解释，新手阅读门槛高</li>
+    <li>【🟡中等】aclInit、aclrtSetDevice、NPU_CHECK 等 CANN API 无说明，不熟悉昇腾生态的开发者会困惑</li>
+    <li>【🟡中等】L53 find_or_insert 重复出现，属于编辑疏忽</li>
+    <li>【🟢轻微】代码模板参数 K/V/S 过于简短，不如 KeyType/ValueType/ScoreType 语义清晰</li>
+    <li>【🟢轻微】"使用约束"放在代码示例之后，建议前移至"如何使用"之前</li>
+  </ul>
+</div>
+
+<!-- ============================== 完整问题列表 ============================== -->
+<h2>完整问题列表（共 20 条）</h2>
+
+<table>
+  <thead><tr><th style="width:40px">#</th><th style="width:100px">维度</th><th style="width:100px">章节</th><th>问题描述</th><th style="width:80px">等级</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><span class="grade grade-d">完整性</span></td><td>如何使用 L63</td><td>int main(int args, ...) 应为 argc，违反C++标准惯例</td><td><span class="grade grade-d">难用</span></td></tr>
+    <tr><td>2</td><td><span class="grade grade-d">完整性</span></td><td>如何使用 L87-L88</td><td>步骤4 "使用table进行相关操作" 为空壳注释，核心API调用未展示</td><td><span class="grade grade-d">难用</span></td></tr>
+    <tr><td>3</td><td><span class="grade grade-d">完整性</span></td><td>编译构建 L155-L159</td><td>CANN/googletest版本号缺失，OS/GCC/CMake版本全无</td><td><span class="grade grade-d">难用</span></td></tr>
+    <tr><td>4</td><td><span class="grade grade-d">完整性</span></td><td>如何使用 L67</td><td>NPU_CHECK 宏未定义，缺少 #include 头文件</td><td><span class="grade grade-d">难用</span></td></tr>
+    <tr><td>5</td><td><span class="grade grade-d">完整性</span></td><td>全文</td><td>错误码/告警信息完全缺失</td><td><span class="grade grade-d">难用</span></td></tr>
+    <tr><td>6</td><td><span class="grade grade-c">完整性</span></td><td>使用约束 L131-L134</td><td>仅2条约束，缺少 value_type限制、C++17标准、OS/编译器约束</td><td><span class="grade grade-c">可用</span></td></tr>
+    <tr><td>7</td><td><span class="grade grade-c">完整性</span></td><td>编译构建 L187</td><td>run.sh 其他参数未展开，仅一句"使用-h获取帮助"</td><td><span class="grade grade-c">可用</span></td></tr>
+    <tr><td>8</td><td><span class="grade grade-c">完整性</span></td><td>目录结构 L138-L147</td><td>缺少 script/ 和 pre-commit/ 目录</td><td><span class="grade grade-c">可用</span></td></tr>
+    <tr><td>9</td><td><span class="grade grade-d">正确性</span></td><td>如何使用 L63</td><td>main签名 args 非标准，NVIDIA原版正确使用argc，移植时错误引入</td><td><span class="grade grade-d">难用</span></td></tr>
+    <tr><td>10</td><td><span class="grade grade-c">正确性</span></td><td>淘汰策略 L53</td><td>find_or_insert 在同句中重复出现两次，疑似笔误</td><td><span class="grade grade-c">可用</span></td></tr>
+    <tr><td>11</td><td><span class="grade grade-c">正确性</span></td><td>前言 L12</td><td>GitHub链接使用 .git 后缀，建议改为网页浏览URL</td><td><span class="grade grade-c">可用</span></td></tr>
+    <tr><td>12</td><td><span class="grade grade-c">正确性</span></td><td>API说明 L39</td><td>NVIDIA Merlin项目已归档，API文档链接可能在未来失效</td><td><span class="grade grade-c">可用</span></td></tr>
+    <tr><td>13</td><td><span class="grade grade-d">易理解</span></td><td>关键特性 L23</td><td>HBM 无全称（High Bandwidth Memory）或解释</td><td><span class="grade grade-d">难用</span></td></tr>
+    <tr><td>14</td><td><span class="grade grade-d">易理解</span></td><td>关键特性 L24</td><td>HOST DDR 无解释</td><td><span class="grade grade-d">难用</span></td></tr>
+    <tr><td>15</td><td><span class="grade grade-d">易理解</span></td><td>淘汰策略 L46 vs L74</td><td>淘汰策略命名不一致：表格 __Lru__ vs 代码 kLru</td><td><span class="grade grade-d">难用</span></td></tr>
+    <tr><td>16</td><td><span class="grade grade-c">易理解</span></td><td>淘汰策略 L48-L49</td><td>epoch 概念无解释即深度使用（位运算+高32位/低32位）</td><td><span class="grade grade-c">可用</span></td></tr>
+    <tr><td>17</td><td><span class="grade grade-c">易理解</span></td><td>概述 L17</td><td>Embedding 概念无解释</td><td><span class="grade grade-c">可用</span></td></tr>
+    <tr><td>18</td><td><span class="grade grade-c">易理解</span></td><td>环境变量 L103</td><td>TLB Miss 无解释</td><td><span class="grade grade-c">可用</span></td></tr>
+    <tr><td>19</td><td><span class="grade grade-c">易理解</span></td><td>如何使用 L66-L67</td><td>aclInit、aclrtSetDevice、NPU_CHECK 无说明</td><td><span class="grade grade-c">可用</span></td></tr>
+    <tr><td>20</td><td><span class="grade grade-c">易理解</span></td><td>如何使用 L69-L71</td><td>模板参数 K/V/S 过于简短，不如 KeyType/ValueType/ScoreType</td><td><span class="grade grade-c">可用</span></td></tr>
+  </tbody>
+</table>
+
+<!-- ============================== 改进建议 ============================== -->
+<h2>改进建议（按优先级排序）</h2>
+
+<div class="priority-hard">
+  <div class="priority-label">重点修订项（难用级问题）— 列入重点修订计划</div>
+  <ul>
+    <li><strong>修复 main 签名</strong>：将 <code>int main(int args, char *argv[])</code> 改为 <code>int main(int argc, char *argv[])</code> — README.md L63</li>
+    <li><strong>补充版本配套信息</strong>：在"构建依赖"中明确 CANN 最低版本、OS 支持列表、GCC 版本、CMake 版本 — README.md L155-L159</li>
+    <li><strong>补充核心 API 调用示例</strong>：在"如何使用"步骤4中至少展示一次 insert_or_assign 或 find 的完整调用 — README.md L87</li>
+    <li><strong>补充 HBM / HOST DDR 术语定义</strong>：在"关键特性"中首次出现时添加全称和解释 — README.md L23-L24</li>
+    <li><strong>统一淘汰策略命名</strong>：将表格中的 __Lru__ 改为 kLru（与代码一致） — README.md L46</li>
+    <li><strong>补充错误码/常见问题</strong>：至少列出编译阶段的常见错误和解决方法</li>
+  </ul>
+</div>
+
+<div class="priority-attention">
+  <div class="priority-label">需关注项（可用级问题）— 制定改进计划</div>
+  <ul>
+    <li><strong>修复 find_or_insert 笔误重复</strong>：删除 L53 中第二次出现的 find_or_insert — README.md L53</li>
+    <li><strong>补充术语表</strong>：在概述之后新增"术语说明"小节，集中解释 epoch、Embedding、TLB Miss、aclInit、NPU_CHECK</li>
+    <li><strong>补充使用约束</strong>：添加 value_type 限制、C++17 标准要求、accum_or_assign 的数据类型限制</li>
+    <li><strong>展开 run.sh 参数说明</strong>：列出 -r、-c、-t 等常用参数，而非仅"使用-h获取帮助"</li>
+    <li><strong>前移"使用约束"</strong>：将其放到"如何使用"之前，避免读者先写代码后看到类型限制</li>
+    <li><strong>修复 GitHub 链接格式</strong>：去掉 .git 后缀，改为标准网页浏览 URL</li>
+  </ul>
+</div>
+
+<!-- ============================== 附录 ============================== -->
+<h2>附录：文档文件清单</h2>
+
+<table>
+  <thead><tr><th>#</th><th>文件标题</th><th>文件路径</th><th>文件类型</th><th>状态</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>HierarchicalKV-ascend</td><td>README.md</td><td>MD</td><td>已评估</td></tr>
+  </tbody>
+</table>
+
+</div>
+</body>
+</html>

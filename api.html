@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文档易用性评估报告 — 原生API支持度</title>
+<style>
+  :root {
+    --grade-a: #16a34a;
+    --grade-b: #2563eb;
+    --grade-c: #d97706;
+    --grade-d: #dc2626;
+    --grade-e: #991b1b;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --text-secondary: #64748b;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {                                                                                                                                                                                                                                                                                                    
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+  }
+
+  .container { max-width: 1080px; margin: 0 auto; }
+
+  h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.25rem; margin: 2rem 0 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; }
+
+  .subtitle { color: var(--text-secondary); margin-bottom: 2rem; }
+
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .overview-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+  }
+
+  .overview-card .label { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+  .overview-card .value { font-size: 1.25rem; font-weight: 600; margin-top: 0.25rem; }
+
+  .total-score-card {
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .total-score-card .score { font-size: 3rem; font-weight: 700; }
+  .total-score-card .grade-label { font-size: 1.1rem; font-weight: 600; margin-top: 0.25rem; }
+
+  .grade { display: inline-block; padding: 0.15em 0.6em; border-radius: 4px; font-weight: 600; font-size: 0.85rem; color: #fff; }
+  .grade-a { background: var(--grade-a); }
+  .grade-b { background: var(--grade-b); }
+  .grade-c { background: var(--grade-c); }
+  .grade-d { background: var(--grade-d); }
+  .grade-e { background: var(--grade-e); }
+
+  .dimension-bars { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 2rem; }
+
+  .dim-row { display: grid; grid-template-columns: 160px 50px 1fr 60px 44px; align-items: center; gap: 0.75rem; }
+  .dim-name { font-weight: 500; font-size: 0.9rem; }
+  .dim-weight { font-size: 0.8rem; color: var(--text-secondary); text-align: right; }
+  .bar-track { height: 20px; background: #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 10px; transition: width 0.6s ease; }
+  .dim-score { font-weight: 600; text-align: right; font-size: 0.95rem; }
+
+  .dim-detail {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .dim-detail-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+  .dim-detail-header h3 { margin: 0; }
+
+  .pros, .cons { margin: 0.5rem 0; padding-left: 1.25rem; }
+  .pros li::marker { content: "✓ "; color: var(--grade-a); }
+  .cons li::marker { content: "✗ "; color: var(--grade-d); }
+  .sub-check { margin: 0.3rem 0; padding-left: 1.25rem; font-size: 0.9rem; }
+  .sub-check .pass { color: var(--grade-a); }
+  .sub-check .fail { color: var(--grade-d); }
+  .sub-check .partial { color: var(--grade-c); }
+  .sub-check .na { color: var(--text-secondary); }
+  .evidence { font-size: 0.85rem; color: var(--text-secondary); font-style: italic; margin-top: 0.25rem; }
+
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  th, td { padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: #f1f5f9; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  tr:hover td { background: #f8fafc; }
+
+  .priority-unusable { border-left: 4px solid var(--grade-e); padding-left: 1rem; margin-bottom: 1rem; }
+  .priority-hard { border-left: 4px solid var(--grade-d); padding-left: 1rem; margin-bottom: 1rem; }
+  .priority-attention { border-left: 4px solid var(--grade-c); padding-left: 1rem; margin-bottom: 1rem; }
+  .priority-optimize { border-left: 4px solid var(--grade-b); padding-left: 1rem; margin-bottom: 1rem; }
+
+  .priority-label { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.25rem; }
+  .priority-unusable .priority-label { color: var(--grade-e); }
+  .priority-hard .priority-label { color: var(--grade-d); }
+  .priority-attention .priority-label { color: var(--grade-c); }
+  .priority-optimize .priority-label { color: var(--grade-b); }
+
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.3rem 0; }
+
+  @media print {
+    body { padding: 0; background: #fff; }
+    .bar-fill { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .grade { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>文档易用性评估报告</h1>
+<p class="subtitle">原生API支持度.md — 2026-06-05</p>
+
+<div class="overview-grid">
+  <div class="overview-card">
+    <div class="label">文档路径</div>
+    <div class="value">doc\原生API支持度.md</div>
+  </div>
+  <div class="overview-card">
+    <div class="label">文档文件数</div>
+    <div class="value">1</div>
+  </div>
+  <div class="overview-card">
+    <div class="label">文档类型</div>
+    <div class="value">API 参考（兼容性对照表）</div>
+  </div>
+  <div class="overview-card">
+    <div class="label">评估模式</div>
+    <div class="value">单文档深度评估</div>
+  </div>
+</div>
+
+<div class="total-score-card">
+  <div class="score" style="color: var(--grade-c);">5.3</div>
+  <div class="grade-label"><span class="grade grade-c">可用</span> 内容存在部分缺失，有模糊点需要实验验证</div>
+</div>
+
+<h2>维度评分总览</h2>
+
+<div class="dimension-bars">
+  <div class="dim-row">
+    <span class="dim-name">完整性</span>
+    <span class="dim-weight">33.3%</span>
+    <div class="bar-track"><div class="bar-fill" style="width:45%; background:var(--grade-c);"></div></div>
+    <span class="dim-score">4.5</span>
+    <span class="grade grade-c">可用</span>
+  </div>
+  <div class="dim-row">
+    <span class="dim-name">正确性</span>
+    <span class="dim-weight">33.3%</span>
+    <div class="bar-track"><div class="bar-fill" style="width:65%; background:var(--grade-b);"></div></div>
+    <span class="dim-score">6.5</span>
+    <span class="grade grade-b">易用</span>
+  </div>
+  <div class="dim-row">
+    <span class="dim-name">易理解</span>
+    <span class="dim-weight">33.3%</span>
+    <div class="bar-track"><div class="bar-fill" style="width:50%; background:var(--grade-c);"></div></div>
+    <span class="dim-score">5.0</span>
+    <span class="grade grade-c">可用</span>
+  </div>
+</div>
+
+<!-- ============================== 各维度详细分析 ============================== -->
+<h2>各维度详细分析</h2>
+
+<div class="dim-detail">
+  <div class="dim-detail-header">
+    <h3>1. 完整性（33.3%）</h3>
+    <span class="grade grade-c">4.5 · 可用</span>
+  </div>
+  <p class="evidence">评分依据：文档仅标注了参数和API的"是否支持"状态，严重缺乏参数含义、类型、取值范围、代码示例、版本信息和错误码说明。</p>
+
+  <h4>逐子项检查</h4>
+  <ul class="sub-check">
+    <li><span class="fail">✗ 1.1 产品支持情况</span> — 列出了参数和API的支持状态，但未提及Ascend硬件/软件版本要求</li>
+    <li><span class="fail">✗ 1.2 版本配套信息</span> — 完全没有版本号、OS、驱动、固件等配套信息</li>
+    <li><span class="partial">◐ 1.3 参数/术语说明</span> — 仅标注"是否支持"和简要限制，缺少参数含义、类型、取值范围、使用场景；API缺少签名和返回值说明</li>
+    <li><span class="na">— 1.4 操作步骤</span> — 非教程类文档，不适用</li>
+    <li><span class="partial">◐ 1.5 依赖/约束说明</span> — 有少量约束（如max_bucket_size "必须大于等于16"），但未解释原因，覆盖不全</li>
+    <li><span class="fail">✗ 1.6 错误码/告警</span> — 完全没有提及</li>
+    <li><span class="fail">✗ 1.7 调用示例</span> — 无任何代码示例</li>
+    <li><span class="fail">✗ 1.8 资源获取渠道</span> — 无链接指向源码、安装指南或其他资源</li>
+  </ul>
+
+  <h4>优点</h4>
+  <ul class="pros">
+    <li>覆盖了 HashTableOptions 的全部 17 个参数和 HashTable 的全部 42 个 API，枚举范围完整</li>
+    <li>对每个条目明确标注了支持与否，读者可快速判断哪些功能可用</li>
+    <li>对有限制条件的条目（如 max_bucket_size、accum_or_assign、erase_if_v2 等）给出了具体约束说明</li>
+  </ul>
+
+  <h4>问题</h4>
+  <ul class="cons">
+    <li>缺少版本配套表：未说明适用的 Ascend 硬件型号、CANN 版本、驱动版本、OS 要求 — [doc\原生API支持度.md:全文]</li>
+    <li>所有参数和 API 均缺少含义/功能说明列，仅靠名称推测用途 — [doc\原生API支持度.md:全文]</li>
+    <li>无任何代码调用示例，开发者无法直观了解 API 用法 — [doc\原生API支持度.md:全文]</li>
+    <li>无错误码/异常行为说明，API 失败场景无法预判 — [doc\原生API支持度.md:全文]</li>
+    <li>不支持的参数（block_size, reserved_key_start_bit）未说明原因和替代方案 — [doc\原生API支持度.md:L15-L16]</li>
+  </ul>
+</div>
+
+<div class="dim-detail">
+  <div class="dim-detail-header">
+    <h3>2. 正确性（33.3%）</h3>
+    <span class="grade grade-b">6.5 · 易用</span>
+  </div>
+  <p class="evidence">评分依据：已有内容描述准确、拼写规范、格式统一，整体无逻辑错误。但部分符号和命名存在歧义，且缺少可验证的内容（无代码、无链接），限制了本维度的深度评估。</p>
+
+  <h4>逐子项检查</h4>
+  <ul class="sub-check">
+    <li><span class="pass">✓ 2.1 描述是否准确</span> — 已有内容描述准确，无矛盾信息</li>
+    <li><span class="na">— 2.2 链接是否有效</span> — 文档内无链接，不适用</li>
+    <li><span class="na">— 2.3 示例代码是否正确</span> — 无代码示例，不适用</li>
+    <li><span class="pass">✓ 2.4 拼写是否准确</span> — 未发现拼写错误，英文参数名拼写规范</li>
+    <li><span class="pass">✓ 2.5 标点符号是否规范</span> — 表格对齐规范，中英文标点使用正确</li>
+    <li><span class="pass">✓ 2.6 安全敏感信息</span> — 未涉及敏感信息</li>
+    <li><span class="partial">◐ 2.7 参数名一致性</span> — 参数名内部一致，但 find_or_insert* 的星号含义不明；find 与 find(value) 的区分未解释</li>
+  </ul>
+
+  <h4>优点</h4>
+  <ul class="pros">
+    <li>两张表格格式统一，参数名/API名拼写规范，无错别字</li>
+    <li>描述简洁精确，无歧义性表述</li>
+    <li>"限制与说明"列中的中文表述通顺，技术术语使用恰当</li>
+  </ul>
+
+  <h4>问题</h4>
+  <ul class="cons">
+    <li>find_or_insert* 中星号后缀含义未解释，读者只能猜测 — [doc\原生API支持度.md:L39]</li>
+    <li>find 和 find(value) 并列但差异未说明，容易混淆 — [doc\原生API支持度.md:L45-L46]</li>
+    <li>is_pure_hbm_mode 说明中称"结果会根据实际存储状态变化"，但未说明哪些操作会触发状态变化（仅举例未穷举） — [doc\原生API支持度.md:L71]</li>
+  </ul>
+</div>
+
+<div class="dim-detail">
+  <div class="dim-detail-header">
+    <h3>3. 易理解（33.3%）</h3>
+    <span class="grade grade-c">5.0 · 可用</span>
+  </div>
+  <p class="evidence">评分依据：表格布局简洁直观，对熟悉原生 API 的开发者友好。但核心术语缺乏定义，文档结构扁平无导航，对新手门槛较高。</p>
+
+  <h4>逐子项检查</h4>
+  <ul class="sub-check">
+    <li><span class="fail">✗ 3.1 术语解释</span> — "原生"、"HBM"、"HOST DDR"、"Ascend独立支持"等核心术语均未定义</li>
+    <li><span class="pass">✓ 3.2 前后一致性</span> — 两个表格格式一致，参数名称前后统一</li>
+    <li><span class="partial">◐ 3.3 架构/大纲</span> — 表格布局简洁易扫，但无目录导航、无章节编号</li>
+    <li><span class="fail">✗ 3.4 渐进式学习路径</span> — 扁平结构，无学习路径设计</li>
+    <li><span class="partial">◐ 3.5 内容易理解</span> — 对熟悉原生 API 的开发者友好；对新手需额外查阅资料</li>
+    <li><span class="partial">◐ 3.6 冗余内容</span> — 说明文字在两部分各重复一次，可合并</li>
+    <li><span class="na">— 3.7 代码片段可读性</span> — 无代码片段，不适用</li>
+  </ul>
+
+  <h4>优点</h4>
+  <ul class="pros">
+    <li>三列表格（参数名/是否支持/限制说明）信息密度适中，一目了然</li>
+    <li>文档顶部有明确的说明文字，帮助读者理解表格的阅读约定</li>
+    <li>对 is_pure_hbm_mode 等 Ascend 独有 API 给出了较详细的说明，体现了差异化关注</li>
+  </ul>
+
+  <h4>问题</h4>
+  <ul class="cons">
+    <li>"原生 API"未定义来源——读者需要知道"原生"指哪个项目、哪个版本 — [doc\原生API支持度.md:L1-L5]</li>
+    <li>HBM 缩写未展开解释（High Bandwidth Memory），非 Ascend 领域开发者难以理解 — [doc\原生API支持度.md:L71]</li>
+    <li>HOST DDR 术语未解释，读者不清楚这是指主机端内存还是其他 — [doc\原生API支持度.md:L52]</li>
+    <li>"Ascend独立支持"措辞模糊——是指原生不支持而 Ascend 新增，还是 Ascend 特有实现 — [doc\原生API支持度.md:L71]</li>
+    <li>文档缺少目录和章节编号，无法快速跳转到 HashTableOptions 或 HashTable 区域 — [doc\原生API支持度.md:全文]</li>
+    <li>顶部说明文字在两处重复出现，可提取为文档级统一说明 — [doc\原生API支持度.md:L3-L5, L28-L30]</li>
+  </ul>
+</div>
+
+<!-- ============================== 完整问题列表 ============================== -->
+<h2>完整问题列表（共 14 条）</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:40px">#</th>
+      <th style="width:100px">维度</th>
+      <th style="width:140px">章节/位置</th>
+      <th>问题描述</th>
+      <th style="width:80px">问题等级</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td><span class="grade grade-e">完整性</span></td>
+      <td>全文</td>
+      <td>缺少版本配套信息：未说明适用的 Ascend 硬件型号、CANN 版本、驱动版本、OS 要求</td>
+      <td><span class="grade grade-e">不可用</span></td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><span class="grade grade-e">完整性</span></td>
+      <td>全文</td>
+      <td>所有参数/API 均缺少含义说明：仅标注"是否支持"，未解释参数功能、类型、取值范围和 API 签名</td>
+      <td><span class="grade grade-e">不可用</span></td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><span class="grade grade-e">易理解</span></td>
+      <td>全文</td>
+      <td>术语"原生 API"未定义——读者不知道"原生"指的是哪个上游项目</td>
+      <td><span class="grade grade-e">不可用</span></td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><span class="grade grade-d">完整性</span></td>
+      <td>全文</td>
+      <td>无任何代码调用示例</td>
+      <td><span class="grade grade-d">难用</span></td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><span class="grade grade-d">完整性</span></td>
+      <td>全文</td>
+      <td>无错误码/异常行为说明</td>
+      <td><span class="grade grade-d">难用</span></td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td><span class="grade grade-d">完整性</span></td>
+      <td>全文</td>
+      <td>无资源获取渠道链接（源码仓库、安装文档等）</td>
+      <td><span class="grade grade-d">难用</span></td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td><span class="grade grade-d">正确性</span></td>
+      <td>HashTable API 表 L39</td>
+      <td>find_or_insert* 的 * 后缀含义未解释，读者只能猜测</td>
+      <td><span class="grade grade-d">难用</span></td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td><span class="grade grade-d">易理解</span></td>
+      <td>全文</td>
+      <td>HBM 缩写未展开解释，非 Ascend 领域开发者难以理解</td>
+      <td><span class="grade grade-d">难用</span></td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td><span class="grade grade-d">易理解</span></td>
+      <td>全文</td>
+      <td>HOST DDR 术语未解释，读者不清楚这是指主机端内存还是其他</td>
+      <td><span class="grade grade-d">难用</span></td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td><span class="grade grade-c">完整性</span></td>
+      <td>HashTableOptions L15-L16</td>
+      <td>block_size、reserved_key_start_bit 标注为"否"，但未说明不支持的原因和替代方案</td>
+      <td><span class="grade grade-c">可用</span></td>
+    </tr>
+    <tr>
+      <td>11</td>
+      <td><span class="grade grade-c">正确性</span></td>
+      <td>HashTable API L45-L46</td>
+      <td>find 和 find(value) 分别列出但差异未说明</td>
+      <td><span class="grade grade-c">可用</span></td>
+    </tr>
+    <tr>
+      <td>12</td>
+      <td><span class="grade grade-c">易理解</span></td>
+      <td>HashTable API L71</td>
+      <td>"Ascend独立支持"措辞模糊——是指原生不支持而 Ascend 新增，还是 Ascend 特有实现</td>
+      <td><span class="grade grade-c">可用</span></td>
+    </tr>
+    <tr>
+      <td>13</td>
+      <td><span class="grade grade-c">易理解</span></td>
+      <td>全文</td>
+      <td>文档缺少目录和章节编号，无法快速跳转到不同区域</td>
+      <td><span class="grade grade-c">可用</span></td>
+    </tr>
+    <tr>
+      <td>14</td>
+      <td><span class="grade grade-c">易理解</span></td>
+      <td>说明文字 L3-L5, L28-L30</td>
+      <td>说明文字在两处重复（"若参数'是否支持'为是..."），可合并为文档级统一说明</td>
+      <td><span class="grade grade-c">可用</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ============================== 文件级评分明细 ============================== -->
+<h2>文件级评分明细</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>文件标题</th>
+      <th>文件路径</th>
+      <th>类型</th>
+      <th>完整性</th>
+      <th>正确性</th>
+      <th>易理解</th>
+      <th>加权总分</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>HierarchicalKV-ascend HashTableOptions / HashTable</td>
+      <td>doc\原生API支持度.md</td>
+      <td>API 参考（兼容性对照表）</td>
+      <td>4.5</td>
+      <td>6.5</td>
+      <td>5.0</td>
+      <td>5.3</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ============================== 改进建议 ============================== -->
+<h2>改进建议（按优先级排序）</h2>
+
+<div class="priority-unusable">
+  <div class="priority-label">紧急修复项（不可用级问题）— 需立即补充，否则文档对新手无参考价值</div>
+  <ul>
+    <li><strong>定义"原生 API"来源</strong>：在文档开头明确说明"原生"指的是哪个项目（如 NVIDIA cuCollections？）、哪个版本，并附上游文档链接 — [doc\原生API支持度.md:L1-L5]</li>
+    <li><strong>补充版本配套表</strong>：添加支持的 Ascend 硬件型号、CANN/驱动版本、OS 要求 — [doc\原生API支持度.md:全文]</li>
+    <li><strong>为每个参数添加含义说明</strong>：新增"参数说明"列，解释参数的功能、数据类型、默认值，而非仅靠名称猜测 — [doc\原生API支持度.md:全文]</li>
+  </ul>
+</div>
+
+<div class="priority-hard">
+  <div class="priority-label">重点修订项（难用级问题）— 列入重点修订计划</div>
+  <ul>
+    <li><strong>为每个 API 添加签名和说明</strong>：例如 <code>insert_or_assign(Key k, Value v) → bool</code>，并说明功能 — [doc\原生API支持度.md:HashTable API 表]</li>
+    <li><strong>添加代码示例</strong>：至少为 insert_or_assign、find、erase、find_or_insert 等核心 API 提供调用示例 — [doc\原生API支持度.md:全文]</li>
+    <li><strong>定义核心缩写</strong>：HBM → High Bandwidth Memory（昇腾设备高带宽内存），HOST DDR → 主机端 DDR 内存，首次出现时附全称和解释 — [doc\原生API支持度.md:全文]</li>
+    <li><strong>解释 find_or_insert* 星号</strong>：说明 * 是通配符还是指代系列 API — [doc\原生API支持度.md:L39]</li>
+  </ul>
+</div>
+
+<div class="priority-attention">
+  <div class="priority-label">需关注项（可用级问题）— 制定改进计划</div>
+  <ul>
+    <li>补充不支持参数（block_size、reserved_key_start_bit）的替代方案或未来路线图说明 — [doc\原生API支持度.md:L15-L16]</li>
+    <li>解释 find 和 find(value) 的区别（是否一个返回 bool，另一个返回 value 引用？） — [doc\原生API支持度.md:L45-L46]</li>
+    <li>为文档添加目录（TOC）和锚点链接，支持快速跳转到 HashTableOptions / HashTable 区域 — [doc\原生API支持度.md:全文]</li>
+    <li>合并顶部两处重复的说明文字为统一约定说明 — [doc\原生API支持度.md:L3-L5, L28-L30]</li>
+    <li>将 "Ascend独立支持" 改为更精确的表述，如 "Ascend 平台新增（原生 API 不含此接口）" — [doc\原生API支持度.md:L71]</li>
+  </ul>
+</div>
+
+<!-- ============================== 附录 ============================== -->
+<h2>附录：文档文件清单</h2>
+
+<table>
+  <thead>
+    <tr><th>#</th><th>文件标题</th><th>文件路径</th><th>文件类型</th><th>状态</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>HierarchicalKV-ascend HashTableOptions / HashTable 原生API支持度</td>
+      <td>doc\原生API支持度.md</td>
+      <td>MD</td>
+      <td>已评估</td>
+    </tr>
+  </tbody>
+</table>
+
+</div><!-- /.container -->
+</body>
+</html>
