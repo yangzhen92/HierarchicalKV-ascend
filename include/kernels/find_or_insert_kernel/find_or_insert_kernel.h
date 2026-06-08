@@ -834,8 +834,8 @@ __global__ __vector__ void read_or_write_value_kernel_half_once(
     move_queue.DeQue<V>(move_local);
     PipeBarrier<PIPE_ALL>();
 
-    for (uint32_t tile_idx = 0; tile_idx < num_tiles; tile_idx++) {
-      __gm__ V* table_value_addr = table_value_addrs[i];
+    for (uint32_t tile_idx = 0; tile_idx < move_in_num_once; tile_idx++) {
+      __gm__ V* table_value_addr = table_value_addrs[i + tile_idx];
       if (table_value_addr == nullptr) {
         continue;
       }
@@ -851,6 +851,8 @@ __global__ __vector__ void read_or_write_value_kernel_half_once(
         // 没找到 key，把用户的值写入 table
         DataCopyPad(table_values_addr_gm, move_local[tile_idx * dim],
                     copy_params);
+        move_queue.EnQue<V>(move_local);
+        move_queue.DeQue<V>(move_local);
       }
     }
     DataCopyPad(param_values_gm[i * dim], move_local, copy_in_params);
