@@ -2848,14 +2848,15 @@ class HashTable : public HashTableBase<K, V, S> {
     DeviceTensor out;
     out.init(out_data_type, {1});
 
-    EXEC_ACLNN_OP(aclnnReduceSum, input, dims, keep_dims, out_data_type, out);
-    auto ret = aclrtSynchronizeStream(stream);
-    NPU_CHECK(ret);
+    WorkspaceDeleter workspace_mng;
+    EXEC_ACLNN_OP(workspace_mng, stream, aclnnReduceSum, input, dims, keep_dims,
+                  out_data_type, out);
 
     int64_t h_total_size = 0;
-    ret = aclrtMemcpy(&h_total_size, sizeof(h_total_size), out.get_data(),
-                      out.get_data_size(), ACL_MEMCPY_DEVICE_TO_HOST);
-    NPU_CHECK(ret);
+    NPU_CHECK(aclrtMemcpyAsync(&h_total_size, sizeof(h_total_size),
+                               out.get_data(), out.get_data_size(),
+                               ACL_MEMCPY_DEVICE_TO_HOST, stream));
+    NPU_CHECK(aclrtSynchronizeStream(stream));
     return h_total_size;
   }
 
@@ -3299,7 +3300,9 @@ class HashTable : public HashTableBase<K, V, S> {
     DeviceTensor out;
     out.init(out_data_type, {1});
 
-    EXEC_ACLNN_OP(aclnnReduceSum, input, dims, keep_dims, out_data_type, out);
+    WorkspaceDeleter workspace_mng;
+    EXEC_ACLNN_OP(workspace_mng, stream, aclnnReduceSum, input, dims, keep_dims,
+                  out_data_type, out);
 
     int64_t h_total_size = 0;
     NPU_CHECK(aclrtMemcpyAsync(&h_total_size, sizeof(h_total_size),

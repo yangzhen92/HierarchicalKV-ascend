@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
- #include <gmock/gmock.h>
- #include <gtest/gtest.h>
- #include <memory>
- #include <vector>
- #define TEST_MEM
- #include "acl/acl.h"
- #include "hkv_hashtable.h"
- #include "aclnn_helper.h"
- #include "test_util.h"
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <memory>
+#include <vector>
+#define TEST_MEM
+#include "acl/acl.h"
+#include "aclnn_helper.h"
+#include "hkv_hashtable.h"
+#include "test_util.h"
 
 using namespace std;
 using namespace npu::hkv;
@@ -113,7 +113,7 @@ int aclnnMockGetWorkspaceSize(aclTensor* in1, aclIntArray* in2, bool in3,
                               uint64_t* workspaceSize,
                               aclOpExecutor** executor) {
   return g_aclnn_mock->aclnnMockGetWorkspaceSize(in1, in2, in3, in4, in5,
-                                          workspaceSize, executor);
+                                                 workspaceSize, executor);
 }
 
 int aclnnMock(void* workspace, uint64_t workspaceSize, aclOpExecutor* executor,
@@ -129,7 +129,8 @@ TEST(test_aclnn_helper, test_exec_aclnn_op_success) {
   g_aclnn_mock = make_unique<AclnnMock>();
   EXPECT_CALL(*g_aclnn_mock, aclnnMockGetWorkspaceSize)
       .Times(1)
-      .WillOnce(Return(ACL_SUCCESS));
+      .WillOnce(DoAll(SetArgPointee<5>(static_cast<uint64_t>(128)),
+                      Return(ACL_SUCCESS)));
   EXPECT_CALL(*g_aclnn_mock, aclnnMock).Times(1).WillOnce(Return(ACL_SUCCESS));
 
   // 3. 执行
@@ -142,11 +143,16 @@ TEST(test_aclnn_helper, test_exec_aclnn_op_success) {
   out->init(out_data_type, {1});
   aclrtStream stream = 0;
 
-  EXEC_ACLNN_OP(aclnnMock, *in, dims, keep_dims, out_data_type, *out);
+  auto workspace_mng = make_unique<WorkspaceDeleter>();
+  EXEC_ACLNN_OP((*workspace_mng), stream, aclnnMock, *in, dims, keep_dims,
+                out_data_type, *out);
   g_aclnn_mock.reset();
 
   in.reset();
   out.reset();
+  // 4. 算子下发成功，但workspace不能释放
+  EXPECT_FALSE(g_mem_set.empty());
+  workspace_mng.reset();
   EXPECT_TRUE(g_mem_set.empty());
 }
 
@@ -171,13 +177,18 @@ TEST(test_aclnn_helper, test_exec_aclnn_op_get_workspace_size_fail) {
   out->init(out_data_type, {1});
   aclrtStream stream = 0;
 
+  auto workspace_mng = make_unique<WorkspaceDeleter>();
   EXPECT_THROW(
-      { EXEC_ACLNN_OP(aclnnMock, *in, dims, keep_dims, out_data_type, *out); },
+      {
+        EXEC_ACLNN_OP((*workspace_mng), stream, aclnnMock, *in, dims, keep_dims,
+                      out_data_type, *out);
+      },
       runtime_error);
   g_aclnn_mock.reset();
 
   in.reset();
   out.reset();
+  workspace_mng.reset();
   EXPECT_TRUE(g_mem_set.empty());
 }
 
@@ -190,7 +201,9 @@ TEST(test_aclnn_helper, test_exec_aclnn_op_fail) {
   EXPECT_CALL(*g_aclnn_mock, aclnnMockGetWorkspaceSize)
       .Times(1)
       .WillOnce(Return(ACL_SUCCESS));
-  EXPECT_CALL(*g_aclnn_mock, aclnnMock).Times(1).WillOnce(Return(ACL_ERROR_WRITE_FILE));
+  EXPECT_CALL(*g_aclnn_mock, aclnnMock)
+      .Times(1)
+      .WillOnce(Return(ACL_ERROR_WRITE_FILE));
 
   // 3. 执行
   auto in = make_unique<DeviceTensor>();
@@ -202,12 +215,17 @@ TEST(test_aclnn_helper, test_exec_aclnn_op_fail) {
   out->init(out_data_type, {55});
   aclrtStream stream = 0;
 
+  auto workspace_mng = make_unique<WorkspaceDeleter>();
   EXPECT_THROW(
-      { EXEC_ACLNN_OP(aclnnMock, *in, dims, keep_dims, out_data_type, *out); },
+      {
+        EXEC_ACLNN_OP((*workspace_mng), stream, aclnnMock, *in, dims, keep_dims,
+                      out_data_type, *out);
+      },
       runtime_error);
   g_aclnn_mock.reset();
 
   in.reset();
   out.reset();
+  workspace_mng.reset();
   EXPECT_TRUE(g_mem_set.empty());
 }
