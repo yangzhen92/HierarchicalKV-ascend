@@ -108,9 +108,26 @@ fi
 echo "ASCEND_HOME_PATH [$ASCEND_HOME_PATH]"
 echo "_ASCEND_INSTALL_PATH [$_ASCEND_INSTALL_PATH]"
 
+if [ ! -d "${_ASCEND_INSTALL_PATH}" ]; then
+    echo "[ERROR]: CANN installation path not found: ${_ASCEND_INSTALL_PATH}"
+    echo "        Please install CANN (>=9.1.0) first, then specify the path via:"
+    echo "          -i|--install-path option, e.g.: bash run.sh -i /usr/local/Ascend/ascend-toolkit-latest -d 0"
+    echo "          or set ASCEND_INSTALL_PATH environment variable"
+    echo "        CANN download: https://www.hiascend.com/software/cann"
+    exit 1
+fi
+
+_SETENV_SCRIPT="${_ASCEND_INSTALL_PATH}/bin/setenv.bash"
+if [ ! -f "${_SETENV_SCRIPT}" ]; then
+    echo "[ERROR]: setenv.bash not found at ${_SETENV_SCRIPT}"
+    echo "        CANN may be incomplete or corrupted. Please reinstall CANN (>=9.1.0)."
+    echo "        CANN download: https://www.hiascend.com/software/cann"
+    exit 1
+fi
+
 export ASCEND_TOOLKIT_HOME=${_ASCEND_INSTALL_PATH}
 export ASCEND_HOME_PATH=${_ASCEND_INSTALL_PATH}
-source ${_ASCEND_INSTALL_PATH}/bin/setenv.bash
+source "${_SETENV_SCRIPT}"
 
 set -e
 rm -rf build ${INSTALL_PREFIX}
