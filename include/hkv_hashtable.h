@@ -2573,7 +2573,7 @@ class HashTable : public HashTableBase<K, V, S> {
           d_counter, table_->dim);
 
       launch_export_batch_value_kernel(n, stream, keys, values, d_src_values,
-                                        d_counter);
+                                       d_counter);
     }
     NpuCheckError();
   }
@@ -2681,7 +2681,7 @@ class HashTable : public HashTableBase<K, V, S> {
               scores, offset, n, d_counter, table_->dim);
 
       launch_export_batch_value_kernel(n, stream, keys, values, d_src_values,
-                                        d_counter);
+                                       d_counter);
     }
     NpuCheckError();
   }
@@ -2749,7 +2749,7 @@ class HashTable : public HashTableBase<K, V, S> {
               offset, n, d_counter, table_->dim);
 
       launch_export_batch_value_kernel(n, stream, keys, values, d_src_values,
-                                        d_counter);
+                                       d_counter);
     }
     NpuCheckError();
   }
@@ -3102,7 +3102,7 @@ class HashTable : public HashTableBase<K, V, S> {
             batch_size, d_count, table_->dim);
 
         launch_export_batch_value_kernel(n, stream, d_keys, d_values,
-                                          d_src_values, d_count);
+                                         d_src_values, d_count);
       }
       NpuCheckError();
       // Copy counter from device to host
@@ -3381,11 +3381,9 @@ class HashTable : public HashTableBase<K, V, S> {
     return 1;
   }
 
-  inline void launch_export_batch_value_kernel(const size_type n, aclrtStream stream,
-                                         const key_type* keys,
-                                         value_type* values,
-                                         value_type** d_src_values,
-                                         size_type* count) const {
+  inline void launch_export_batch_value_kernel(
+      const size_type n, aclrtStream stream, const key_type* keys,
+      value_type* values, value_type** d_src_values, size_type* count) const {
     constexpr uint32_t ALIGN_SIZE = 32;  // ub地址32字节对齐
     uint32_t tensor_size = table_->dim * sizeof(value_type);
     bool is_align = (tensor_size % ALIGN_SIZE == 0);
