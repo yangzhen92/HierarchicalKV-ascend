@@ -1587,11 +1587,7 @@ class HashTable : public HashTableBase<K, V, S> {
                 table_->max_bucket_shift, table_->capacity_divisor_magic,
                 table_->capacity_divisor_shift, table_->capacity);
 
-        uint32_t tensor_size = table_->dim * sizeof(value_type);
-        bool is_align = tensor_size % 32 == 0;
-        bool is_ub_full = GetMixedOpUbSize() >= (tensor_size * DOUBLE_BUFFER * 2);
-        bool is_ok = is_align && is_ub_full;
-        if (is_ok) {
+        if (UseHalfUbWriteKernel(table_->dim, sizeof(value_type), false)) {
           auto tiling = GetHalfUBValueMoveTiling(n, block_dim_, table_->dim,
                                            sizeof(value_type), false);
           read_or_write_value_kernel_half_once<K, V, true>
@@ -1645,12 +1641,7 @@ class HashTable : public HashTableBase<K, V, S> {
           NPU_CHECK(aclrtMemcpyAsync(values, value_size, h_values, value_size,
                                      ACL_MEMCPY_HOST_TO_DEVICE, stream));
         } else {
-          uint32_t tensor_size = table_->dim * sizeof(value_type);
-          bool is_align = tensor_size % 32 == 0;
-          bool is_ub_full =
-              GetMixedOpUbSize() >= (tensor_size * DOUBLE_BUFFER * 2);
-          bool is_ok = is_align && is_ub_full;
-          if (is_ok) {
+          if (UseHalfUbWriteKernel(table_->dim, sizeof(value_type), false)) {
             auto tiling = GetHalfUBValueMoveTiling(n, block_dim_, table_->dim,
                                                    sizeof(value_type), false);
             read_or_write_value_kernel_half_once<K, V, false>
