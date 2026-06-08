@@ -1587,15 +1587,30 @@ class HashTable : public HashTableBase<K, V, S> {
                 table_->max_bucket_shift, table_->capacity_divisor_magic,
                 table_->capacity_divisor_shift, table_->capacity);
 
-        auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
-                                         sizeof(value_type), false);
-        read_or_write_value_kernel<K, V, true>
-            <<<block_dim_, tiling.valid_ub_size, stream>>>(
-                tiling.former_num, tiling.former_core_move_num,
-                tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-                table_->dim, const_cast<key_type*>(keys),
-                const_cast<value_type*>(values), n, table_value_addrs,
-                d_dst_keys, d_founds);
+        uint32_t tensor_size = table_->dim * sizeof(value_type);
+        bool is_align = tensor_size % 32 == 0;
+        bool is_ub_full = GetMixedOpUbSize() >= (tensor_size * DOUBLE_BUFFER * 2);
+        bool is_ok = is_align && is_ub_full;
+        if (is_ok) {
+          auto tiling = GetHalfUBValueMoveTiling(n, block_dim_, table_->dim,
+                                           sizeof(value_type), false);
+          read_or_write_value_kernel_half_once<K, V, true>
+              <<<block_dim_, tiling.valid_ub_size, stream>>>(
+                  tiling.former_num, tiling.former_core_move_num,
+                  tiling.tail_core_move_num, tiling.num_tiles, table_->dim,
+                  const_cast<key_type*>(keys), const_cast<value_type*>(values),
+                  n, table_value_addrs, d_dst_keys, d_founds);
+        } else {
+          auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
+                                           sizeof(value_type), false);
+          read_or_write_value_kernel<K, V, true>
+              <<<block_dim_, tiling.valid_ub_size, stream>>>(
+                  tiling.former_num, tiling.former_core_move_num,
+                  tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
+                  table_->dim, const_cast<key_type*>(keys),
+                  const_cast<value_type*>(values), n, table_value_addrs,
+                  d_dst_keys, d_founds);
+        }
       } else {
         find_or_insert_non_unique_kernel<K, V, S, false, evict_strategy>
             <<<block_dim_, 0, stream>>>(
@@ -1630,15 +1645,32 @@ class HashTable : public HashTableBase<K, V, S> {
           NPU_CHECK(aclrtMemcpyAsync(values, value_size, h_values, value_size,
                                      ACL_MEMCPY_HOST_TO_DEVICE, stream));
         } else {
-          auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
-                                           sizeof(value_type), false);
-          read_or_write_value_kernel<K, V, false>
-              <<<block_dim_, tiling.valid_ub_size, stream>>>(
-                  tiling.former_num, tiling.former_core_move_num,
-                  tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-                  table_->dim, const_cast<key_type*>(keys),
-                  const_cast<value_type*>(values), n, table_value_addrs,
-                  nullptr, d_founds);
+          uint32_t tensor_size = table_->dim * sizeof(value_type);
+          bool is_align = tensor_size % 32 == 0;
+          bool is_ub_full =
+              GetMixedOpUbSize() >= (tensor_size * DOUBLE_BUFFER * 2);
+          bool is_ok = is_align && is_ub_full;
+          if (is_ok) {
+            auto tiling = GetHalfUBValueMoveTiling(n, block_dim_, table_->dim,
+                                                   sizeof(value_type), false);
+            read_or_write_value_kernel_half_once<K, V, false>
+                <<<block_dim_, tiling.valid_ub_size, stream>>>(
+                    tiling.former_num, tiling.former_core_move_num,
+                    tiling.tail_core_move_num, tiling.num_tiles, table_->dim,
+                    const_cast<key_type*>(keys),
+                    const_cast<value_type*>(values), n, table_value_addrs,
+                    nullptr, d_founds);
+          } else {
+            auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
+                                             sizeof(value_type), false);
+            read_or_write_value_kernel<K, V, false>
+                <<<block_dim_, tiling.valid_ub_size, stream>>>(
+                    tiling.former_num, tiling.former_core_move_num,
+                    tiling.tail_core_move_num, tiling.tile_size,
+                    tiling.num_tiles, table_->dim, const_cast<key_type*>(keys),
+                    const_cast<value_type*>(values), n, table_value_addrs,
+                    nullptr, d_founds);
+          }
         }
       }
     }

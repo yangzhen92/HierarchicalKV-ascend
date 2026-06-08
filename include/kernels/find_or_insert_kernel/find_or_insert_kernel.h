@@ -789,6 +789,80 @@ __global__ __vector__ void read_or_write_value_kernel(
   }
 }
 
+template <class K, class V, bool UNLOCK_KEY>
+__global__ __vector__ void read_or_write_value_kernel_half_once(
+    uint32_t former_num, uint64_t former_core_move_num,
+    uint64_t tail_core_move_num, uint32_t num_tiles, uint32_t dim,
+    __gm__ K* keys, __gm__ V* param_values, uint64_t n,
+    __gm__ V* __gm__* table_value_addrs, __gm__ K* __gm__* d_dst_keys,
+    __gm__ bool* founds) {
+  uint64_t cur_block_idx = GetBlockIdx();
+  uint64_t core_start_idx = 0;
+  uint64_t core_move_count = 0;
+  if (cur_block_idx < former_num) {
+    core_start_idx = cur_block_idx * former_core_move_num;
+    core_move_count = former_core_move_num;
+  } else {
+    core_start_idx = former_num * former_core_move_num +
+                     (cur_block_idx - former_num) * tail_core_move_num;
+    core_move_count = tail_core_move_num;
+  }
+
+  TPipe pipe;
+  TQueBind<TPosition::VECIN, TPosition::VECOUT, 0> move_queue;
+  pipe.InitBuffer(move_queue, DOUBLE_BUFFER, num_tiles * dim * sizeof(V));
+
+  GlobalTensor<V> table_values_addr_gm;
+  GlobalTensor<V> param_values_gm;
+  LocalTensor<V> move_local;
+  DataCopyPadExtParams<V> pad_params{true, 0, 0, 0};
+
+  param_values_gm.SetGlobalBuffer(param_values);
+  uint64_t core_max_idx = core_start_idx + core_move_count;
+  for (uint64_t i = core_start_idx; i < core_max_idx; i += num_tiles) {
+    uint32_t move_in_num_once =
+        i + num_tiles > core_max_idx ? core_max_idx - i : num_tiles;
+    DataCopyExtParams copy_in_params{
+        1, static_cast<uint32_t>(move_in_num_once * dim * sizeof(V)), 0, 0, 0};
+
+    move_queue.AllocTensor<V>(move_local);
+    AscendC::DataCopyPad(move_local, param_values_gm[i * dim], copy_in_params,
+                         pad_params);
+    move_queue.EnQue<V>(move_local);
+    move_queue.DeQue<V>(move_local);
+    PipeBarrier<PIPE_ALL>();
+
+    for (uint32_t tile_idx = 0; tile_idx < num_tiles; tile_idx++) {
+      __gm__ V* table_value_addr = table_value_addrs[i];
+      if (table_value_addr == nullptr) {
+        continue;
+      }
+      table_values_addr_gm.SetGlobalBuffer(table_value_addr);
+
+      if (founds[i + tile_idx]) {
+        // 找到 key，从 table 中读取值返回给用户
+        DataCopyPad(move_local[tile_idx * dim], table_values_addr_gm,
+                    copy_params, pad_params);
+        move_queue.EnQue<V>(move_local);
+        move_queue.DeQue<V>(move_local);
+      } else {
+        // 没找到 key，把用户的值写入 table
+        DataCopyPad(table_values_addr_gm, move_local[tile_idx * dim],
+                    copy_params);
+      }
+    }
+    DataCopyPad(param_values_gm[i * dim], move_local, copy_in_params);
+    move_queue.FreeTensor(move_local);
+  }
+
+  if constexpr (UNLOCK_KEY) {
+    const uint32_t thread_all = THREAD_NUM_2048 * GetBlockNum();
+
+    asc_vf_call<write_key_vf<K>>(dim3{THREAD_NUM_2048}, n, keys, d_dst_keys,
+                                 thread_all, GetBlockIdx());
+  }
+}
+
 }  // namespace hkv
 }  // namespace npu
 
