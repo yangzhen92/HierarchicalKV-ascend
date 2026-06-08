@@ -1589,7 +1589,7 @@ class HashTable : public HashTableBase<K, V, S> {
 
         if (UseHalfUbWriteKernel(table_->dim, sizeof(value_type), false)) {
           auto tiling = GetHalfUBValueMoveTiling(n, block_dim_, table_->dim,
-                                           sizeof(value_type), false);
+                                                 sizeof(value_type), false);
           read_or_write_value_kernel_half_once<K, V, true>
               <<<block_dim_, tiling.valid_ub_size, stream>>>(
                   tiling.former_num, tiling.former_core_move_num,

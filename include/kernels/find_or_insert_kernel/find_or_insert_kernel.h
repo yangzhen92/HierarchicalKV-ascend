@@ -25,8 +25,8 @@
 
 #include <kernel_operator.h>
 #include <cstdint>
-#include "kernels/insert_or_assign_kernel/insert_or_assign_kernel.h"
 #include "find_utils.h"
+#include "kernels/insert_or_assign_kernel/insert_or_assign_kernel.h"
 #include "score_functor.h"
 #include "simt_api/asc_simt.h"
 #include "simt_vf_dispatcher.h"
@@ -337,7 +337,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_non_unique_kernel_vf(
     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
     uint64_t capacity, uint32_t bucket_max_size, uint32_t dim,
     __gm__ const K* keys, __gm__ const S* scores, S cur_score, uint64_t n,
-    __gm__ V* values, __gm__ V * __gm__ * d_dst_values, __gm__ bool* founds,
+    __gm__ V* values, __gm__ V* __gm__* d_dst_values, __gm__ bool* founds,
     uint32_t thread_all, uint64_t global_epoch, uint32_t block_index,
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
     uint64_t capacity_divisor_shift) {
@@ -429,7 +429,7 @@ __global__ __vector__ void find_or_insert_non_unique_kernel(
     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
     uint64_t capacity, uint32_t bucket_max_size, uint32_t dim,
     __gm__ const K* keys, __gm__ const S* scores, uint64_t n, __gm__ V* values,
-    __gm__ V * __gm__ * d_dst_values, __gm__ bool* founds,
+    __gm__ V* __gm__* d_dst_values, __gm__ bool* founds,
     uint64_t global_epoch, uint32_t max_bucket_shift,
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift) {
   const uint32_t thread_all = THREAD_NUM_512 * GetBlockNum();
@@ -453,8 +453,8 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_hybrid_kernel_vf(
     __gm__ int32_t* __restrict__ buckets_size, uint32_t bucket_max_size,
     uint32_t dim, __gm__ const K* __restrict__ keys,
     __gm__ V* __restrict__ values, __gm__ S* __restrict__ scores,
-    __gm__ V * __gm__ * __restrict__ d_dst_values,
-    __gm__ K * __gm__ * __restrict__ d_dst_keys, __gm__ bool* founds,
+    __gm__ V* __gm__* __restrict__ d_dst_values,
+    __gm__ K* __gm__* __restrict__ d_dst_keys, __gm__ bool* founds,
     uint64_t n, uint64_t global_epoch, uint64_t cur_score, uint32_t blockIdx,
     uint64_t thread_all, uint32_t max_bucket_shift,
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
@@ -692,8 +692,8 @@ template <class K, class V, class S, int Strategy = -1>
 __global__ __vector__ void find_or_insert_hybrid_kernel(
     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
     uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys,
-    __gm__ V* values, __gm__ S* scores, __gm__ V * __gm__ * d_dst_values,
-    __gm__ K * __gm__ * d_dst_keys, __gm__ bool* founds, uint64_t n,
+    __gm__ V* values, __gm__ S* scores, __gm__ V* __gm__* d_dst_values,
+    __gm__ K* __gm__* d_dst_keys, __gm__ bool* founds, uint64_t n,
     uint64_t global_epoch, uint32_t max_bucket_shift,
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
     uint64_t capacity) {
@@ -716,7 +716,7 @@ __global__ __vector__ void read_or_write_value_kernel(
     uint32_t former_num, uint64_t former_core_move_num,
     uint64_t tail_core_move_num, uint32_t tile_size, uint32_t num_tiles,
     uint32_t dim, __gm__ K* keys, __gm__ V* param_values, uint64_t n,
-    __gm__ V * __gm__ * table_value_addrs, __gm__ K * __gm__ * d_dst_keys,
+    __gm__ V* __gm__* table_value_addrs, __gm__ K* __gm__* d_dst_keys,
     __gm__ bool* founds) {
   uint64_t cur_block_idx = GetBlockIdx();
   uint64_t core_start_idx = 0;
