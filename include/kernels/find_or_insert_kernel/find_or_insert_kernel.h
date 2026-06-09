@@ -830,8 +830,6 @@ __global__ __vector__ void read_or_write_value_kernel_half_once(
     move_queue.AllocTensor<V>(move_local);
     AscendC::DataCopyPad(move_local, param_values_gm[i * dim], copy_in_params,
                          pad_params);
-    move_queue.EnQue<V>(move_local);
-    move_queue.DeQue<V>(move_local);
     PipeBarrier<PIPE_ALL>();
 
     for (uint32_t tile_idx = 0; tile_idx < move_in_num_once; tile_idx++) {
