@@ -16,18 +16,18 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <memory>
-#include <vector>
 #include <algorithm>
+#include <memory>
 #include <unordered_map>
-#include "test_find_base.h"
+#include <vector>
 #include "test_device_data.h"
+#include "test_find_base.h"
 
 // find(value copy) 专用测试类
 class FindValueTest : public FindTestBase {
  public:
   // 验证 find 返回的 values / founds / scores
-  template<size_t DIM>
+  template <size_t DIM>
   void VerifyFindResults(const vector<K>& query_keys,
                          const vector<V>& result_values,
                          const vector<bool>& result_founds,
@@ -42,7 +42,8 @@ class FindValueTest : public FindTestBase {
     for (size_t i = 0; i < query_keys.size(); i++) {
       auto it = key_to_insert_idx.find(query_keys[i]);
       if (it != key_to_insert_idx.end()) {
-        EXPECT_TRUE(result_founds[i]) << "key=" << query_keys[i] << " should be found";
+        EXPECT_TRUE(result_founds[i])
+            << "key=" << query_keys[i] << " should be found";
         if (result_founds[i]) {
           found_num++;
           size_t insert_idx = it->second;
@@ -57,7 +58,8 @@ class FindValueTest : public FindTestBase {
           }
         }
       } else {
-        EXPECT_FALSE(result_founds[i]) << "key=" << query_keys[i] << " should NOT be found";
+        EXPECT_FALSE(result_founds[i])
+            << "key=" << query_keys[i] << " should NOT be found";
         if (!result_founds[i]) {
           not_found_num++;
         }
@@ -129,8 +131,8 @@ TEST_F(FindValueTest, BasicFunction_SmallScaleAllExist_NoScores) {
                         key_num * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE),
             ACL_ERROR_NONE);
 
-  table.find(key_num, device_keys, device_values, device_found,
-             nullptr, stream);
+  table.find(key_num, device_keys, device_values, device_found, nullptr,
+             stream);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
 
   // 回收结果
@@ -149,8 +151,8 @@ TEST_F(FindValueTest, BasicFunction_SmallScaleAllExist_NoScores) {
             ACL_ERROR_NONE);
   result_founds.assign(host_found, host_found + key_num);
 
-  VerifyFindResults<dim>(host_keys, result_values, result_founds,
-                         host_values, key_to_idx, key_num, 0);
+  VerifyFindResults<dim>(host_keys, result_values, result_founds, host_values,
+                         key_to_idx, key_num, 0);
 
   ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_values), ACL_ERROR_NONE);
@@ -179,8 +181,8 @@ TEST_F(FindValueTest, BasicFunction_SmallScaleNoneExist) {
 
   // 查询键 [100000, 101023]，全部不存在
   vector<K> query_keys(key_num);
-  create_continuous_keys<K, S, V, dim>(query_keys.data(), nullptr,
-                                       nullptr, key_num, 100000);
+  create_continuous_keys<K, S, V, dim>(query_keys.data(), nullptr, nullptr,
+                                       key_num, 100000);
 
   K* device_keys = nullptr;
   V* device_values = nullptr;
@@ -199,8 +201,8 @@ TEST_F(FindValueTest, BasicFunction_SmallScaleNoneExist) {
                         key_num * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE),
             ACL_ERROR_NONE);
 
-  table.find(key_num, device_keys, device_values, device_found,
-             nullptr, stream);
+  table.find(key_num, device_keys, device_values, device_found, nullptr,
+             stream);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
 
   bool* host_found = nullptr;
@@ -243,8 +245,9 @@ TEST_F(FindValueTest, MixedScenario_PartialExist_WithScores) {
   vector<K> insert_keys;
   vector<V> insert_values;
   vector<S> insert_scores;
-  InsertContinuousKeys<decltype(table), dim>(
-      table, insert_num, insert_keys, insert_values, insert_scores, true, stream);
+  InsertContinuousKeys<decltype(table), dim>(table, insert_num, insert_keys,
+                                             insert_values, insert_scores, true,
+                                             stream);
 
   unordered_map<K, size_t> key_to_idx;
   for (size_t i = 0; i < insert_num; i++) {
@@ -281,8 +284,8 @@ TEST_F(FindValueTest, MixedScenario_PartialExist_WithScores) {
                         query_num * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE),
             ACL_ERROR_NONE);
 
-  table.find(query_num, device_keys, device_values, device_found,
-             device_scores, stream);
+  table.find(query_num, device_keys, device_values, device_found, device_scores,
+             stream);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
 
   // 回收结果
@@ -299,16 +302,15 @@ TEST_F(FindValueTest, MixedScenario_PartialExist_WithScores) {
   ASSERT_EQ(aclrtMemcpy(host_found, query_num * sizeof(bool), device_found,
                         query_num * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST),
             ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMemcpy(result_scores.data(), query_num * sizeof(S),
-                        device_scores, query_num * sizeof(S),
-                        ACL_MEMCPY_DEVICE_TO_HOST),
-            ACL_ERROR_NONE);
+  ASSERT_EQ(
+      aclrtMemcpy(result_scores.data(), query_num * sizeof(S), device_scores,
+                  query_num * sizeof(S), ACL_MEMCPY_DEVICE_TO_HOST),
+      ACL_ERROR_NONE);
 
   vector<bool> result_founds(host_found, host_found + query_num);
-  VerifyFindResults<dim>(query_keys, result_values, result_founds,
-                         insert_values, key_to_idx,
-                         insert_num, query_num - insert_num,
-                         &result_scores, &insert_scores);
+  VerifyFindResults<dim>(
+      query_keys, result_values, result_founds, insert_values, key_to_idx,
+      insert_num, query_num - insert_num, &result_scores, &insert_scores);
 
   ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_values), ACL_ERROR_NONE);
@@ -333,8 +335,9 @@ TEST_F(FindValueTest, MediumScale_PartialExist) {
   vector<K> insert_keys;
   vector<V> insert_values;
   vector<S> insert_scores;
-  InsertContinuousKeys<decltype(table), dim>(
-      table, insert_num, insert_keys, insert_values, insert_scores, true, stream);
+  InsertContinuousKeys<decltype(table), dim>(table, insert_num, insert_keys,
+                                             insert_values, insert_scores, true,
+                                             stream);
 
   unordered_map<K, size_t> key_to_idx;
   for (size_t i = 0; i < insert_num; i++) {
@@ -367,8 +370,8 @@ TEST_F(FindValueTest, MediumScale_PartialExist) {
                         query_num * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE),
             ACL_ERROR_NONE);
 
-  table.find(query_num, device_keys, device_values, device_found,
-             nullptr, stream);
+  table.find(query_num, device_keys, device_values, device_found, nullptr,
+             stream);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
 
   vector<V> result_values(query_num * dim);
@@ -386,8 +389,8 @@ TEST_F(FindValueTest, MediumScale_PartialExist) {
 
   vector<bool> result_founds(host_found, host_found + query_num);
   VerifyFindResults<dim>(query_keys, result_values, result_founds,
-                         insert_values, key_to_idx,
-                         insert_num, query_num - insert_num);
+                         insert_values, key_to_idx, insert_num,
+                         query_num - insert_num);
 
   ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_values), ACL_ERROR_NONE);
@@ -435,8 +438,8 @@ TEST_F(FindValueTest, LargeScale_AllExist) {
                         key_num * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE),
             ACL_ERROR_NONE);
 
-  table.find(key_num, device_keys, device_values, device_found,
-             nullptr, stream);
+  table.find(key_num, device_keys, device_values, device_found, nullptr,
+             stream);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
 
   vector<V> result_values(key_num * dim);
@@ -453,8 +456,8 @@ TEST_F(FindValueTest, LargeScale_AllExist) {
             ACL_ERROR_NONE);
 
   vector<bool> result_founds(host_found, host_found + key_num);
-  VerifyFindResults<dim>(host_keys, result_values, result_founds,
-                         host_values, key_to_idx, key_num, 0);
+  VerifyFindResults<dim>(host_keys, result_values, result_founds, host_values,
+                         key_to_idx, key_num, 0);
 
   ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_values), ACL_ERROR_NONE);
@@ -502,8 +505,8 @@ TEST_F(FindValueTest, DifferentDim_128) {
                         key_num * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE),
             ACL_ERROR_NONE);
 
-  table.find(key_num, device_keys, device_values, device_found,
-             nullptr, stream);
+  table.find(key_num, device_keys, device_values, device_found, nullptr,
+             stream);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
 
   vector<V> result_values(key_num * dim);
@@ -520,8 +523,8 @@ TEST_F(FindValueTest, DifferentDim_128) {
             ACL_ERROR_NONE);
 
   vector<bool> result_founds(host_found, host_found + key_num);
-  VerifyFindResults<dim>(host_keys, result_values, result_founds,
-                         host_values, key_to_idx, key_num, 0);
+  VerifyFindResults<dim>(host_keys, result_values, result_founds, host_values,
+                         key_to_idx, key_num, 0);
 
   ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_values), ACL_ERROR_NONE);
@@ -569,8 +572,8 @@ TEST_F(FindValueTest, DifferentDim_4) {
                         key_num * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE),
             ACL_ERROR_NONE);
 
-  table.find(key_num, device_keys, device_values, device_found,
-             nullptr, stream);
+  table.find(key_num, device_keys, device_values, device_found, nullptr,
+             stream);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
 
   vector<V> result_values(key_num * dim);
@@ -587,8 +590,8 @@ TEST_F(FindValueTest, DifferentDim_4) {
             ACL_ERROR_NONE);
 
   vector<bool> result_founds(host_found, host_found + key_num);
-  VerifyFindResults<dim>(host_keys, result_values, result_founds,
-                         host_values, key_to_idx, key_num, 0);
+  VerifyFindResults<dim>(host_keys, result_values, result_founds, host_values,
+                         key_to_idx, key_num, 0);
 
   ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_values), ACL_ERROR_NONE);
@@ -612,9 +615,9 @@ TEST_F(FindValueTest, DuplicateKeys) {
   vector<K> insert_keys;
   vector<V> insert_values;
   vector<S> insert_scores;
-  InsertContinuousKeys<decltype(table), dim>(
-      table, unique_key_num, insert_keys, insert_values, insert_scores,
-      true, stream);
+  InsertContinuousKeys<decltype(table), dim>(table, unique_key_num, insert_keys,
+                                             insert_values, insert_scores, true,
+                                             stream);
 
   unordered_map<K, size_t> key_to_idx;
   for (size_t i = 0; i < unique_key_num; i++) {
@@ -648,8 +651,8 @@ TEST_F(FindValueTest, DuplicateKeys) {
                         query_num * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE),
             ACL_ERROR_NONE);
 
-  table.find(query_num, device_keys, device_values, device_found,
-             device_scores, stream);
+  table.find(query_num, device_keys, device_values, device_found, device_scores,
+             stream);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
 
   vector<V> result_values(query_num * dim);
@@ -665,15 +668,14 @@ TEST_F(FindValueTest, DuplicateKeys) {
   ASSERT_EQ(aclrtMemcpy(host_found, query_num * sizeof(bool), device_found,
                         query_num * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST),
             ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMemcpy(result_scores.data(), query_num * sizeof(S),
-                        device_scores, query_num * sizeof(S),
-                        ACL_MEMCPY_DEVICE_TO_HOST),
-            ACL_ERROR_NONE);
+  ASSERT_EQ(
+      aclrtMemcpy(result_scores.data(), query_num * sizeof(S), device_scores,
+                  query_num * sizeof(S), ACL_MEMCPY_DEVICE_TO_HOST),
+      ACL_ERROR_NONE);
 
   vector<bool> result_founds(host_found, host_found + query_num);
   VerifyFindResults<dim>(query_keys, result_values, result_founds,
-                         insert_values, key_to_idx,
-                         query_num, 0,
+                         insert_values, key_to_idx, query_num, 0,
                          &result_scores, &insert_scores);
 
   ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
@@ -700,14 +702,14 @@ TEST_F(FindValueTest, NotFound_InitialValuePreserved) {
   vector<K> insert_keys;
   vector<V> insert_values;
   vector<S> insert_scores;
-  InsertContinuousKeys<decltype(table), dim>(
-      table, insert_num, insert_keys, insert_values, insert_scores,
-      true, stream);
+  InsertContinuousKeys<decltype(table), dim>(table, insert_num, insert_keys,
+                                             insert_values, insert_scores, true,
+                                             stream);
 
   // 查询 [50000, 50099]，全部不存在
   vector<K> query_keys(query_num);
-  create_continuous_keys<K, S, V, dim>(query_keys.data(), nullptr,
-                                       nullptr, query_num, 50000);
+  create_continuous_keys<K, S, V, dim>(query_keys.data(), nullptr, nullptr,
+                                       query_num, 50000);
 
   // 用特定标记值初始化 values 和 scores
   const V MAGIC_VALUE = static_cast<V>(-999.0f);
@@ -739,13 +741,13 @@ TEST_F(FindValueTest, NotFound_InitialValuePreserved) {
                         init_values.data(), query_num * dim * sizeof(V),
                         ACL_MEMCPY_HOST_TO_DEVICE),
             ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMemcpy(device_scores, query_num * sizeof(S),
-                        init_scores.data(), query_num * sizeof(S),
-                        ACL_MEMCPY_HOST_TO_DEVICE),
-            ACL_ERROR_NONE);
+  ASSERT_EQ(
+      aclrtMemcpy(device_scores, query_num * sizeof(S), init_scores.data(),
+                  query_num * sizeof(S), ACL_MEMCPY_HOST_TO_DEVICE),
+      ACL_ERROR_NONE);
 
-  table.find(query_num, device_keys, device_values, device_found,
-             device_scores, stream);
+  table.find(query_num, device_keys, device_values, device_found, device_scores,
+             stream);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
 
   // 回收结果
@@ -762,10 +764,10 @@ TEST_F(FindValueTest, NotFound_InitialValuePreserved) {
   ASSERT_EQ(aclrtMemcpy(host_found, query_num * sizeof(bool), device_found,
                         query_num * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST),
             ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMemcpy(result_scores.data(), query_num * sizeof(S),
-                        device_scores, query_num * sizeof(S),
-                        ACL_MEMCPY_DEVICE_TO_HOST),
-            ACL_ERROR_NONE);
+  ASSERT_EQ(
+      aclrtMemcpy(result_scores.data(), query_num * sizeof(S), device_scores,
+                  query_num * sizeof(S), ACL_MEMCPY_DEVICE_TO_HOST),
+      ACL_ERROR_NONE);
 
   // 验证：所有键未找到，values和scores保持初始标记值
   size_t not_found_count = 0;
@@ -823,8 +825,7 @@ static void test_find_hybrid_dim(size_t dim) {
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), capacity);
 
-  ASSERT_EQ(aclrtMemset(device_data.device_values,
-                        key_num * sizeof(V) * dim, 0,
+  ASSERT_EQ(aclrtMemset(device_data.device_values, key_num * sizeof(V) * dim, 0,
                         key_num * sizeof(V) * dim),
             ACL_ERROR_NONE);
 
@@ -836,10 +837,10 @@ static void test_find_hybrid_dim(size_t dim) {
   ASSERT_EQ(aclrtMallocHost(reinterpret_cast<void**>(&host_found),
                             key_num * sizeof(bool)),
             ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMemcpy(host_found, key_num * sizeof(bool),
-                        device_data.device_found, key_num * sizeof(bool),
-                        ACL_MEMCPY_DEVICE_TO_HOST),
-            ACL_ERROR_NONE);
+  ASSERT_EQ(
+      aclrtMemcpy(host_found, key_num * sizeof(bool), device_data.device_found,
+                  key_num * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST),
+      ACL_ERROR_NONE);
 
   vector<V> result_values(key_num * dim);
   ASSERT_EQ(aclrtMemcpy(result_values.data(), key_num * dim * sizeof(V),
@@ -863,13 +864,17 @@ static void test_find_hybrid_dim(size_t dim) {
 }
 
 // 用例11: hybrid模式 - dim=8
-TEST_F(FindValueTest, HybridMode_Dim8) {
-  test_find_hybrid_dim(8);
-}
+TEST_F(FindValueTest, HybridMode_Dim8) { test_find_hybrid_dim(8); }
 
 // 用例12: hybrid模式 - dim=1024
-TEST_F(FindValueTest, HybridMode_Dim1024) {
-  test_find_hybrid_dim(1024);
+TEST_F(FindValueTest, HybridMode_Dim1024) { test_find_hybrid_dim(1024); }
+
+// Hybrid find value fallback path when value bytes are not 32-byte aligned.
+TEST_F(FindValueTest, HybridMode_Non32ByteAlignedDim) {
+  constexpr size_t dim = 7;
+  static_assert(dim * sizeof(V) % 32 != 0,
+                "This test needs a value size that is not 32-byte aligned.");
+  test_find_hybrid_dim(dim);
 }
 
 // 用例13: IS_RESERVED_KEY 保留键场景 - 混合正常key和所有保留key
@@ -897,9 +902,9 @@ TEST_F(FindValueTest, ReservedKeys_MixedWithNormalKeys) {
   vector<K> insert_keys;
   vector<V> insert_values;
   vector<S> insert_scores;
-  InsertContinuousKeys<decltype(table), dim>(
-      table, normal_key_num, insert_keys, insert_values, insert_scores,
-      true, stream);
+  InsertContinuousKeys<decltype(table), dim>(table, normal_key_num, insert_keys,
+                                             insert_values, insert_scores, true,
+                                             stream);
 
   unordered_map<K, size_t> key_to_idx;
   for (size_t i = 0; i < normal_key_num; i++) {
@@ -945,13 +950,13 @@ TEST_F(FindValueTest, ReservedKeys_MixedWithNormalKeys) {
                         init_values.data(), query_num * dim * sizeof(V),
                         ACL_MEMCPY_HOST_TO_DEVICE),
             ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMemcpy(device_scores, query_num * sizeof(S),
-                        init_scores.data(), query_num * sizeof(S),
-                        ACL_MEMCPY_HOST_TO_DEVICE),
-            ACL_ERROR_NONE);
+  ASSERT_EQ(
+      aclrtMemcpy(device_scores, query_num * sizeof(S), init_scores.data(),
+                  query_num * sizeof(S), ACL_MEMCPY_HOST_TO_DEVICE),
+      ACL_ERROR_NONE);
 
-  table.find(query_num, device_keys, device_values, device_found,
-             device_scores, stream);
+  table.find(query_num, device_keys, device_values, device_found, device_scores,
+             stream);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
 
   // 回收结果
@@ -968,15 +973,16 @@ TEST_F(FindValueTest, ReservedKeys_MixedWithNormalKeys) {
   ASSERT_EQ(aclrtMemcpy(host_found, query_num * sizeof(bool), device_found,
                         query_num * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST),
             ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMemcpy(result_scores.data(), query_num * sizeof(S),
-                        device_scores, query_num * sizeof(S),
-                        ACL_MEMCPY_DEVICE_TO_HOST),
-            ACL_ERROR_NONE);
+  ASSERT_EQ(
+      aclrtMemcpy(result_scores.data(), query_num * sizeof(S), device_scores,
+                  query_num * sizeof(S), ACL_MEMCPY_DEVICE_TO_HOST),
+      ACL_ERROR_NONE);
 
   // 验证正常键：全部找到，values和scores正确
   size_t found_count = 0;
   for (size_t i = 0; i < normal_key_num; i++) {
-    EXPECT_TRUE(host_found[i]) << "normal key=" << query_keys[i] << " should be found";
+    EXPECT_TRUE(host_found[i])
+        << "normal key=" << query_keys[i] << " should be found";
     if (host_found[i]) {
       found_count++;
       size_t insert_idx = key_to_idx[query_keys[i]];
@@ -995,9 +1001,8 @@ TEST_F(FindValueTest, ReservedKeys_MixedWithNormalKeys) {
   size_t reserved_not_found_count = 0;
   for (size_t i = 0; i < reserved_num; i++) {
     size_t idx = normal_key_num + i;
-    EXPECT_FALSE(host_found[idx])
-        << "reserved key=0x" << std::hex << query_keys[idx]
-        << " should NOT be found";
+    EXPECT_FALSE(host_found[idx]) << "reserved key=0x" << std::hex
+                                  << query_keys[idx] << " should NOT be found";
     if (!host_found[idx]) {
       reserved_not_found_count++;
       for (size_t j = 0; j < dim; j++) {

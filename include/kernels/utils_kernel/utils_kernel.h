@@ -140,6 +140,69 @@ __global__ __vector__ void read_value_kernel(uint32_t former_num,
   }
 }
 
+template <class V>
+__global__ __vector__ void read_with_half_ub_kernel(
+    uint32_t former_num, uint64_t former_core_move_num,
+    uint64_t tail_core_move_num, uint32_t num_tiles, uint32_t dim,
+    __gm__ V* values, __gm__ V* __gm__* d_src_values) {
+  uint64_t cur_block_idx = GetBlockIdx();
+  uint64_t core_start_idx = 0;
+  uint64_t core_move_count = 0;
+  constexpr uint32_t BUFFER_NUM = 2;
+  if (cur_block_idx < former_num) {
+    core_start_idx = cur_block_idx * former_core_move_num;
+    core_move_count = former_core_move_num;
+  } else {
+    core_start_idx = former_num * former_core_move_num +
+                     (cur_block_idx - former_num) * tail_core_move_num;
+    core_move_count = tail_core_move_num;
+  }
+
+  TPipe pipe;
+  TQueBind<TPosition::VECIN, TPosition::VECOUT, 0> move_queue;
+  pipe.InitBuffer(move_queue, BUFFER_NUM, num_tiles * sizeof(V) * dim);
+
+  GlobalTensor<V> src_values_gm;
+  GlobalTensor<V> dst_values_gm;
+  LocalTensor<V> move_local;
+  DataCopyPadExtParams<V> pad_params{true, 0, 0, 0};
+
+  dst_values_gm.SetGlobalBuffer(values);
+  DataCopyExtParams copy_value_params{1, static_cast<uint32_t>(dim * sizeof(V)),
+                                      0, 0, 0};
+
+  uint64_t core_max_idx = core_start_idx + core_move_count;
+  for (uint64_t i = core_start_idx; i < core_max_idx; i += num_tiles) {
+    uint32_t move_num_once =
+        i + num_tiles > core_max_idx ? core_max_idx - i : num_tiles;
+    DataCopyExtParams copy_window_params{
+        1, static_cast<uint32_t>(move_num_once * dim * sizeof(V)), 0, 0, 0};
+
+    move_queue.AllocTensor<V>(move_local);
+
+    DataCopyPad(move_local, dst_values_gm[i * dim], copy_window_params,
+                pad_params);
+    move_queue.EnQue<V>(move_local);
+    move_queue.DeQue<V>(move_local);
+
+    for (uint32_t move_idx = 0; move_idx < move_num_once; move_idx++) {
+      __gm__ V* src_value = d_src_values[i + move_idx];
+      if (src_value == nullptr) {
+        continue;
+      }
+
+      src_values_gm.SetGlobalBuffer(src_value);
+      DataCopyPad(move_local[move_idx * dim], src_values_gm, copy_value_params,
+                  pad_params);
+      move_queue.EnQue<V>(move_local);
+      move_queue.DeQue<V>(move_local);
+    }
+
+    DataCopyPad(dst_values_gm[i * dim], move_local, copy_window_params);
+    move_queue.FreeTensor(move_local);
+  }
+}
+
 template <typename V, int32_t TILE_SIZE>
 __forceinline__ __simt_callee__ void copy_vector(__gm__ const V* src,
                                                  __gm__ V* dst,
