@@ -1,4 +1,4 @@
-/* *
+/*
  * Copyright (c) 2022, NVIDIA CORPORATION.
  * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
  *

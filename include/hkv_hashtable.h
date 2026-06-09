@@ -3446,28 +3446,28 @@ class HashTable : public HashTableBase<K, V, S> {
     }
   }
 
-   private:
-    HashTableOptions options_;
-    TableCore* table_ = nullptr;
-    TableCore* d_table_ = nullptr;
-    size_t shared_mem_size_ = 0;
-    uint32_t block_dim_ = 0;
-    int sm_cnt_ = 0;
-    int max_threads_per_block_ = 0;
-    std::atomic_bool reach_max_capacity_{false};
-    bool initialized_ = false;
-    mutable group_shared_mutex mutex_;
-    const unsigned int kernel_select_interval_ = 7;
-    std::unique_ptr<DeviceMemoryPool> dev_mem_pool_;
-    std::unique_ptr<HostMemoryPool> host_mem_pool_;
-    allocator_type* allocator_;
-    bool default_allocator_ = true;
-    std::atomic<uint64_t> global_epoch_{
-        static_cast<uint64_t>(IGNORED_GLOBAL_EPOCH)};
-    ValueMoveOpt value_move_opt_;
-    std::unique_ptr<BucketMemoryPoolManager<key_type, value_type, score_type>>
-        bucket_memory_pool_manager_;
-  };
+ private:
+  HashTableOptions options_;
+  TableCore* table_ = nullptr;
+  TableCore* d_table_ = nullptr;
+  size_t shared_mem_size_ = 0;
+  uint32_t block_dim_ = 0;
+  int sm_cnt_ = 0;
+  int max_threads_per_block_ = 0;
+  std::atomic_bool reach_max_capacity_{false};
+  bool initialized_ = false;
+  mutable group_shared_mutex mutex_;
+  const unsigned int kernel_select_interval_ = 7;
+  std::unique_ptr<DeviceMemoryPool> dev_mem_pool_;
+  std::unique_ptr<HostMemoryPool> host_mem_pool_;
+  allocator_type* allocator_;
+  bool default_allocator_ = true;
+  std::atomic<uint64_t> global_epoch_{
+      static_cast<uint64_t>(IGNORED_GLOBAL_EPOCH)};
+  ValueMoveOpt value_move_opt_;
+  std::unique_ptr<BucketMemoryPoolManager<key_type, value_type, score_type>>
+      bucket_memory_pool_manager_;
+};
 
 }  // namespace hkv
 }  // namespace npu
