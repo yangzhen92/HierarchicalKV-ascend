@@ -429,9 +429,9 @@ __global__ __vector__ void find_or_insert_non_unique_kernel(
     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
     uint64_t capacity, uint32_t bucket_max_size, uint32_t dim,
     __gm__ const K* keys, __gm__ const S* scores, uint64_t n, __gm__ V* values,
-    __gm__ V* __gm__* d_dst_values, __gm__ bool* founds,
-    uint64_t global_epoch, uint32_t max_bucket_shift,
-    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift) {
+    __gm__ V* __gm__* d_dst_values, __gm__ bool* founds, uint64_t global_epoch,
+    uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
+    uint64_t capacity_divisor_shift) {
   const uint32_t thread_all = THREAD_NUM_512 * GetBlockNum();
   uint64_t cur_score = (Strategy == npu::hkv::EvictStrategyInternal::kLru ||
                         Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
@@ -454,8 +454,8 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_hybrid_kernel_vf(
     uint32_t dim, __gm__ const K* __restrict__ keys,
     __gm__ V* __restrict__ values, __gm__ S* __restrict__ scores,
     __gm__ V* __gm__* __restrict__ d_dst_values,
-    __gm__ K* __gm__* __restrict__ d_dst_keys, __gm__ bool* founds,
-    uint64_t n, uint64_t global_epoch, uint64_t cur_score, uint32_t blockIdx,
+    __gm__ K* __gm__* __restrict__ d_dst_keys, __gm__ bool* founds, uint64_t n,
+    uint64_t global_epoch, uint64_t cur_score, uint32_t blockIdx,
     uint64_t thread_all, uint32_t max_bucket_shift,
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
     uint64_t capacity) {
