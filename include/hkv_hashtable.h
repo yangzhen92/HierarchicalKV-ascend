@@ -2572,14 +2572,8 @@ class HashTable : public HashTableBase<K, V, S> {
           d_table_, table_->buckets, keys, d_src_values, scores, offset, n,
           d_counter, table_->dim);
 
-      uint64_t valid_ub_size = GetMixedOpUbSize();
-      uint32_t max_tile_size =
-          valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
-      HKV_CHECK(max_tile_size != 0,
-                log_format("UB size %lu is too small.", valid_ub_size));
-      export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
-          block_dim_, table_->dim, max_tile_size, values, d_counter,
-          d_src_values);
+      launch_export_batch_value_kernel(n, stream, keys, values, d_src_values,
+                                       d_counter);
     }
     NpuCheckError();
   }
@@ -2686,14 +2680,8 @@ class HashTable : public HashTableBase<K, V, S> {
               d_table_, table_->buckets, pattern, threshold, keys, d_src_values,
               scores, offset, n, d_counter, table_->dim);
 
-      uint64_t valid_ub_size = GetMixedOpUbSize();
-      uint32_t max_tile_size =
-          valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
-      HKV_CHECK(max_tile_size != 0,
-                log_format("UB size %lu is too small.", valid_ub_size));
-      export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
-          block_dim_, table_->dim, max_tile_size, values, d_counter,
-          d_src_values);
+      launch_export_batch_value_kernel(n, stream, keys, values, d_src_values,
+                                       d_counter);
     }
     NpuCheckError();
   }
@@ -2760,14 +2748,8 @@ class HashTable : public HashTableBase<K, V, S> {
               pred, d_table_, table_->buckets, keys, d_src_values, scores,
               offset, n, d_counter, table_->dim);
 
-      uint64_t valid_ub_size = GetMixedOpUbSize();
-      uint32_t max_tile_size =
-          valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
-      HKV_CHECK(max_tile_size != 0,
-                log_format("UB size %lu is too small.", valid_ub_size));
-      export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
-          block_dim_, table_->dim, max_tile_size, values, d_counter,
-          d_src_values);
+      launch_export_batch_value_kernel(n, stream, keys, values, d_src_values,
+                                       d_counter);
     }
     NpuCheckError();
   }
@@ -3120,14 +3102,8 @@ class HashTable : public HashTableBase<K, V, S> {
             d_table_, table_->buckets, d_keys, d_src_values, d_scores, i,
             batch_size, d_count, table_->dim);
 
-        uint64_t valid_ub_size = GetMixedOpUbSize();
-        uint32_t max_tile_size =
-            valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
-        HKV_CHECK(max_tile_size != 0,
-                  log_format("UB size %lu is too small.", valid_ub_size));
-        export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
-            block_dim_, table_->dim, max_tile_size, d_values, d_count,
-            d_src_values);
+        launch_export_batch_value_kernel(n, stream, d_keys, d_values,
+                                         d_src_values, d_count);
       }
       NpuCheckError();
       // Copy counter from device to host
@@ -3406,6 +3382,32 @@ class HashTable : public HashTableBase<K, V, S> {
       return 8;
     }
     return 1;
+  }
+
+  inline void launch_export_batch_value_kernel(
+      const size_type n, aclrtStream stream, const key_type* keys,
+      value_type* values, value_type** d_src_values, size_type* count) const {
+    constexpr uint32_t ALIGN_SIZE = 32;  // ub地址32字节对齐
+    uint32_t tensor_size = table_->dim * sizeof(value_type);
+    bool is_align = (tensor_size % ALIGN_SIZE == 0);
+    uint64_t valid_ub_size = GetMixedOpUbSize();
+    bool is_ub_full = (valid_ub_size >= (tensor_size * DOUBLE_BUFFER));
+    bool choose_half_once = is_ub_full && is_align;
+    if (choose_half_once) {
+      uint32_t max_tile_size =
+          valid_ub_size / (DOUBLE_BUFFER * (sizeof(value_type) * table_->dim));
+      export_batch_value_kernel_half_once<V>
+          <<<block_dim_, valid_ub_size, stream>>>(block_dim_, table_->dim,
+                                                  max_tile_size, values, count,
+                                                  d_src_values);
+    } else {
+      uint32_t max_tile_size =
+          valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
+      HKV_CHECK(max_tile_size != 0,
+                log_format("UB size %lu is too small.", valid_ub_size));
+      export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
+          block_dim_, table_->dim, max_tile_size, values, count, d_src_values);
+    }
   }
 
   template <bool UNLOCK_KEY>
