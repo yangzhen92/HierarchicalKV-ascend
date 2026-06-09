@@ -2160,12 +2160,7 @@ class HashTable : public HashTableBase<K, V, S> {
           global_epoch_, table_->max_bucket_shift,
           table_->capacity_divisor_magic, table_->capacity_divisor_shift);
 
-      auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
-                                       sizeof(value_type), false);
-      read_value_kernel<V><<<block_dim_, tiling.valid_ub_size, stream>>>(
-          tiling.former_num, tiling.former_core_move_num,
-          tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-          table_->dim, values, n, d_src_values);
+      launch_read_kernel(n, stream, values, d_src_values);
     }
     NpuCheckError();
   }
@@ -2233,12 +2228,7 @@ class HashTable : public HashTableBase<K, V, S> {
           table_->capacity_divisor_magic, table_->capacity_divisor_shift,
           n_align_warp);
 
-      auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
-                                       sizeof(value_type), false);
-      read_value_kernel<V><<<block_dim_, tiling.valid_ub_size, stream>>>(
-          tiling.former_num, tiling.former_core_move_num,
-          tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-          table_->dim, values, n, d_src_values);
+      launch_read_kernel(n, stream, values, d_src_values);
     }
     NpuCheckError();
   }
@@ -3429,6 +3419,26 @@ class HashTable : public HashTableBase<K, V, S> {
               tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
               table_->dim, const_cast<key_type*>(keys),
               const_cast<value_type*>(values), n, d_dst_values, d_dst_keys);
+    }
+  }
+
+  inline void launch_read_kernel(const size_type n, aclrtStream stream,
+                                 value_type* values,
+                                 value_type** d_src_values) const {
+    if (UseHalfUbWriteKernel(table_->dim, sizeof(value_type), false)) {
+      auto tiling = GetHalfUBValueMoveTiling(n, block_dim_, table_->dim,
+                                             sizeof(value_type), false);
+      read_with_half_ub_kernel<V><<<block_dim_, tiling.valid_ub_size, stream>>>(
+          tiling.former_num, tiling.former_core_move_num,
+          tiling.tail_core_move_num, tiling.num_tiles, table_->dim, values,
+          d_src_values);
+    } else {
+      auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
+                                       sizeof(value_type), false);
+      read_value_kernel<V><<<block_dim_, tiling.valid_ub_size, stream>>>(
+          tiling.former_num, tiling.former_core_move_num,
+          tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
+          table_->dim, values, n, d_src_values);
     }
   }
 
