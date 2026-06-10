@@ -1,4 +1,4 @@
-/* *
+/*
  * Copyright (c) 2022, NVIDIA CORPORATION.
  * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
  *
@@ -25,8 +25,8 @@
 
 #include <kernel_operator.h>
 #include <cstdint>
-#include "kernels/insert_or_assign_kernel/insert_or_assign_kernel.h"
 #include "find_utils.h"
+#include "kernels/insert_or_assign_kernel/insert_or_assign_kernel.h"
 #include "score_functor.h"
 #include "simt_api/asc_simt.h"
 #include "simt_vf_dispatcher.h"
@@ -337,7 +337,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_non_unique_kernel_vf(
     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
     uint64_t capacity, uint32_t bucket_max_size, uint32_t dim,
     __gm__ const K* keys, __gm__ const S* scores, S cur_score, uint64_t n,
-    __gm__ V* values, __gm__ V * __gm__ * d_dst_values, __gm__ bool* founds,
+    __gm__ V* values, __gm__ V* __gm__* d_dst_values, __gm__ bool* founds,
     uint32_t thread_all, uint64_t global_epoch, uint32_t block_index,
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
     uint64_t capacity_divisor_shift) {
@@ -429,9 +429,9 @@ __global__ __vector__ void find_or_insert_non_unique_kernel(
     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
     uint64_t capacity, uint32_t bucket_max_size, uint32_t dim,
     __gm__ const K* keys, __gm__ const S* scores, uint64_t n, __gm__ V* values,
-    __gm__ V * __gm__ * d_dst_values, __gm__ bool* founds,
-    uint64_t global_epoch, uint32_t max_bucket_shift,
-    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift) {
+    __gm__ V* __gm__* d_dst_values, __gm__ bool* founds, uint64_t global_epoch,
+    uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
+    uint64_t capacity_divisor_shift) {
   const uint32_t thread_all = THREAD_NUM_512 * GetBlockNum();
   uint64_t cur_score = (Strategy == npu::hkv::EvictStrategyInternal::kLru ||
                         Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
@@ -453,9 +453,9 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_or_insert_hybrid_kernel_vf(
     __gm__ int32_t* __restrict__ buckets_size, uint32_t bucket_max_size,
     uint32_t dim, __gm__ const K* __restrict__ keys,
     __gm__ V* __restrict__ values, __gm__ S* __restrict__ scores,
-    __gm__ V * __gm__ * __restrict__ d_dst_values,
-    __gm__ K * __gm__ * __restrict__ d_dst_keys, __gm__ bool* founds,
-    uint64_t n, uint64_t global_epoch, uint64_t cur_score, uint32_t blockIdx,
+    __gm__ V* __gm__* __restrict__ d_dst_values,
+    __gm__ K* __gm__* __restrict__ d_dst_keys, __gm__ bool* founds, uint64_t n,
+    uint64_t global_epoch, uint64_t cur_score, uint32_t blockIdx,
     uint64_t thread_all, uint32_t max_bucket_shift,
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
     uint64_t capacity) {
@@ -692,8 +692,8 @@ template <class K, class V, class S, int Strategy = -1>
 __global__ __vector__ void find_or_insert_hybrid_kernel(
     __gm__ Bucket<K, V, S>* buckets, __gm__ int32_t* buckets_size,
     uint32_t bucket_capacity, uint32_t dim, __gm__ const K* keys,
-    __gm__ V* values, __gm__ S* scores, __gm__ V * __gm__ * d_dst_values,
-    __gm__ K * __gm__ * d_dst_keys, __gm__ bool* founds, uint64_t n,
+    __gm__ V* values, __gm__ S* scores, __gm__ V* __gm__* d_dst_values,
+    __gm__ K* __gm__* d_dst_keys, __gm__ bool* founds, uint64_t n,
     uint64_t global_epoch, uint32_t max_bucket_shift,
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
     uint64_t capacity) {
@@ -716,7 +716,7 @@ __global__ __vector__ void read_or_write_value_kernel(
     uint32_t former_num, uint64_t former_core_move_num,
     uint64_t tail_core_move_num, uint32_t tile_size, uint32_t num_tiles,
     uint32_t dim, __gm__ K* keys, __gm__ V* param_values, uint64_t n,
-    __gm__ V * __gm__ * table_value_addrs, __gm__ K * __gm__ * d_dst_keys,
+    __gm__ V* __gm__* table_value_addrs, __gm__ K* __gm__* d_dst_keys,
     __gm__ bool* founds) {
   uint64_t cur_block_idx = GetBlockIdx();
   uint64_t core_start_idx = 0;
@@ -779,6 +779,82 @@ __global__ __vector__ void read_or_write_value_kernel(
 
       move_queue.FreeTensor(move_local);
     }
+  }
+
+  if constexpr (UNLOCK_KEY) {
+    const uint32_t thread_all = THREAD_NUM_2048 * GetBlockNum();
+
+    asc_vf_call<write_key_vf<K>>(dim3{THREAD_NUM_2048}, n, keys, d_dst_keys,
+                                 thread_all, GetBlockIdx());
+  }
+}
+
+template <class K, class V, bool UNLOCK_KEY>
+__global__ __vector__ void read_or_write_value_kernel_half_once(
+    uint32_t former_num, uint64_t former_core_move_num,
+    uint64_t tail_core_move_num, uint32_t num_tiles, uint32_t dim,
+    __gm__ K* keys, __gm__ V* param_values, uint64_t n,
+    __gm__ V* __gm__* table_value_addrs, __gm__ K* __gm__* d_dst_keys,
+    __gm__ bool* founds) {
+  uint64_t cur_block_idx = GetBlockIdx();
+  uint64_t core_start_idx = 0;
+  uint64_t core_move_count = 0;
+  if (cur_block_idx < former_num) {
+    core_start_idx = cur_block_idx * former_core_move_num;
+    core_move_count = former_core_move_num;
+  } else {
+    core_start_idx = former_num * former_core_move_num +
+                     (cur_block_idx - former_num) * tail_core_move_num;
+    core_move_count = tail_core_move_num;
+  }
+
+  TPipe pipe;
+  TQueBind<TPosition::VECIN, TPosition::VECOUT, 0> move_queue;
+  pipe.InitBuffer(move_queue, DOUBLE_BUFFER, num_tiles * dim * sizeof(V));
+
+  GlobalTensor<V> table_values_addr_gm;
+  GlobalTensor<V> param_values_gm;
+  LocalTensor<V> move_local;
+  DataCopyPadExtParams<V> pad_params{true, 0, 0, 0};
+  DataCopyExtParams copy_params{1, static_cast<uint32_t>(dim * sizeof(V)), 0, 0,
+                                0};
+
+  param_values_gm.SetGlobalBuffer(param_values);
+  uint64_t core_max_idx = core_start_idx + core_move_count;
+  for (uint64_t i = core_start_idx; i < core_max_idx; i += num_tiles) {
+    uint32_t move_in_num_once =
+        i + num_tiles > core_max_idx ? core_max_idx - i : num_tiles;
+    DataCopyExtParams copy_in_params{
+        1, static_cast<uint32_t>(move_in_num_once * dim * sizeof(V)), 0, 0, 0};
+
+    move_queue.AllocTensor<V>(move_local);
+    AscendC::DataCopyPad(move_local, param_values_gm[i * dim], copy_in_params,
+                         pad_params);
+    PipeBarrier<PIPE_ALL>();
+
+    for (uint32_t tile_idx = 0; tile_idx < move_in_num_once; tile_idx++) {
+      __gm__ V* table_value_addr = table_value_addrs[i + tile_idx];
+      if (table_value_addr == nullptr) {
+        continue;
+      }
+      table_values_addr_gm.SetGlobalBuffer(table_value_addr);
+
+      if (founds[i + tile_idx]) {
+        // 找到 key，从 table 中读取值返回给用户
+        DataCopyPad(move_local[tile_idx * dim], table_values_addr_gm,
+                    copy_params, pad_params);
+        move_queue.EnQue<V>(move_local);
+        move_queue.DeQue<V>(move_local);
+      } else {
+        // 没找到 key，把用户的值写入 table
+        DataCopyPad(table_values_addr_gm, move_local[tile_idx * dim],
+                    copy_params);
+        move_queue.EnQue<V>(move_local);
+        move_queue.DeQue<V>(move_local);
+      }
+    }
+    DataCopyPad(param_values_gm[i * dim], move_local, copy_in_params);
+    move_queue.FreeTensor(move_local);
   }
 
   if constexpr (UNLOCK_KEY) {
