@@ -2146,12 +2146,7 @@ class HashTable : public HashTableBase<K, V, S> {
           global_epoch_, table_->max_bucket_shift,
           table_->capacity_divisor_magic, table_->capacity_divisor_shift);
 
-      auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
-                                       sizeof(value_type), false);
-      read_value_kernel<V><<<block_dim_, tiling.valid_ub_size, stream>>>(
-          tiling.former_num, tiling.former_core_move_num,
-          tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-          table_->dim, values, n, d_src_values);
+      launch_read_kernel(n, stream, values, d_src_values);
     }
     NpuCheckError();
   }
@@ -2219,12 +2214,7 @@ class HashTable : public HashTableBase<K, V, S> {
           table_->capacity_divisor_magic, table_->capacity_divisor_shift,
           n_align_warp);
 
-      auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
-                                       sizeof(value_type), false);
-      read_value_kernel<V><<<block_dim_, tiling.valid_ub_size, stream>>>(
-          tiling.former_num, tiling.former_core_move_num,
-          tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
-          table_->dim, values, n, d_src_values);
+      launch_read_kernel(n, stream, values, d_src_values);
     }
     NpuCheckError();
   }
@@ -2558,14 +2548,8 @@ class HashTable : public HashTableBase<K, V, S> {
           d_table_, table_->buckets, keys, d_src_values, scores, offset, n,
           d_counter, table_->dim);
 
-      uint64_t valid_ub_size = GetMixedOpUbSize();
-      uint32_t max_tile_size =
-          valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
-      HKV_CHECK(max_tile_size != 0,
-                log_format("UB size %lu is too small.", valid_ub_size));
-      export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
-          block_dim_, table_->dim, max_tile_size, values, d_counter,
-          d_src_values);
+      launch_export_batch_value_kernel(n, stream, keys, values, d_src_values,
+                                       d_counter);
     }
     NpuCheckError();
   }
@@ -2672,14 +2656,8 @@ class HashTable : public HashTableBase<K, V, S> {
               d_table_, table_->buckets, pattern, threshold, keys, d_src_values,
               scores, offset, n, d_counter, table_->dim);
 
-      uint64_t valid_ub_size = GetMixedOpUbSize();
-      uint32_t max_tile_size =
-          valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
-      HKV_CHECK(max_tile_size != 0,
-                log_format("UB size %lu is too small.", valid_ub_size));
-      export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
-          block_dim_, table_->dim, max_tile_size, values, d_counter,
-          d_src_values);
+      launch_export_batch_value_kernel(n, stream, keys, values, d_src_values,
+                                       d_counter);
     }
     NpuCheckError();
   }
@@ -2746,14 +2724,8 @@ class HashTable : public HashTableBase<K, V, S> {
               pred, d_table_, table_->buckets, keys, d_src_values, scores,
               offset, n, d_counter, table_->dim);
 
-      uint64_t valid_ub_size = GetMixedOpUbSize();
-      uint32_t max_tile_size =
-          valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
-      HKV_CHECK(max_tile_size != 0,
-                log_format("UB size %lu is too small.", valid_ub_size));
-      export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
-          block_dim_, table_->dim, max_tile_size, values, d_counter,
-          d_src_values);
+      launch_export_batch_value_kernel(n, stream, keys, values, d_src_values,
+                                       d_counter);
     }
     NpuCheckError();
   }
@@ -2834,14 +2806,15 @@ class HashTable : public HashTableBase<K, V, S> {
     DeviceTensor out;
     out.init(out_data_type, {1});
 
-    EXEC_ACLNN_OP(aclnnReduceSum, input, dims, keep_dims, out_data_type, out);
-    auto ret = aclrtSynchronizeStream(stream);
-    NPU_CHECK(ret);
+    WorkspaceDeleter workspace_deleter;
+    EXEC_ACLNN_OP(workspace_deleter, stream, aclnnReduceSum, input, dims,
+                  keep_dims, out_data_type, out);
 
     int64_t h_total_size = 0;
-    ret = aclrtMemcpy(&h_total_size, sizeof(h_total_size), out.get_data(),
-                      out.get_data_size(), ACL_MEMCPY_DEVICE_TO_HOST);
-    NPU_CHECK(ret);
+    NPU_CHECK(aclrtMemcpyAsync(&h_total_size, sizeof(h_total_size),
+                               out.get_data(), out.get_data_size(),
+                               ACL_MEMCPY_DEVICE_TO_HOST, stream));
+    NPU_CHECK(aclrtSynchronizeStream(stream));
     return h_total_size;
   }
 
@@ -3105,14 +3078,8 @@ class HashTable : public HashTableBase<K, V, S> {
             d_table_, table_->buckets, d_keys, d_src_values, d_scores, i,
             batch_size, d_count, table_->dim);
 
-        uint64_t valid_ub_size = GetMixedOpUbSize();
-        uint32_t max_tile_size =
-            valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
-        HKV_CHECK(max_tile_size != 0,
-                  log_format("UB size %lu is too small.", valid_ub_size));
-        export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
-            block_dim_, table_->dim, max_tile_size, d_values, d_count,
-            d_src_values);
+        launch_export_batch_value_kernel(n, stream, d_keys, d_values,
+                                         d_src_values, d_count);
       }
       NpuCheckError();
       // Copy counter from device to host
@@ -3285,7 +3252,9 @@ class HashTable : public HashTableBase<K, V, S> {
     DeviceTensor out;
     out.init(out_data_type, {1});
 
-    EXEC_ACLNN_OP(aclnnReduceSum, input, dims, keep_dims, out_data_type, out);
+    WorkspaceDeleter workspace_deleter;
+    EXEC_ACLNN_OP(workspace_deleter, stream, aclnnReduceSum, input, dims,
+                  keep_dims, out_data_type, out);
 
     int64_t h_total_size = 0;
     NPU_CHECK(aclrtMemcpyAsync(&h_total_size, sizeof(h_total_size),
@@ -3391,6 +3360,32 @@ class HashTable : public HashTableBase<K, V, S> {
     return 1;
   }
 
+  inline void launch_export_batch_value_kernel(
+      const size_type n, aclrtStream stream, const key_type* keys,
+      value_type* values, value_type** d_src_values, size_type* count) const {
+    constexpr uint32_t ALIGN_SIZE = 32;  // ub地址32字节对齐
+    uint32_t tensor_size = table_->dim * sizeof(value_type);
+    bool is_align = (tensor_size % ALIGN_SIZE == 0);
+    uint64_t valid_ub_size = GetMixedOpUbSize();
+    bool is_ub_full = (valid_ub_size >= (tensor_size * DOUBLE_BUFFER));
+    bool choose_half_once = is_ub_full && is_align;
+    if (choose_half_once) {
+      uint32_t max_tile_size =
+          valid_ub_size / (DOUBLE_BUFFER * (sizeof(value_type) * table_->dim));
+      export_batch_value_kernel_half_once<V>
+          <<<block_dim_, valid_ub_size, stream>>>(block_dim_, table_->dim,
+                                                  max_tile_size, values, count,
+                                                  d_src_values);
+    } else {
+      uint32_t max_tile_size =
+          valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
+      HKV_CHECK(max_tile_size != 0,
+                log_format("UB size %lu is too small.", valid_ub_size));
+      export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
+          block_dim_, table_->dim, max_tile_size, values, count, d_src_values);
+    }
+  }
+
   template <bool UNLOCK_KEY>
   inline void launch_write_kernel(const size_type n, aclrtStream stream,
                                   const key_type* keys,
@@ -3443,6 +3438,26 @@ class HashTable : public HashTableBase<K, V, S> {
               table_->dim, const_cast<key_type*>(keys),
               const_cast<value_type*>(values), n, table_value_addrs, d_dst_keys,
               founds);
+    }
+  }
+
+  inline void launch_read_kernel(const size_type n, aclrtStream stream,
+                                 value_type* values,
+                                 value_type** d_src_values) const {
+    if (UseHalfUbWriteKernel(table_->dim, sizeof(value_type), true)) {
+      auto tiling = GetHalfUBValueMoveTiling(n, block_dim_, table_->dim,
+                                             sizeof(value_type), true);
+      read_with_half_ub_kernel<V><<<block_dim_, tiling.valid_ub_size, stream>>>(
+          tiling.former_num, tiling.former_core_move_num,
+          tiling.tail_core_move_num, tiling.num_tiles, table_->dim, values,
+          d_src_values);
+    } else {
+      auto tiling = GetValueMoveTiling(n, block_dim_, table_->dim,
+                                       sizeof(value_type), true);
+      read_value_kernel<V><<<block_dim_, tiling.valid_ub_size, stream>>>(
+          tiling.former_num, tiling.former_core_move_num,
+          tiling.tail_core_move_num, tiling.tile_size, tiling.num_tiles,
+          table_->dim, values, n, d_src_values);
     }
   }
 

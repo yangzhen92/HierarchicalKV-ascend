@@ -1,15 +1,15 @@
 # [HierarchicalKV-ascend](https://gitcode.com/Ascend/HierarchicalKV-ascend)
 
 <div align="center">
- 	  	 
+
 [![Zread](https://img.shields.io/badge/Zread-Ask_AI-_.svg?style=flat&color=0052D9&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/Ascend/HierarchicalKV-ascend)&nbsp;&nbsp;&nbsp;&nbsp;
 [![DeepWiki](https://img.shields.io/badge/DeepWiki-Ask_AI-_.svg?style=flat&color=0052D9&labelColor=000000&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCcr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==)](https://deepwiki.com/Ascend/HierarchicalKV-ascend)
- 	  	 
+
 </div>
 
 ## 前言
 
-本项目参考[NVIDIA HierarchicalKV(Beta)](https://github.com/NVIDIA-Merlin/HierarchicalKV.git)，实现了Ascend950系列架构下HKV HashTable的移植样例。
+本项目参考[NVIDIA HierarchicalKV(Beta)](https://github.com/NVIDIA-Merlin/HierarchicalKV)，实现了Ascend950系列架构下HKV HashTable的移植样例。
 
 ## 概述
 
@@ -20,8 +20,8 @@ HierarchicalKV-ascend（下称HKV）是一个基于昇腾平台，面向推荐�
 
 * 支持动态扩容
 * 支持可定制的淘汰策略
-* keys和values存储分离，keys仅存储于HBM
-* 支持使用HOST DDR存储values
+* keys和values存储分离，keys仅存储于DEVICE侧内存
+* 支持使用HOST侧内存存储values
 
 ## API说明
 
@@ -36,7 +36,9 @@ HierarchicalKV-ascend（下称HKV）是一个基于昇腾平台，面向推荐�
 
 当前已支持的接口列表及限制说明，请参考：[原生API支持度](doc/原生API支持度.md)
 
-接口参数说明与约束请参考[HierarchicalKV API](https://nvidia-merlin.github.io/HierarchicalKV/master/api/index.html)
+原生接口参数说明与约束请参考[HierarchicalKV API](https://nvidia-merlin.github.io/HierarchicalKV/master/api/index.html)
+
+> **参考基线：** 本项目API支持度对齐 [HierarchicalKV](https://github.com/NVIDIA-Merlin/HierarchicalKV) 的 master 分支 [`bbe2ee1`](https://github.com/NVIDIA-Merlin/HierarchicalKV/commit/bbe2ee1) 提交点。
 
 ### 淘汰策略
 
@@ -50,28 +52,30 @@ HierarchicalKV-ascend（下称HKV）是一个基于昇腾平台，面向推荐�
 | __Customized__ | 由调用者调用`插值类的API`，通过`scores`传入的分数                                                               |
 
 * __注意__：
-  - 插值类API：`insert_or_assign`, `insert_and_evict`, `find_or_insert`, `accum_or_assign`, `assign_scores`以及`find_or_insert`等等。
+  - 插值类API：`insert_or_assign`, `insert_and_evict`, `accum_or_assign`, `assign_scores`以及`find_or_insert`等等。
+  - `global_epoch`：由调用者通过`set_global_epoch`设置并作为插值类API的隐式输入，用于EpochLru和EpochLfu策略。
 
 ### 如何使用
 
 ```cpp
+#include "debug.h"
 #include "hkv_hashtable.h"
 
 using TableOptions = npu::hkv::HashTableOptions;
 using EvictStrategy = npu::hkv::EvictStrategy;
 
-int main(int args, char *argv[])
+int main(int argc, char *argv[])
 {
   // 0. 初始化环境
   aclInit(nullptr);
   NPU_CHECK(aclrtSetDevice(0));
 
-  using K = uint64_t;
-  using V = float;
-  using S = uint64_t;
+  using KeyType = uint64_t;
+  using ValueType = float;
+  using ScoreType = uint64_t;
 
   // 1. 指定淘汰策略，并创建表对象
-  using HKVTable = npu::hkv::HashTable<K, V, S, EvictStrategy::kLru>;
+  using HKVTable = npu::hkv::HashTable<KeyType, ValueType, ScoreType, EvictStrategy::kLru>;
   std::unique_ptr<HKVTable> table = std::make_unique<HKVTable>();
 
   // 2. 定义配置选项
@@ -100,8 +104,8 @@ HKV_NPU_ALLOC_CONF=buckets_mem_pool=<enable|disable>;page_table=<1g|2m>
 
 | 配置项 | 可选值 | 说明 |
 |--------|--------|------|
-| `buckets_mem_pool` | `enable` | 内存池模式：预分配整个内存池，使用大页（2M/1G），降低TLB Miss，提高性能，默认开启内存池，页表默认为2M |
-| `buckets_mem_pool` | `disable` | 非内存池模式：该模式与开源社区一致，即按需申请，该模式TLB Miss较高，性能不如内存池模式，同时capacity设置过大会存在大量内存碎片导致内存申请失败，建议开发者使用内存池模式 |
+| `buckets_mem_pool` | `enable` | 内存池模式：预分配整个内存池，使用大页（2M/1G），提升TLB（Translation Lookaside Buffer）命中率，提高性能，默认开启内存池，页表默认为2M |
+| `buckets_mem_pool` | `disable` | 非内存池模式：该模式与开源社区一致，即按需申请，该模式TLB命中率较低，性能不如内存池模式，同时capacity设置过大会存在大量内存碎片导致内存申请失败，建议开发者使用内存池模式 |
 | `page_table` | `2m` | 使用2MB大页（默认） |
 | `page_table` | `1g` | 使用1GB大页，适合超大规模场景 |
 
@@ -140,6 +144,8 @@ export HKV_TEST_DEVICE=3
 ├── benchmark          // 算子性能评估工程
 ├── doc                // 文档目录
 ├── include            // 头文件目录
+├── pre-commit         // 代码检查配置目录
+├── script             // 脚本目录（依赖检查等）
 ├── tests              // 单元测试与集成测试工程
 ├── CMakeLists.txt     // 顶层CMake构建文件
 ├── main.cpp           // 最小应用demo入口
@@ -155,7 +161,7 @@ export HKV_TEST_DEVICE=3
 ### 构建依赖
   - [CANN开发套件包](https://hiascend.com/document/redirect/CannCommunityInstSoftware)
 
-  - [googletest](https://gitcode.com/gh_mirrors/googl/googletest)
+依赖软件的版本号要求请参考：[dependencies.yaml](dependencies.yaml)
 
 ### 快速构建
 
@@ -183,11 +189,20 @@ cd HierarchicalKV-ascend
       ```
 
 #### 编译运行
-```bash
-bash run.sh -d [DEVICE_ID]
-```
-- DEVICE_ID：样例执行的npu的卡号，默认值为0。
-- **其他参数说明请使用`-h`获取帮助信息。**
+
+`run.sh`参数说明：
+
+| 参数 | 长参数 | 说明 |
+| ---- | ------ | ---- |
+| `-h` | `--help` | 打印帮助信息并退出 |
+| `-r` | `--run-mode MODE` | 指定编译方式，可选 `sim`（CPU仿真）/ `npu`（NPU上板），默认值为 `npu` |
+| `-i` | `--install-path PATH` | 指定CANN的安装路径，默认值为环境变量 `ASCEND_INSTALL_PATH` |
+| `-b` | `--build-type TYPE` | 指定构建类型，默认值为 `Release` |
+| `-p` | `--install-prefix PATH` | 指定安装路径，默认为当前路径下的 `out` 目录 |
+| `-d` | `--device DEVICE_ID` | 指定NPU卡号，默认值为 `0`。testcase、benchmark、demo将在指定芯片上执行 |
+| `-c` | `--compile-only` | 仅编译安装HKV工程，不执行用例 |
+| `-t` | `--enable-test SHIFT` | 指定测试开关，`0` 表示不执行testcase，`1` 表示执行testcase |
+| `-g` | `--skip-disabled-test` | 不执行gtest中 `DISABLED_` 用例 |
 
 示例：
 ```bash

@@ -300,30 +300,28 @@ class ScopedStream {
  * 因此如需【新增转换类型】，则应添加对应模板特例化的convert_type接口、release接口。
  * 此外，由于接口可能失败导致异常，为保证内存得到合理释放，新增TupleDeleter、WorkspaceDeleter类用于在各种场景下释放内存
  */
-#define EXEC_ACLNN_OP(aclnn_api, ...)                                   \
-  do {                                                                  \
-    uint64_t workspace_size = 0;                                        \
-    uint64_t* workspace_size_addr = &workspace_size;                    \
-    aclOpExecutor* executor = nullptr;                                  \
-    aclOpExecutor** executor_addr = &executor;                          \
-    auto converted_params =                                             \
-        convert_types(__VA_ARGS__, workspace_size_addr, executor_addr); \
-    TupleDeleter tuple_deleter(converted_params);                       \
-    auto workspace_status =                                             \
-        call(GET_WORKSPACE_SIZE_FUNC(aclnn_api), converted_params);     \
-    NPU_CHECK(workspace_status);                                        \
-    WorkspaceDeleter workspace_deleter;                                 \
-    void* workspace_addr = nullptr;                                     \
-    if (workspace_size != 0) {                                          \
-      auto aclnn_ret = aclrtMalloc(&workspace_addr, workspace_size,     \
-                                   ACL_MEM_MALLOC_HUGE_FIRST);          \
-      NPU_CHECK(aclnn_ret);                                             \
-      CHECK_MEM_ALLOC(workspace_addr);                                  \
-      workspace_deleter.set_workspace(workspace_addr);                  \
-    }                                                                   \
-    auto api_ret =                                                      \
-        aclnn_api(workspace_addr, workspace_size, executor, stream);    \
-    NPU_CHECK(api_ret);                                                 \
+#define EXEC_ACLNN_OP(workspace_deleter, stream, aclnn_api, ...)              \
+  do {                                                                        \
+    uint64_t workspace_size = 0;                                              \
+    uint64_t* workspace_size_addr = &workspace_size;                          \
+    aclOpExecutor* executor = nullptr;                                        \
+    aclOpExecutor** executor_addr = &executor;                                \
+    auto converted_params =                                                   \
+        convert_types(__VA_ARGS__, workspace_size_addr, executor_addr);       \
+    TupleDeleter tuple_deleter(converted_params);                             \
+    auto workspace_status =                                                   \
+        call(GET_WORKSPACE_SIZE_FUNC(aclnn_api), converted_params);           \
+    NPU_CHECK(workspace_status);                                              \
+    void* workspace = nullptr;                                                \
+    if (workspace_size != 0) {                                                \
+      auto aclnn_ret =                                                        \
+          aclrtMalloc(&workspace, workspace_size, ACL_MEM_MALLOC_HUGE_FIRST); \
+      NPU_CHECK(aclnn_ret);                                                   \
+      CHECK_MEM_ALLOC(workspace);                                             \
+      workspace_deleter.set_workspace(workspace);                             \
+    }                                                                         \
+    auto api_ret = aclnn_api(workspace, workspace_size, executor, stream);    \
+    NPU_CHECK(api_ret);                                                       \
   } while (false)
 
 }  // namespace hkv

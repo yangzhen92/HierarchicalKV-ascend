@@ -167,7 +167,7 @@ template <class K, class V, class S>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_kernel_hybrid_vf(
     __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
-    __gm__ K* d_key, __gm__ V * __gm__ * dst_val, __gm__ S* d_score,
+    __gm__ K* d_key, __gm__ V* __gm__* dst_val, __gm__ S* d_score,
     const size_t offset, const size_t search_length,
     const uint64_t total_thread_num, __gm__ size_t* d_dump_counter,
     __ubuf__ uint32_t* block_acc, __ubuf__ uint32_t* global_acc,
@@ -224,7 +224,7 @@ LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_kernel_hybrid_vf(
 template <class K, class V, class S>
 __global__ __vector__ void dump_kernel_hybrid(
     __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
-    __gm__ K* keys, __gm__ V * __gm__ * src_vals, __gm__ S* scores,
+    __gm__ K* keys, __gm__ V* __gm__* src_vals, __gm__ S* scores,
     const size_t offset, const size_t search_length,
     __gm__ size_t* dump_counter, uint32_t dim) {
   const uint64_t total_thread_num = THREAD_NUM_2048 * GetBlockNum();
@@ -256,7 +256,7 @@ __global__ __vector__ void dump_kernel_hybrid(
 template <class V>
 __global__ __vector__ void export_batch_value_kernel(
     uint32_t block_dim, uint32_t dim, uint32_t max_tile_size, __gm__ V* values,
-    __gm__ size_t* dump_counter, __gm__ V * __gm__ * d_src_values) {
+    __gm__ size_t* dump_counter, __gm__ V* __gm__* d_src_values) {
   size_t n = *dump_counter;
   uint64_t tail_core_move_num = n / block_dim;
   uint64_t former_core_move_num = tail_core_move_num + 1;
@@ -314,6 +314,63 @@ __global__ __vector__ void export_batch_value_kernel(
 
       move_queue.FreeTensor(move_local);
     }
+  }
+}
+
+template <class V>
+__global__ __vector__ void export_batch_value_kernel_half_once(
+    uint32_t block_dim, uint32_t dim, uint32_t max_tile_size, __gm__ V* values,
+    __gm__ size_t* dump_counter, __gm__ V* __gm__* d_src_values) {
+  size_t n = *dump_counter;
+  uint64_t tail_core_move_num = n / block_dim;
+  uint64_t former_core_move_num = tail_core_move_num + 1;
+  uint32_t former_num = n - tail_core_move_num * block_dim;
+  uint32_t num_tiles = max_tile_size;
+
+  uint64_t cur_block_idx = GetBlockIdx();
+  uint64_t core_start_idx = 0;
+  uint64_t core_move_count = 0;
+  if (cur_block_idx < former_num) {
+    core_start_idx = cur_block_idx * former_core_move_num;
+    core_move_count = former_core_move_num;
+  } else {
+    core_start_idx = former_num * former_core_move_num +
+                     (cur_block_idx - former_num) * tail_core_move_num;
+    core_move_count = tail_core_move_num;
+  }
+
+  TPipe pipe;
+  TQueBind<TPosition::VECIN, TPosition::VECOUT, 0> move_queue;
+  pipe.InitBuffer(move_queue, DOUBLE_BUFFER, num_tiles * sizeof(V) * dim);
+  GlobalTensor<V> src_values_gm;
+  GlobalTensor<V> dst_values_gm;
+  LocalTensor<V> move_local;
+  DataCopyPadExtParams<V> pad_params{true, 0, 0, 0};
+
+  dst_values_gm.SetGlobalBuffer(values);
+  DataCopyExtParams copy_in_params{1, static_cast<uint32_t>(sizeof(V) * dim), 0,
+                                   0, 0};
+  uint64_t core_max_idx = core_start_idx + core_move_count;
+  for (uint64_t i = core_start_idx; i < core_max_idx; i += num_tiles) {
+    uint32_t move_in_num_once =
+        i + num_tiles > core_max_idx ? core_max_idx - i : num_tiles;
+    DataCopyExtParams copy_params{
+        1, static_cast<uint32_t>(move_in_num_once * sizeof(V) * dim), 0, 0, 0};
+    move_queue.AllocTensor<V>(move_local);
+    for (uint32_t tile_idx = 0; tile_idx < move_in_num_once; tile_idx++) {
+      __gm__ V* src_value = d_src_values[i + tile_idx];
+      if (src_value == nullptr) {
+        continue;
+      }
+      src_values_gm.SetGlobalBuffer(src_value);
+
+      DataCopyPad(move_local[tile_idx * dim], src_values_gm, copy_in_params,
+                  pad_params);
+      move_queue.EnQue<V>(move_local);
+      move_queue.DeQue<V>(move_local);
+    }
+    DataCopyPad(dst_values_gm[i * dim], move_local, copy_params);
+    move_queue.FreeTensor(move_local);
   }
 }
 
