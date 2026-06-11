@@ -36,6 +36,8 @@ HierarchicalKV-ascend（下称HKV）是一个基于昇腾平台，面向推荐�
 
 当前已支持的接口列表及限制说明，请参考：[原生API支持度](doc/原生API支持度.md)
 
+Ascend扩展接口说明，请参考：[Ascend扩展API](doc/Ascend扩展API.md)
+
 原生接口参数说明与约束请参考[HierarchicalKV API](https://nvidia-merlin.github.io/HierarchicalKV/master/api/index.html)
 
 > **参考基线：** 本项目API支持度对齐 [HierarchicalKV](https://github.com/NVIDIA-Merlin/HierarchicalKV) 的 master 分支 [`bbe2ee1`](https://github.com/NVIDIA-Merlin/HierarchicalKV/commit/bbe2ee1) 提交点。
