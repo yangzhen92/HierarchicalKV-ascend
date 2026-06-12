@@ -23,7 +23,7 @@ bool is_pure_hbm_mode() const noexcept;
 
 ### 注意事项
 
-- 该接口反映的是当前 HashTable 的 value 存储状态，不是固定的初始化参数。执行插入、扩容、加载、rehash 或其他可能改变存储布局的操作后，返回值可能发生变化。
+- 该接口反映的是当前 HashTable 的 value 存储状态，不是固定的初始化参数。reserve、insert_or_assign、find_or_insert、load等可能触发扩容的接口执行后建议重新调用。
 - 该接口只描述 value 存储是否全部位于 HBM，不表示 key、score 或其他元数据的存储位置。
 
 ### 示例
