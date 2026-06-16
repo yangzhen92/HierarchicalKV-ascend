@@ -61,74 +61,65 @@ public:
   }
 
   __simt_callee__ inline void all_assigned() {
-    *reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR) = 1;
+    *reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR) = FINISH_FLAG;
   }
 
   __aicore__ inline void run(const uint32_t &value_size) {
-    uint32_t scalar_process_value = 0;
     int value_size_aligned = (value_size + UB_ALIGN_SIZE - 1) / UB_ALIGN_SIZE * UB_ALIGN_SIZE;
-    constexpr uint32_t issue_queue_limited = 32; // 一次最多消费32个任务
-    // 1次能消费多少value
-    uint32_t value_batch_size = DATA_BUFFER_SZ / (value_size_aligned);
-    value_batch_size = min(value_batch_size, issue_queue_limited);
-    uint32_t curr_simt_wr_pos = 0;
+    uint32_t max_proc_batch = DATA_BUFFER_SZ / (value_size_aligned);
+    max_proc_batch = min(max_proc_batch, queue_limited);
 
-    __ubuf__ volatile uint32_t* simt_wr_pos = reinterpret_cast<__ubuf__ volatile uint32_t*>(SIMT_ASSIGN_ID_ADDR);
-    __ubuf__ volatile uint32_t* scalar_read_pos = reinterpret_cast<__ubuf__ volatile uint32_t*>(MTE_FINISH_ID_ADDR);
-    __ubuf__ volatile uint32_t* work_done = reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR);
-    __ubuf__ volatile uint64_t* ring_buffer_in_value_ptr = reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_IN_ADDR_QUEUE_ADDR);
-    __ubuf__ volatile uint64_t* ring_buffer_out_value_ptr = reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_OUT_ADDR_QUEUE_ADDR);
-
+    __ubuf__ volatile uint32_t* simt_assign_id_addr = reinterpret_cast<__ubuf__ volatile uint32_t*>(SIMT_ASSIGN_ID_ADDR);
+    __ubuf__ volatile uint32_t* mte_finish_id_addr = reinterpret_cast<__ubuf__ volatile uint32_t*>(MTE_FINISH_ID_ADDR);
+    __ubuf__ volatile uint32_t* task_finish_flag_addr = reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR);
+    __ubuf__ volatile uint64_t* ring_buffer_in_addr_queue_addr = reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_IN_ADDR_QUEUE_ADDR);
+    __ubuf__ volatile uint64_t* ring_buffer_out_addr_queue_addr = reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_OUT_ADDR_QUEUE_ADDR);
+    uint32_t mte_finish_id = 0;
+    uint32_t simt_assign_id = 0;
     while (true) {
-      // 获取simt生产计数
-      curr_simt_wr_pos = *simt_wr_pos;
-      // 是否已经消费完成？
-      if (curr_simt_wr_pos == scalar_process_value) {
-        // 消费完成 && 任务全完成 => 结束
-        if (*work_done == 1) {
+      simt_assign_id = *simt_assign_id_addr;
+      if (simt_assign_id == mte_finish_id) {
+        if (*task_finish_flag_addr == FINISH_FLAG) {
           return;
-        } else { // 消费完成 && 任务未完成 => 继续等待
+        } else {
           continue;
         }
       }
 
-      // 计算一次性能消费的数量
-      uint32_t curr_batch_size = min(value_batch_size, curr_simt_wr_pos - scalar_process_value);
-      // 消费
-      for (uint32_t i = 0; i < curr_batch_size; ++i) {
-        uint32_t slot_pos = (scalar_process_value + i) & RING_BUFFER_MASK;
+      uint32_t cur_batch = min(max_proc_batch, simt_assign_id - mte_finish_id);
+      for (uint32_t i = 0; i < cur_batch; ++i) {
+        uint32_t slot_pos = (mte_finish_id + i) & RING_BUFFER_MASK;
         copy_gm_to_ubuf_align_v2(
-          (__ubuf__ uint8_t*)(DATA_BUFFER_START_ADDR + i * value_size_aligned),
-          (__gm__ uint8_t*)(ring_buffer_in_value_ptr[slot_pos]),
+          reinterpret_cast<__ubuf__ uint8_t*>(DATA_BUFFER_START_ADDR + i * value_size_aligned),
+          reinterpret_cast<__gm__ uint8_t*>(ring_buffer_in_addr_queue_addr[slot_pos]),
           0, 1, value_size, 0, 0, 0, 0, 0, 0);
       }
 
-      set_flag(PIPE_MTE2, PIPE_MTE3, (event_t)0);
-      wait_flag(PIPE_MTE2, PIPE_MTE3, (event_t)0);
+      set_flag(PIPE_MTE2, PIPE_MTE3, 0);
+      wait_flag(PIPE_MTE2, PIPE_MTE3, 0);
 
-      for (uint32_t i = 0; i < curr_batch_size; ++i) {
-        uint32_t slot_pos = (scalar_process_value + i) & RING_BUFFER_MASK;
+      for (uint32_t i = 0; i < cur_batch; ++i) {
+        uint32_t slot_pos = (mte_finish_id + i) & RING_BUFFER_MASK;
         copy_ubuf_to_gm_align_v2(
-            (__gm__ uint8_t*)(ring_buffer_out_value_ptr[slot_pos]),
-            (__ubuf__ uint8_t*)(DATA_BUFFER_START_ADDR + i * value_size_aligned),
-            0, 1, value_size,
-            0, 0, 0);
+            reinterpret_cast<__gm__ uint8_t*>(ring_buffer_out_addr_queue_addr[slot_pos]),
+            reinterpret_cast<__ubuf__ uint8_t*>(DATA_BUFFER_START_ADDR + i * value_size_aligned),
+            0, 1, value_size, 0, 0, 0);
       }
 
-      set_flag(PIPE_MTE3, PIPE_S, (event_t)0);
-      wait_flag(PIPE_MTE3, PIPE_S, (event_t)0);
+      set_flag(PIPE_MTE3, PIPE_S, 0);
+      wait_flag(PIPE_MTE3, PIPE_S, 0);
 
       // 消费完成，累加消费进展
-      scalar_process_value += curr_batch_size;
-      *scalar_read_pos = scalar_process_value;
-
+      mte_finish_id += cur_batch;
+      *mte_finish_id_addr = mte_finish_id;
     }
   }
 
 protected:
-  // 用于位计算代替取余
+  const uint32_t queue_limited = 32;  // 一次最多处理32个任务
+  const uint32_t FINISH_FLAG = 1;  // 任务完成标志1，未完成0
   const uint32_t RING_BUFFER_MASK = RING_BUFFER_SZ - 1;
-  const uint32_t DATA_BUFFER_SZ = 128 * 1024;
+  const uint32_t DATA_BUFFER_SZ = 128 * 1024;  // 默认缓冲区大小128KB，可根据实际情况调整
 
   // 队列数据
   const uint32_t RING_BUFFER_IN_ADDR_QUEUE_ADDR = 0;
@@ -174,10 +165,7 @@ public:
   template <bool all = false>
   __simt_callee__ inline void drain(const uint32_t &new_task_end_id) {
     while (true) {
-      // 正常来说，512个位置一定是够所有thread的任务数的，这里会超过512，肯定是因为MTE消费速度跟不上生产速度
-      // warp来到了第二轮下发任务，发现第一轮的任务还没结束，因此要轮询确认任务是否完成
       uint32_t finish_id = *reinterpret_cast<__ubuf__ volatile uint32_t*>(FINISH_ID_ADDR);
-      // 获取已完成任务数（KEY_OUTPUT_WR_POS_PTR），完成任务数+队列长度512 >= 当前任务终数，说明当前可以启动任务
       if constexpr (all) {
         if (new_task_end_id == finish_id) {
           break;
@@ -187,36 +175,27 @@ public:
           break;
         }
       }
-      // 剩余队列长度不足，因此等待MTE消费完成，启动写key任务，尝试释放队列；这里释放队列本该由MTE消费者负责，但是任务由两段，一是MTE搬运以后，二是SIMT写出key，因此最终释放由SIMT负责
+
       uint32_t mte_finish_id = *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTETaskQueue<RING_BUFFER_SZ>::MTE_FINISH_ID_ADDR);
       uint32_t assign_id = *reinterpret_cast<__ubuf__ volatile uint32_t*>(ASSIGN_ID_ADDR);
-      // 获取MTE消费进度（SCALAR_READ_POS_PTR），写key任务数量（KEY_OUTPUT_RD_POS_PTR），只有当MTE消费进度大于写key任务数量，才能触发写key任务
       if (assign_id < mte_finish_id) {
-        // MTE消费进度已经大于任务完成数，说明可以启动写key任务
-        uint32_t output_key_size = min((uint32_t)32, mte_finish_id - assign_id);
+        uint32_t cur_batch = min(MTETaskQueue<RING_BUFFER_SZ>::queue_limited, mte_finish_id - assign_id);
         uint32_t my_lane_id = laneid();
-        uint32_t prev_key_output_rd_pos = 0;
-        // 尝试占领释放队列
+        uint32_t cur_assign_id = 0;
         if (my_lane_id == 0) {
-          prev_key_output_rd_pos = atomicCAS(reinterpret_cast<__ubuf__ uint32_t*>(ASSIGN_ID_ADDR), assign_id, assign_id + output_key_size);
+          cur_assign_id = atomicCAS(reinterpret_cast<__ubuf__ uint32_t*>(ASSIGN_ID_ADDR), assign_id, assign_id + cur_batch);
         }
-        prev_key_output_rd_pos = __shfl(prev_key_output_rd_pos, 0);
-        // 抢占成功，启动写key任务，由当前warp写key并释放队列；抢占失败，由其他warp释放，并重新进入循环
-        if (prev_key_output_rd_pos == assign_id) {
-          if (my_lane_id < output_key_size) {
+        cur_assign_id = __shfl(cur_assign_id, 0);
+        if (cur_assign_id == assign_id) {
+          if (my_lane_id < cur_batch) {
             uint32_t slot_pos = (assign_id + my_lane_id) & MTETaskQueue<RING_BUFFER_SZ>::RING_BUFFER_MASK;
-            *(__gm__ volatile uint64_t*)(((__ubuf__ uint64_t*)RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR)[slot_pos]) =
-                ((__ubuf__ uint64_t*)(RING_BUFFER_KEY_ADDR))[slot_pos];
+            *reinterpret_cast<__gm__ volatile uint64_t*>(reinterpret_cast<__ubuf__ uint64_t*>(RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR)[slot_pos]) =
+                reinterpret_cast<__ubuf__ uint64_t*>(RING_BUFFER_KEY_ADDR)[slot_pos];
           }
           __threadfence();
-          // 写key任务完成，释放空间，累加任务完成数量
           if (my_lane_id == 0) {
             while (true) {
-              // 这里会有多个warp分别释放不同部分队列的场景，后来的warp可能先完成了写key任务，
-              // 但是后来的warp不能立刻释放，因为队列buffer是严格顺序的，后来的先释放会导致前面还在释放中的buffer使用错乱，
-              // 因此这里需要循环等待，按warp顺序释放队列
-              if (atomicCAS((__ubuf__ uint32_t*)FINISH_ID_ADDR, prev_key_output_rd_pos, assign_id + output_key_size) == prev_key_output_rd_pos) {
-                // 释放完后继续申请空间
+              if (atomicCAS(reinterpret_cast<__ubuf__ uint32_t*>(FINISH_ID_ADDR), cur_assign_id, assign_id + cur_batch) == cur_assign_id) {
                 break;
               }
             }
