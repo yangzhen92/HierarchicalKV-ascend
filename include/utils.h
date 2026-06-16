@@ -33,6 +33,7 @@
 
 namespace npu {
 namespace hkv {
+constexpr uint32_t UB_ALIGN_SIZE = 32;
 constexpr uint32_t THREAD_NUM_512 = 512;
 constexpr uint32_t THREAD_NUM_1024 = 1024;
 constexpr uint32_t THREAD_NUM_2048 = 2048;

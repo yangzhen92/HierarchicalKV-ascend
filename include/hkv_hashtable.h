@@ -1117,31 +1117,17 @@ class HashTable : public HashTableBase<K, V, S> {
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     if (is_fast_mode()) {
       if (unique_key) {
-        if (value_move_opt_.is_large_size) {
-          insert_or_assign_kernel_with_thread_1024<K, V, S, evict_strategy_>
-              <<<block_dim_, 0, stream>>>(
-                  static_cast<void*>(table_->buckets), table_->buckets_size,
-                  table_->capacity, table_->bucket_max_size,
-                  value_move_opt_.dim, const_cast<key_type*>(keys),
-                  const_cast<value_type*>(values),
-                  const_cast<score_type*>(scores), n, global_epoch_,
-                  value_move_opt_.size, table_->max_bucket_shift,
-                  table_->capacity_divisor_magic,
-                  table_->capacity_divisor_shift, n_align_warp,
-                  value_move_opt_.cg_size);
-        } else {
-          insert_or_assign_kernel<K, V, S, evict_strategy_>
-              <<<block_dim_, 0, stream>>>(
-                  static_cast<void*>(table_->buckets), table_->buckets_size,
-                  table_->capacity, table_->bucket_max_size,
-                  value_move_opt_.dim, const_cast<key_type*>(keys),
-                  const_cast<value_type*>(values),
-                  const_cast<score_type*>(scores), n, global_epoch_,
-                  value_move_opt_.size, table_->max_bucket_shift,
-                  table_->capacity_divisor_magic,
-                  table_->capacity_divisor_shift, n_align_warp,
-                  value_move_opt_.cg_size);
-        }
+        insert_or_assign_kernel<K, V, S, evict_strategy_>
+            <<<block_dim_, GetMixedOpUbSize(), stream>>>(
+                static_cast<void*>(table_->buckets), table_->buckets_size,
+                table_->capacity, table_->bucket_max_size,
+                value_move_opt_.dim, const_cast<key_type*>(keys),
+                const_cast<value_type*>(values),
+                const_cast<score_type*>(scores), n, global_epoch_,
+                value_move_opt_.size, table_->max_bucket_shift,
+                table_->capacity_divisor_magic,
+                table_->capacity_divisor_shift, n_align_warp,
+                value_move_opt_.cg_size);
       } else {
         upsert_kernel<K, V, S, true, evict_strategy_>
             <<<block_dim_, 0, stream>>>(
