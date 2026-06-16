@@ -64,12 +64,12 @@ public:
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR) = 1;
   }
 
-  __aicore__ inline void run(const uint32_t &value_dim_size) {
+  __aicore__ inline void run(const uint32_t &value_size) {
     uint32_t scalar_process_value = 0;
-    int value_dim_size_aligned = (value_dim_size + UB_ALIGN_SIZE - 1) / UB_ALIGN_SIZE * UB_ALIGN_SIZE;
+    int value_size_aligned = (value_size + UB_ALIGN_SIZE - 1) / UB_ALIGN_SIZE * UB_ALIGN_SIZE;
     constexpr uint32_t issue_queue_limited = 32; // 一次最多消费32个任务
     // 1次能消费多少value
-    uint32_t value_batch_size = DATA_BUFFER_SZ / (value_dim_size_aligned);
+    uint32_t value_batch_size = DATA_BUFFER_SZ / (value_size_aligned);
     value_batch_size = min(value_batch_size, issue_queue_limited);
     uint32_t curr_simt_wr_pos = 0;
 
@@ -98,9 +98,9 @@ public:
       for (uint32_t i = 0; i < curr_batch_size; ++i) {
         uint32_t slot_pos = (scalar_process_value + i) & RING_BUFFER_MASK;
         copy_gm_to_ubuf_align_v2(
-          (__ubuf__ uint8_t*)(DATA_BUFFER_START_ADDR + i * value_dim_size_aligned),
+          (__ubuf__ uint8_t*)(DATA_BUFFER_START_ADDR + i * value_size_aligned),
           (__gm__ uint8_t*)(ring_buffer_in_value_ptr[slot_pos]),
-          0, 1, value_dim_size, 0, 0, 0, 0, 0, 0);
+          0, 1, value_size, 0, 0, 0, 0, 0, 0);
       }
 
       set_flag(PIPE_MTE2, PIPE_MTE3, (event_t)0);
@@ -110,8 +110,8 @@ public:
         uint32_t slot_pos = (scalar_process_value + i) & RING_BUFFER_MASK;
         copy_ubuf_to_gm_align_v2(
             (__gm__ uint8_t*)(ring_buffer_out_value_ptr[slot_pos]),
-            (__ubuf__ uint8_t*)(DATA_BUFFER_START_ADDR + i * value_dim_size_aligned),
-            0, 1, value_dim_size,
+            (__ubuf__ uint8_t*)(DATA_BUFFER_START_ADDR + i * value_size_aligned),
+            0, 1, value_size,
             0, 0, 0);
       }
 
@@ -810,7 +810,7 @@ __global__ __vector__ void insert_or_assign_kernel(
     __gm__ void* buckets, __gm__ int* buckets_size, uint64_t capacity,
     uint32_t bucket_max_size, uint32_t dim, __gm__ void* keys,
     __gm__ void* values, __gm__ void* scores, uint64_t n, uint64_t global_epoch,
-    uint32_t value_size, uint32_t max_bucket_shift,
+    uint32_t value_ele_size, uint32_t max_bucket_shift,
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
     uint64_t n_align_warp, int32_t group_size) {
   KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIV_ONLY);
@@ -834,7 +834,7 @@ __global__ __vector__ void insert_or_assign_kernel(
     DISPATCH_GROUP_SIZE(
         group_size,
         DISPATCH_VALUE_SIZE(
-            value_size,
+            value_ele_size,
             DISPATCH_EVICT_STRATEGY(
                 Strategy,
                 (Simt::VF_CALL<insert_or_assign_kernel_with_digest_vf<
@@ -845,8 +845,8 @@ __global__ __vector__ void insert_or_assign_kernel(
                     max_bucket_shift, capacity_divisor_magic,
                     capacity_divisor_shift, n_align_warp)))));
 
-    uint32_t value_dim_size = dim * value_size;
-    upsert_task_queue.run(value_dim_size);
+    uint32_t value_size = dim * value_ele_size;
+    upsert_task_queue.run(value_size);
   } // ASCEND_IS_AIV
 }
 
