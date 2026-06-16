@@ -56,24 +56,26 @@ struct MTETaskMem {
 template <uint32_t RING_BUFFER_SZ = 512>
 class MTETaskQueue {
 public:
-  __simt_callee__ inline static void init() {
+  __aicore__ MTETaskQueue() {}
+
+  __aicore__ inline void init() {
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTETaskMem<RING_BUFFER_SZ>::GLOBAL_ID_ADDR) = 0;
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTETaskMem<RING_BUFFER_SZ>::MTE_FINISH_ID_ADDR) = 0;
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTETaskMem<RING_BUFFER_SZ>::SIMT_ASSIGN_ID_ADDR) = 0;
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTETaskMem<RING_BUFFER_SZ>::TASK_FINISH_FLAG_ADDR) = 0;
   }
 
-  __simt_callee__ inline static uint32_t apply_ID(const uint32_t &warp_task_count) {
+  __simt_callee__ inline uint32_t apply_ID(const uint32_t &warp_task_count) {
     return asc_atomic_add(reinterpret_cast<__ubuf__ uint32_t *>(MTETaskMem<RING_BUFFER_SZ>::GLOBAL_ID_ADDR), warp_task_count);
   }
 
-  __simt_callee__ inline static void fill_task_info(uint32_t task_id, const uint64_t &in_ddr, const uint64_t &out_ddr) {
+  __simt_callee__ inline void fill_task_info(uint32_t task_id, const uint64_t &in_ddr, const uint64_t &out_ddr) {
     task_id &= MTETaskMem<RING_BUFFER_SZ>::RING_BUFFER_MASK;
     reinterpret_cast<__ubuf__ volatile uint64_t*>(MTETaskMem<RING_BUFFER_SZ>::RING_BUFFER_IN_ADDR_QUEUE_ADDR)[task_id] = in_ddr;
     reinterpret_cast<__ubuf__ volatile uint64_t*>(MTETaskMem<RING_BUFFER_SZ>::RING_BUFFER_OUT_ADDR_QUEUE_ADDR)[task_id] = out_ddr;
   }
 
-  __simt_callee__ inline static void assign_task(const uint32_t &new_task_start_id, const uint32_t &new_task_end_id) {
+  __simt_callee__ inline void assign_task(const uint32_t &new_task_start_id, const uint32_t &new_task_end_id) {
     while (true) {
       // 任务数据填充完成，下发任务
       if (atomicCAS(reinterpret_cast<__ubuf__ uint32_t*>(MTETaskMem<RING_BUFFER_SZ>::SIMT_ASSIGN_ID_ADDR), new_task_start_id, new_task_end_id) == new_task_start_id) {
@@ -82,15 +84,15 @@ public:
     }
   }
 
-  __simt_callee__ inline static void all_assigned() {
+  __simt_callee__ inline void all_assigned() {
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTETaskMem<RING_BUFFER_SZ>::TASK_FINISH_FLAG_ADDR) = 1;
   }
 
-  __simt_callee__ inline static uint32_t get_last_task_id() {
+  __simt_callee__ inline uint32_t get_last_task_id() {
     return *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTETaskMem<RING_BUFFER_SZ>::SIMT_ASSIGN_ID_ADDR);
   }
 
-  __aicore__ inline static void run(const uint32_t &value_dim_size) {
+  __aicore__ inline void run(const uint32_t &value_dim_size) {
     uint32_t scalar_process_value = 0;
     int value_dim_size_aligned = (value_dim_size + UB_ALIGN_SIZE - 1) / UB_ALIGN_SIZE * UB_ALIGN_SIZE;
     constexpr uint32_t issue_queue_limited = 32; // 一次最多消费32个任务
@@ -156,12 +158,14 @@ public:
 template <uint32_t RING_BUFFER_SZ = 512>
 class KeyTaskQueue {
 public:
-  __simt_callee__ inline static void init() {
+  __aicore__ KeyTaskQueue() {}
+
+  __aicore__ inline void init() {
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(ASSIGN_ID_ADDR) = 0;
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(FINISH_ID_ADDR) = 0;
   }
 
-  __simt_callee__ inline static void fill_task_info(uint32_t task_id, const uint64_t &key, const uint64_t &out_ddr) {
+  __simt_callee__ inline void fill_task_info(uint32_t task_id, const uint64_t &key, const uint64_t &out_ddr) {
     task_id &= MTETaskMem<RING_BUFFER_SZ>::RING_BUFFER_MASK;
     reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_KEY_ADDR)[task_id] = key;
     reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR)[task_id] = out_ddr;
@@ -169,7 +173,7 @@ public:
 
 
   template <bool all = false>
-  __simt_callee__ inline static void drain(const uint32_t &new_task_end_id) {
+  __simt_callee__ inline void drain(const uint32_t &new_task_end_id) {
     while (true) {
       // 正常来说，512个位置一定是够所有thread的任务数的，这里会超过512，肯定是因为MTE消费速度跟不上生产速度
       // warp来到了第二轮下发任务，发现第一轮的任务还没结束，因此要轮询确认任务是否完成
@@ -223,7 +227,6 @@ public:
     } // while(true)
   }
 
-
 private:
   // 队列数据
   static constexpr uint32_t RING_BUFFER_KEY_ADDR = MTETaskMem<RING_BUFFER_SZ>::DATA_BUFFER_END_ADDR;
@@ -244,7 +247,7 @@ template <typename K = uint64_t, typename V = float, typename S = uint64_t,
           int32_t EVICT_GROUP_SIZE = 16>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM) inline void insert_or_assign_kernel_with_digest_vf(
-    GM_ADDR buckets_addr_gm, GM_ADDR buckets_size_addr_gm, uint64_t capacity,
+    MTETaskQueue<THREAD_NUM> mtetask_queue, KeyTaskQueue<THREAD_NUM> keytask_queue, GM_ADDR buckets_addr_gm, GM_ADDR buckets_size_addr_gm, uint64_t capacity,
     uint32_t bucket_max_size, uint32_t dim, GM_ADDR keys_addr_gm,
     GM_ADDR values_addr_gm, GM_ADDR scores_gm, S cur_score, uint64_t n,
     uint32_t thread_all, uint64_t global_epoch, uint32_t block_index,
@@ -499,12 +502,12 @@ LAUNCH_BOUND(THREAD_NUM) inline void insert_or_assign_kernel_with_digest_vf(
     uint32_t new_simt_alloc_pos = 0;
     // 下发任务，由于多个warp并行，因此使用cas确保任务下发安全
     if (laneid() == 0) {
-      curr_simt_alloc_pos = MTETaskQueue<THREAD_NUM_512>::apply_ID(warp_write_count);
+      curr_simt_alloc_pos = mtetask_queue.apply_ID(warp_write_count);
     }
     curr_simt_alloc_pos = __shfl(curr_simt_alloc_pos, 0);
     new_simt_alloc_pos = curr_simt_alloc_pos + warp_write_count;
 
-    KeyTaskQueue<THREAD_NUM_512>::drain(new_simt_alloc_pos);
+    keytask_queue.drain(new_simt_alloc_pos);
 
     // 前面已经明确由足够队列空间存放任务
     // 填充各任务数据
@@ -512,14 +515,14 @@ LAUNCH_BOUND(THREAD_NUM) inline void insert_or_assign_kernel_with_digest_vf(
       uint32_t offset_in_warp = __popc(write_mask & lanemask_lt());
       uint32_t my_slot_id = curr_simt_alloc_pos + offset_in_warp;
 
-      MTETaskQueue<THREAD_NUM_512>::fill_task_info(my_slot_id, value_base_addr, bucket_value_base_addr);
-      KeyTaskQueue<THREAD_NUM_512>::fill_task_info(my_slot_id, key, reinterpret_cast<uint64_t>(bucket_keys + key_pos));
+      mtetask_queue.fill_task_info(my_slot_id, value_base_addr, bucket_value_base_addr);
+      keytask_queue.fill_task_info(my_slot_id, key, reinterpret_cast<uint64_t>(bucket_keys + key_pos));
     }
 
     __threadfence();  // FENCE SIMT -> MTE
 
     if (laneid() == 0) {
-      MTETaskQueue<THREAD_NUM_512>::assign_task(curr_simt_alloc_pos, new_simt_alloc_pos);
+      mtetask_queue.assign_task(curr_simt_alloc_pos, new_simt_alloc_pos);
     }
   }
 
@@ -527,12 +530,12 @@ LAUNCH_BOUND(THREAD_NUM) inline void insert_or_assign_kernel_with_digest_vf(
 
   // 所有任务已经处理完成，MTE任务结束
   if (threadIdx.x == 0) {
-    MTETaskQueue<THREAD_NUM_512>::all_assigned();
+    mtetask_queue.all_assigned();
   }
 
   // MTE任务下发完成了，处理最后的写key任务！
-  uint32_t last_task_id = MTETaskQueue<THREAD_NUM_512>::get_last_task_id();
-  KeyTaskQueue<THREAD_NUM_512>::drain<true>(last_task_id);
+  uint32_t last_task_id = mtetask_queue.get_last_task_id();
+  keytask_queue.template drain<true>(last_task_id);
 }
 
 template <typename K = uint64_t, typename V = float, typename S = uint64_t,
@@ -822,9 +825,12 @@ __global__ __vector__ void insert_or_assign_kernel(
 
   if ASCEND_IS_AIV {
 
+  MTETaskQueue<THREAD_NUM_512> mtetask_queue;
+  KeyTaskQueue<THREAD_NUM_512> keytask_queue;
+
   // 标记位清0
-  MTETaskQueue<THREAD_NUM_512>::init();
-  KeyTaskQueue<THREAD_NUM_512>::init();
+  mtetask_queue.init();
+  keytask_queue.init();
 
   pipe_barrier(PIPE_ALL);
 
@@ -844,14 +850,14 @@ __global__ __vector__ void insert_or_assign_kernel(
               Strategy,
               (Simt::VF_CALL<insert_or_assign_kernel_with_digest_vf<
                    uint64_t, DTYPE, uint64_t, STRATEGY, GROUP_SIZE>>(
-                  Simt::Dim3{static_cast<uint32_t>(thread_num)}, (GM_ADDR)buckets,
+                  Simt::Dim3{static_cast<uint32_t>(thread_num)}, mtetask_queue, keytask_queue, (GM_ADDR)buckets,
                   (GM_ADDR)buckets_size, capacity, bucket_max_size, dim, (GM_ADDR)keys, (GM_ADDR)values,
                   (GM_ADDR)scores, cur_score, n, thread_all, global_epoch, GetBlockIdx(),
                   max_bucket_shift, capacity_divisor_magic,
                   capacity_divisor_shift, n_align_warp)))));
 
   uint32_t value_dim_size = dim * value_size;
-  MTETaskQueue<THREAD_NUM_512>::run(value_dim_size);
+  mtetask_queue.run(value_dim_size);
   } // ASCEND_IS_AIV
 }
 
