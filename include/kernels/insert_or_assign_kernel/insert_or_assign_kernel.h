@@ -27,6 +27,8 @@
 namespace npu {
 namespace hkv {
 
+using namespace AscendC;
+
 // RING_BUFFER_SZ 必须是2的整数次幂，且必须大于等于8，否则内存不按32对齐
 template <uint32_t RING_BUFFER_SZ = 512>
 class MTETaskQueue {
@@ -60,10 +62,6 @@ public:
 
   __simt_callee__ inline void all_assigned() {
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR) = 1;
-  }
-
-  __simt_callee__ inline uint32_t get_last_task_id() {
-    return *reinterpret_cast<__ubuf__ volatile uint32_t*>(SIMT_ASSIGN_ID_ADDR);
   }
 
   __aicore__ inline void run(const uint32_t &value_dim_size) {
@@ -168,6 +166,10 @@ public:
     reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR)[task_id] = key_out_ddr;
   }
 
+  __simt_callee__ inline void drain_all() {
+    uint32_t last_task_id = *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTETaskQueue<RING_BUFFER_SZ>::SIMT_ASSIGN_ID_ADDR);
+    drain<true>(last_task_id);
+  }
 
   template <bool all = false>
   __simt_callee__ inline void drain(const uint32_t &new_task_end_id) {
@@ -234,17 +236,12 @@ private:
   const uint32_t FINISH_ID_ADDR = ASSIGN_ID_ADDR + UB_ALIGN_SIZE;
 };
 
-
-
-
-using namespace AscendC;
-
 template <typename K = uint64_t, typename V = float, typename S = uint64_t,
           int32_t Strategy = -1, int32_t GROUP_SIZE = 16, uint32_t THREAD_NUM = 512,
           int32_t EVICT_GROUP_SIZE = 16>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM) inline void insert_or_assign_kernel_with_digest_vf(
-    MTETaskQueue<THREAD_NUM> mtetask_queue, UpsertTaskQueue<THREAD_NUM> keytask_queue, GM_ADDR buckets_addr_gm, GM_ADDR buckets_size_addr_gm, uint64_t capacity,
+    UpsertTaskQueue<THREAD_NUM> upsert_task_queue, GM_ADDR buckets_addr_gm, GM_ADDR buckets_size_addr_gm, uint64_t capacity,
     uint32_t bucket_max_size, uint32_t dim, GM_ADDR keys_addr_gm,
     GM_ADDR values_addr_gm, GM_ADDR scores_gm, S cur_score, uint64_t n,
     uint32_t thread_all, uint64_t global_epoch, uint32_t block_index,
@@ -499,12 +496,12 @@ LAUNCH_BOUND(THREAD_NUM) inline void insert_or_assign_kernel_with_digest_vf(
     uint32_t new_simt_alloc_pos = 0;
     // 下发任务，由于多个warp并行，因此使用cas确保任务下发安全
     if (laneid() == 0) {
-      curr_simt_alloc_pos = mtetask_queue.apply_ID(warp_write_count);
+      curr_simt_alloc_pos = upsert_task_queue.apply_ID(warp_write_count);
     }
     curr_simt_alloc_pos = __shfl(curr_simt_alloc_pos, 0);
     new_simt_alloc_pos = curr_simt_alloc_pos + warp_write_count;
 
-    keytask_queue.drain(new_simt_alloc_pos);
+    upsert_task_queue.drain(new_simt_alloc_pos);
 
     // 前面已经明确由足够队列空间存放任务
     // 填充各任务数据
@@ -512,13 +509,13 @@ LAUNCH_BOUND(THREAD_NUM) inline void insert_or_assign_kernel_with_digest_vf(
       uint32_t offset_in_warp = __popc(write_mask & lanemask_lt());
       uint32_t my_slot_id = curr_simt_alloc_pos + offset_in_warp;
 
-      keytask_queue.fill_task_info(my_slot_id, value_base_addr, bucket_value_base_addr, key, reinterpret_cast<uint64_t>(bucket_keys + key_pos));
+      upsert_task_queue.fill_task_info(my_slot_id, value_base_addr, bucket_value_base_addr, key, reinterpret_cast<uint64_t>(bucket_keys + key_pos));
     }
 
     __threadfence();  // FENCE SIMT -> MTE
 
     if (laneid() == 0) {
-      mtetask_queue.assign_task(curr_simt_alloc_pos, new_simt_alloc_pos);
+      upsert_task_queue.assign_task(curr_simt_alloc_pos, new_simt_alloc_pos);
     }
   }
 
@@ -526,12 +523,11 @@ LAUNCH_BOUND(THREAD_NUM) inline void insert_or_assign_kernel_with_digest_vf(
 
   // 所有任务已经处理完成，MTE任务结束
   if (threadIdx.x == 0) {
-    mtetask_queue.all_assigned();
+    upsert_task_queue.all_assigned();
   }
 
   // MTE任务下发完成了，处理最后的写key任务！
-  uint32_t last_task_id = mtetask_queue.get_last_task_id();
-  keytask_queue.template drain<true>(last_task_id);
+  upsert_task_queue.drain_all();
 }
 
 template <typename K = uint64_t, typename V = float, typename S = uint64_t,
@@ -820,40 +816,37 @@ __global__ __vector__ void insert_or_assign_kernel(
   KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIV_ONLY);
 
   if ASCEND_IS_AIV {
+    UpsertTaskQueue<THREAD_NUM_512> upsert_task_queue;
 
-  MTETaskQueue<THREAD_NUM_512> mtetask_queue;
-  UpsertTaskQueue<THREAD_NUM_512> keytask_queue;
+    // 标记位清0
+    upsert_task_queue.init();
 
-  // 标记位清0
-  mtetask_queue.init();
-  keytask_queue.init();
+    pipe_barrier(PIPE_ALL);
 
-  pipe_barrier(PIPE_ALL);
+    constexpr uint32_t thread_num = 512;
+    const uint32_t thread_all = thread_num * GetBlockNum();
+    uint64_t cur_score =
+        (Strategy == npu::hkv::EvictStrategyInternal::kLru ||
+        Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
+            ? static_cast<uint64_t>(GetSystemCycle())
+            : 0;
 
-  constexpr uint32_t thread_num = 512;
-  const uint32_t thread_all = thread_num * GetBlockNum();
-  uint64_t cur_score =
-      (Strategy == npu::hkv::EvictStrategyInternal::kLru ||
-       Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
-          ? static_cast<uint64_t>(GetSystemCycle())
-          : 0;
+    DISPATCH_GROUP_SIZE(
+        group_size,
+        DISPATCH_VALUE_SIZE(
+            value_size,
+            DISPATCH_EVICT_STRATEGY(
+                Strategy,
+                (Simt::VF_CALL<insert_or_assign_kernel_with_digest_vf<
+                    uint64_t, DTYPE, uint64_t, STRATEGY, GROUP_SIZE>>(
+                    Simt::Dim3{static_cast<uint32_t>(thread_num)}, upsert_task_queue, (GM_ADDR)buckets,
+                    (GM_ADDR)buckets_size, capacity, bucket_max_size, dim, (GM_ADDR)keys, (GM_ADDR)values,
+                    (GM_ADDR)scores, cur_score, n, thread_all, global_epoch, GetBlockIdx(),
+                    max_bucket_shift, capacity_divisor_magic,
+                    capacity_divisor_shift, n_align_warp)))));
 
-  DISPATCH_GROUP_SIZE(
-      group_size,
-      DISPATCH_VALUE_SIZE(
-          value_size,
-          DISPATCH_EVICT_STRATEGY(
-              Strategy,
-              (Simt::VF_CALL<insert_or_assign_kernel_with_digest_vf<
-                   uint64_t, DTYPE, uint64_t, STRATEGY, GROUP_SIZE>>(
-                  Simt::Dim3{static_cast<uint32_t>(thread_num)}, mtetask_queue, keytask_queue, (GM_ADDR)buckets,
-                  (GM_ADDR)buckets_size, capacity, bucket_max_size, dim, (GM_ADDR)keys, (GM_ADDR)values,
-                  (GM_ADDR)scores, cur_score, n, thread_all, global_epoch, GetBlockIdx(),
-                  max_bucket_shift, capacity_divisor_magic,
-                  capacity_divisor_shift, n_align_warp)))));
-
-  uint32_t value_dim_size = dim * value_size;
-  mtetask_queue.run(value_dim_size);
+    uint32_t value_dim_size = dim * value_size;
+    upsert_task_queue.run(value_dim_size);
   } // ASCEND_IS_AIV
 }
 
