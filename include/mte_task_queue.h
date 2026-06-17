@@ -26,12 +26,14 @@ namespace hkv {
 
 using namespace AscendC;
 
+// MTE搬运任务队列，默认仅支持GM->GM任务
 // RING_BUFFER_SZ 必须是2的整数次幂，且必须大于等于8，否则内存不按32对齐
 template <uint32_t RING_BUFFER_SZ = 512>
 class MTETaskQueue {
 public:
   __aicore__ MTETaskQueue() {}
 
+  // 初始化控制量
   __aicore__ inline virtual void init() {
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(GLOBAL_ID_ADDR) = 0;
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTE_FINISH_ID_ADDR) = 0;
@@ -39,28 +41,32 @@ public:
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR) = 0;
   }
 
+  // 申请任务ID
   __simt_callee__ inline uint32_t apply_ID(const uint32_t &warp_task_count) {
     return asc_atomic_add(reinterpret_cast<__ubuf__ uint32_t *>(GLOBAL_ID_ADDR), warp_task_count);
   }
 
+  // 填充任务信息
   __simt_callee__ inline void fill_task_info(uint32_t task_id, const uint64_t &in_ddr, const uint64_t &out_ddr) {
     reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_IN_ADDR_QUEUE_ADDR)[task_id] = in_ddr;
     reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_OUT_ADDR_QUEUE_ADDR)[task_id] = out_ddr;
   }
 
+  // 下发任务
   __simt_callee__ inline void assign_task(const uint32_t &new_task_start_id, const uint32_t &new_task_end_id) {
     while (true) {
-      // 任务数据填充完成，下发任务
       if (atomicCAS(reinterpret_cast<__ubuf__ uint32_t*>(SIMT_ASSIGN_ID_ADDR), new_task_start_id, new_task_end_id) == new_task_start_id) {
         return;
       }
     }
   }
 
+  // 任务生产结束
   __simt_callee__ inline void assignment_finish() {
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR) = FINISH_FLAG;
   }
 
+  // 消费执行任务
   __aicore__ inline void run_task(const uint32_t &value_size) {
     int value_size_aligned = (value_size + UB_ALIGN_SIZE - 1) / UB_ALIGN_SIZE * UB_ALIGN_SIZE;
     uint32_t max_proc_batch = DATA_BUFFER_SZ / (value_size_aligned);
@@ -129,6 +135,7 @@ protected:
   const uint32_t MTE_FINISH_ID_ADDR = GLOBAL_ID_ADDR + UB_ALIGN_SIZE;
   // SIMT下发ID
   const uint32_t SIMT_ASSIGN_ID_ADDR = MTE_FINISH_ID_ADDR + UB_ALIGN_SIZE;
+  // 任务完成标记
   const uint32_t TASK_FINISH_FLAG_ADDR = SIMT_ASSIGN_ID_ADDR + UB_ALIGN_SIZE;
 
   // buffer区

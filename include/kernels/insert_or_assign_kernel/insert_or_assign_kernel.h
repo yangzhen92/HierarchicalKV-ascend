@@ -41,13 +41,6 @@ public:
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(FINISH_ID_ADDR) = 0;
   }
 
-  __simt_callee__ inline void fill_task_info(uint32_t task_id, const uint64_t &in_ddr, const uint64_t &out_ddr, const uint64_t &key, const uint64_t &key_out_ddr) {
-    task_id &= MTETaskQueue<RING_BUFFER_SZ>::RING_BUFFER_MASK;
-    MTETaskQueue<RING_BUFFER_SZ>::fill_task_info(task_id, in_ddr, out_ddr);
-    reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_KEY_ADDR)[task_id] = key;
-    reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR)[task_id] = key_out_ddr;
-  }
-
   __simt_callee__ inline void drain_all() {
     uint32_t last_task_id = *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTETaskQueue<RING_BUFFER_SZ>::SIMT_ASSIGN_ID_ADDR);
     drain<true>(last_task_id);
@@ -96,25 +89,26 @@ public:
     } // while(true)
   }
 
-  __simt_callee__ inline void assign_task(const uint64_t &in_ddr, const uint64_t &out_ddr, const uint64_t &key, const uint64_t &key_out_ddr, const bool &need_assign) {
+  __simt_callee__ inline void assign_warp_task(const uint64_t &in_ddr, const uint64_t &out_ddr, const uint64_t &key, const uint64_t &key_out_ddr, const bool &need_assign) {
+    // 1. 统计warp任务数
     uint32_t write_mask = __ballot(need_assign);
     uint32_t warp_write_count = __popc(write_mask);
     if (warp_write_count == 0) {
       return;
     }
+
+    // 2. 申请任务ID
     uint32_t curr_simt_alloc_pos = 0;
-    uint32_t new_simt_alloc_pos = 0;
-    // 下发任务，由于多个warp并行，因此使用cas确保任务下发安全
     if (laneid() == 0) {
       curr_simt_alloc_pos = MTETaskQueue<RING_BUFFER_SZ>::apply_ID(warp_write_count);
     }
     curr_simt_alloc_pos = __shfl(curr_simt_alloc_pos, 0);
-    new_simt_alloc_pos = curr_simt_alloc_pos + warp_write_count;
 
+    // 3. 等待任务队列空间足够
+    uint32_t new_simt_alloc_pos = curr_simt_alloc_pos + warp_write_count;
     drain(new_simt_alloc_pos);
 
-    // 前面已经明确由足够队列空间存放任务
-    // 填充各任务数据
+    // 4. 填充任务信息
     if (need_assign) {
       uint32_t offset_in_warp = __popc(write_mask & lanemask_lt());
       uint32_t my_slot_id = curr_simt_alloc_pos + offset_in_warp;
@@ -122,14 +116,23 @@ public:
       fill_task_info(my_slot_id, in_ddr, out_ddr, key, key_out_ddr);
     }
 
-    __threadfence();  // FENCE SIMT -> MTE
+    // 5. 确认信息填写完成
+    __threadfence();
 
+    // 6. 下发任务
     if (laneid() == 0) {
       MTETaskQueue<RING_BUFFER_SZ>::assign_task(curr_simt_alloc_pos, new_simt_alloc_pos);
     }
   }
 
 private:
+  __simt_callee__ inline void fill_task_info(uint32_t task_id, const uint64_t &in_ddr, const uint64_t &out_ddr, const uint64_t &key, const uint64_t &key_out_ddr) {
+    task_id &= MTETaskQueue<RING_BUFFER_SZ>::RING_BUFFER_MASK;
+    MTETaskQueue<RING_BUFFER_SZ>::fill_task_info(task_id, in_ddr, out_ddr);
+    reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_KEY_ADDR)[task_id] = key;
+    reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR)[task_id] = key_out_ddr;
+  }
+
   // 队列数据
   const uint32_t RING_BUFFER_KEY_ADDR = MTETaskQueue<RING_BUFFER_SZ>::DATA_BUFFER_END_ADDR;
   const uint32_t RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR = RING_BUFFER_KEY_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
@@ -381,22 +384,20 @@ LAUNCH_BOUND(THREAD_NUM) inline void insert_or_assign_kernel_with_digest_vf(
       }
     }
 
-    // 累加本warp内任务数
     bool need_assign = ((occupy_result != OccupyResult::REFUSED) && (occupy_result != OccupyResult::ILLEGAL));
-
     uint64_t value_base_addr = reinterpret_cast<uint64_t>(values + kv_idx * dim);
     uint64_t bucket_value_base_addr = bucket_values_uintptr + key_pos * dim * sizeof(V);
-    upsert_task_queue.assign_task(value_base_addr, bucket_value_base_addr, key, reinterpret_cast<uint64_t>(bucket_keys + key_pos), need_assign);
+    upsert_task_queue.assign_warp_task(value_base_addr, bucket_value_base_addr, key, reinterpret_cast<uint64_t>(bucket_keys + key_pos), need_assign);
   }
 
   __syncthreads();
 
-  // 所有任务已经处理完成，MTE任务结束
+  // 生产结束
   if (threadIdx.x == 0) {
     upsert_task_queue.assignment_finish();
   }
 
-  // MTE任务下发完成了，处理最后的写key任务！
+  // 确定所有任务都被处理完成
   upsert_task_queue.drain_all();
 }
 
