@@ -95,7 +95,7 @@ done
 
 RUN_MODE_LIST="npu cpu sim"
 if [[ " $RUN_MODE_LIST " != *" $RUN_MODE "* ]]; then
-    echo "[ERROR]: RUN_MODE error, This sample only support specify npu!"
+    echo "[ERROR]: RUN_MODE [$RUN_MODE] error, This sample only support specify [$RUN_MODE_LIST]!"
     exit -1
 fi
 
