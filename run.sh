@@ -15,6 +15,7 @@ ENABLE_TEST=1
 RUN_MODE="npu"
 BUILD_TYPE="Release"
 RUN_DISABLED=1
+SOC_VERSION="Ascend950PR_9589"
 
 show_help() {
     cat << EOF
@@ -31,6 +32,7 @@ OPTIONS（可选参数）：
     -c, --compile-only        仅编译安装HKV工程，不执行用例。
     -t, --enable-test SHIFT   指定测试开关SHIFT，支持参数为[0 / 1]，0表示不执行testcase，1表示执行testcase。
     -g, --skip-disabled-test  不执行gtest中DISABLED_用例。
+    -v, --soc-version SOC     指定SOC版本，默认值为Ascend950PR_9589。
 EOF
     exit 0
 }
@@ -76,6 +78,10 @@ while :; do
         RUN_DISABLED=0
         shift
         ;;
+    -v | --soc-version)
+        SOC_VERSION="$2"
+        shift 2
+        ;;
     --)
         shift
         break
@@ -103,6 +109,12 @@ else
     else
         _ASCEND_INSTALL_PATH=/usr/local/Ascend/ascend-toolkit/latest
     fi
+fi
+
+if [ "$RUN_MODE" = "sim" ]; then
+    _CAMODEL_PATH=${_ASCEND_INSTALL_PATH}/tools/simulator/${SOC_VERSION}/camodel
+else
+    _CAMODEL_PATH=""
 fi
 
 echo "ASCEND_HOME_PATH [$ASCEND_HOME_PATH]"
@@ -133,6 +145,8 @@ set -e
 rm -rf build ${INSTALL_PREFIX}
 mkdir -p build
 cmake -B build \
+    -DRUN_MODE=${RUN_MODE} \
+    -DCAMODEL_PATH=${_CAMODEL_PATH} \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
     -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
     -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \

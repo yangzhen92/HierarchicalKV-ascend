@@ -205,6 +205,7 @@ cd HierarchicalKV-ascend
 | `-c` | `--compile-only` | 仅编译安装HKV工程，不执行用例 |
 | `-t` | `--enable-test SHIFT` | 指定测试开关，`0` 表示不执行testcase，`1` 表示执行testcase |
 | `-g` | `--skip-disabled-test` | 不执行gtest中 `DISABLED_` 用例 |
+| `-v` | `--soc-version SOC` | 指定SOC版本，默认值为 `Ascend950PR_9589` |
 
 示例：
 ```bash
