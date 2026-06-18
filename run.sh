@@ -93,7 +93,7 @@ while :; do
     esac
 done
 
-RUN_MODE_LIST="npu cpu sim"
+RUN_MODE_LIST="npu sim"
 if [[ " $RUN_MODE_LIST " != *" $RUN_MODE "* ]]; then
     echo "[ERROR]: RUN_MODE [$RUN_MODE] error, This sample only support specify [$RUN_MODE_LIST]!"
     exit -1
@@ -113,6 +113,7 @@ fi
 
 if [ "$RUN_MODE" = "sim" ]; then
     _CAMODEL_PATH=${_ASCEND_INSTALL_PATH}/tools/simulator/${SOC_VERSION}/camodel
+    COMPILE_ONLY=1
 else
     _CAMODEL_PATH=""
 fi

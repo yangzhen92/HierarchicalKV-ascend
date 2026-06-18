@@ -202,7 +202,7 @@ cd HierarchicalKV-ascend
 | `-b` | `--build-type TYPE` | 指定构建类型，默认值为 `Release` |
 | `-p` | `--install-prefix PATH` | 指定安装路径，默认为当前路径下的 `out` 目录 |
 | `-d` | `--device DEVICE_ID` | 指定NPU卡号，默认值为 `0`。testcase、benchmark、demo将在指定芯片上执行 |
-| `-c` | `--compile-only` | 仅编译安装HKV工程，不执行用例 |
+| `-c` | `--compile-only` | 仅编译安装HKV工程，不执行用例，当编译方式指定为`sim`时，默认不执行用例。|
 | `-t` | `--enable-test SHIFT` | 指定测试开关，`0` 表示不执行testcase，`1` 表示执行testcase |
 | `-g` | `--skip-disabled-test` | 不执行gtest中 `DISABLED_` 用例 |
 | `-v` | `--soc-version SOC` | 指定SOC版本，默认值为 `Ascend950PR_9589` |
@@ -210,4 +210,15 @@ cd HierarchicalKV-ascend
 示例：
 ```bash
 bash run.sh -d 3
+```
+
+示例2：
+```bash
+# 编译安装HKV工程，不执行用例
+bash run.sh -r sim -v Ascend950PR_9589 -d 3 -i /usr/local/Ascend/ascend-toolkit/latest
+
+# 执行用例
+mkdir cannsim
+cd cannsim
+cannsim record "../build/test/test_main --test_filter='*test_find_or_insert_ptr.hash_collisions*'" -s Ascend950 -g -o ./
 ```
