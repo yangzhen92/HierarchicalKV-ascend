@@ -6,8 +6,8 @@ CURRENT_DIR=$(
 
 INSTALL_PREFIX="${CURRENT_DIR}/out"
 
-SHORT=h,r:,i:,b:,p:,d:,c,t:,g
-LONG=help,run-mode:,install-path:,build-type:,install-prefix:,device:,compile-only,enable-test:,skip-disabled-test
+SHORT=h,r:,i:,b:,p:,d:,c,t:,g,v:
+LONG=help,run-mode:,install-path:,build-type:,install-prefix:,device:,compile-only,enable-test:,skip-disabled-test,soc-version:
 OPTS=$(getopt -a --options $SHORT --longoptions $LONG -- "$@")
 eval set -- "$OPTS"
 COMPILE_ONLY=0

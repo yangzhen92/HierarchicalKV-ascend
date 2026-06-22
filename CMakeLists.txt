@@ -41,15 +41,15 @@ if(RUN_MODE STREQUAL "sim")
     runtime_camodel
     npu_drv
   )
-  set(_OPT_FLAG "O0")
+  set(_OPT_FLAG "-O0")
 else()
-  set(_OPT_FLAG "O2")
+  set(_OPT_FLAG "-O2")
 endif()
 
 target_compile_options(hkv_depends INTERFACE
   # 该NPU架构版本号暂未正式发布，后续可能会有变更，请关注正式版本发布信息
   $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>
-  -g ${OPT_FLAG}
+  -g ${_OPT_FLAG}
   # 优化SIMT算子寄存器数
   -mllvm -disable-machine-licm
   # 打印寄存器使用情况
