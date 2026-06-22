@@ -55,6 +55,7 @@ set_source_files_properties(
   ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/benchmark/hkv_hashtable_benchmark.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/benchmark/benchmark_find_miss.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/benchmark/benchmark_ddr_to_ub.cpp
   PROPERTIES LANGUAGE ASC
 )
 
@@ -71,13 +72,18 @@ add_executable(hkv_benchmark_find_miss
 )
 target_link_libraries(hkv_benchmark_find_miss PRIVATE hkv_depends)
 
+add_executable(hkv_benchmark_ddr_to_ub
+  ${CMAKE_CURRENT_SOURCE_DIR}/benchmark/benchmark_ddr_to_ub.cpp
+)
+target_link_libraries(hkv_benchmark_ddr_to_ub PRIVATE hkv_depends)
+
 # 6. 安装二进制
 install(TARGETS hkv_demo
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
-install(TARGETS hkv_benchmark hkv_benchmark_find_miss
+install(TARGETS hkv_benchmark hkv_benchmark_find_miss hkv_benchmark_ddr_to_ub
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

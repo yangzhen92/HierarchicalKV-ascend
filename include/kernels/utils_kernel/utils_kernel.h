@@ -68,6 +68,53 @@ __global__ __vector__ void host_nano_kernel(__gm__ S* d_clk) {
 }
 
 /**
+ * @brief Pure bandwidth probe: copy a contiguous GM source buffer into UB.
+ *
+ *        The kernel intentionally avoids UB->GM value write-back. Each core
+ *        reads a contiguous byte range from @p src into UB with DataCopyPad.
+ */
+template <class V>
+__global__ __vector__ void ddr_to_ub_read_kernel(
+    uint64_t former_num, uint64_t former_core_tile_num,
+    uint64_t tail_core_tile_num, uint32_t tile_elements,
+    __gm__ V* src) {
+  uint64_t cur_block_idx = GetBlockIdx();
+  uint64_t core_start_tile = 0;
+  uint64_t core_tile_count = 0;
+  constexpr uint32_t BUFFER_NUM = 2;
+  if (cur_block_idx < former_num) {
+    core_start_tile = cur_block_idx * former_core_tile_num;
+    core_tile_count = former_core_tile_num;
+  } else {
+    core_start_tile = former_num * former_core_tile_num +
+                      (cur_block_idx - former_num) * tail_core_tile_num;
+    core_tile_count = tail_core_tile_num;
+  }
+
+  TPipe pipe;
+  TQueBind<TPosition::VECIN, TPosition::VECOUT, 0> move_queue;
+  pipe.InitBuffer(move_queue, BUFFER_NUM, tile_elements * sizeof(V));
+
+  GlobalTensor<V> src_gm;
+  LocalTensor<V> move_local;
+  DataCopyPadExtParams<V> pad_params{true, 0, 0, 0};
+  DataCopyExtParams copy_params{
+      1, static_cast<uint32_t>(tile_elements * sizeof(V)), 0, 0, 0};
+
+  for (uint64_t tile_idx = core_start_tile;
+       tile_idx < core_start_tile + core_tile_count; tile_idx++) {
+    move_queue.AllocTensor<V>(move_local);
+
+    src_gm.SetGlobalBuffer(src + tile_idx * tile_elements);
+    DataCopyPad(move_local, src_gm, copy_params, pad_params);
+    move_queue.EnQue<V>(move_local);
+    move_queue.DeQue<V>(move_local);
+
+    move_queue.FreeTensor(move_local);
+  }
+}
+
+/**
  * @brief SIMD kernel: copy values from scattered GM source pointers to a
  *        contiguous GM destination buffer via UB double-buffered tiles.
  *
