@@ -2435,8 +2435,6 @@ class HashTable : public HashTableBase<K, V, S> {
 #endif
     NPU_CHECK(aclrtSynchronizeStream(stream));
 
-#endif
-
     NpuCheckError();
     return count;
   }
