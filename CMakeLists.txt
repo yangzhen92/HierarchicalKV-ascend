@@ -41,6 +41,7 @@ if(RUN_MODE STREQUAL "sim")
     runtime_camodel
     npu_drv
   )
+  target_compile_definitions(hkv_depends INTERFACE SIM_MODE=1)
   set(_OPT_FLAG "-O0")
 else()
   set(_OPT_FLAG "-O2")
