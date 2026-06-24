@@ -4,24 +4,24 @@
 
 ## HierarchicalKV-ascend HashTableOptions
 
-| 参数名称                   | 是否支持 | 限制与说明                 |
-| -------------------------- | -------- | -------------------------- |
-| `init_capacity`            | 是       | -                          |
-| `max_capacity`             | 是       | -                          |
-| `max_hbm_for_vectors`      | 是       | -                          |
-| `max_bucket_size`          | 是       | 必须大于等于16             |
-| `dim`                      | 是       | -                          |
-| `max_load_factor`          | 是       | -                          |
-| `block_size`               | 否       | Ascend芯片算子不涉及此参数 |
-| `io_block_size`            | 否       | Ascend芯片算子不涉及此参数 |
-| `device_id`                | 是       | -                          |
-| `io_by_cpu`                | 是       | -                          |
-| `use_constant_memory`      | 是       | -                          |
-| `reserved_key_start_bit`   | 否       | 功能开发中，敬请期待       |
-| `num_of_buckets_per_alloc` | 是       | -                          |
-| `api_lock`                 | 是       | 默认值为false              |
-| `device_memory_pool`       | 是       | -                          |
-| `host_memory_pool`         | 是       | -                          |
+| 参数名称                   | 是否支持 | 限制与说明                                                           |
+| -------------------------- | -------- | -------------------------------------------------------------------- |
+| `init_capacity`            | 是       | -                                                                    |
+| `max_capacity`             | 是       | -                                                                    |
+| `max_hbm_for_vectors`      | 是       | -                                                                    |
+| `max_bucket_size`          | 是       | 必须大于等于16                                                       |
+| `dim`                      | 是       | -                                                                    |
+| `max_load_factor`          | 是       | -                                                                    |
+| `block_size`               | 否       | Ascend芯片算子不涉及此参数                                           |
+| `io_block_size`            | 否       | Ascend芯片算子不涉及此参数                                           |
+| `device_id`                | 是       | -                                                                    |
+| `io_by_cpu`                | 是       | -                                                                    |
+| `use_constant_memory`      | 是       | -                                                                    |
+| `reserved_key_start_bit`   | 否       | 默认值为0。设置此参数功能尚未实现，设置此参数不会产生任何效果。      |
+| `num_of_buckets_per_alloc` | 是       | -                                                                    |
+| `api_lock`                 | 是       | 默认值为false                                                        |
+| `device_memory_pool`       | 是       | -                                                                    |
+| `host_memory_pool`         | 是       | -                                                                    |
 
 ## HierarchicalKV-ascend HashTable
 
