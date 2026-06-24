@@ -56,7 +56,7 @@ std::unique_ptr<Table> make_table() {
 // ============================================================================
 TEST(TestAllInterfaces, test_init_and_basic_properties) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
   EXPECT_EQ(table->size(), 0);
   EXPECT_EQ(table->capacity(), TABLE_CAPACITY);
   EXPECT_EQ(table->empty(), true);
@@ -70,7 +70,7 @@ TEST(TestAllInterfaces, test_init_and_basic_properties) {
 // ============================================================================
 TEST(TestAllInterfaces, test_insert_or_assign) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -106,7 +106,7 @@ TEST(TestAllInterfaces, test_insert_and_evict_with_counter) {
       .dim = DIM,
       .io_by_cpu = false,
   };
-  auto table = std::make_unique<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = std::make_unique<HashTable<K, V, S, EvictStrategy::kLru>>();
   table->init(options);
 
   DeviceData<K, V, S> device_data;
@@ -172,7 +172,7 @@ TEST(TestAllInterfaces, test_insert_and_evict_return_size) {
       .dim = DIM,
       .io_by_cpu = false,
   };
-  auto table = std::make_unique<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = std::make_unique<HashTable<K, V, S, EvictStrategy::kLru>>();
   table->init(options);
 
   DeviceData<K, V, S> device_data;
@@ -217,7 +217,7 @@ TEST(TestAllInterfaces, test_insert_and_evict_return_size) {
 // ============================================================================
 TEST(TestAllInterfaces, test_accum_or_assign) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -257,7 +257,7 @@ TEST(TestAllInterfaces, test_accum_or_assign) {
 // ============================================================================
 TEST(TestAllInterfaces, test_find_or_insert_value_copy) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -284,7 +284,7 @@ TEST(TestAllInterfaces, test_find_or_insert_value_copy) {
 // ============================================================================
 TEST(TestAllInterfaces, test_find_or_insert_ptr) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -312,7 +312,7 @@ TEST(TestAllInterfaces, test_find_or_insert_ptr) {
 // ============================================================================
 TEST(TestAllInterfaces, test_lock_unlock_keys) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -355,7 +355,7 @@ TEST(TestAllInterfaces, test_lock_unlock_keys) {
 // ============================================================================
 TEST(TestAllInterfaces, test_assign_with_values_scores) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -387,7 +387,7 @@ TEST(TestAllInterfaces, test_assign_with_values_scores) {
 // ============================================================================
 TEST(TestAllInterfaces, test_assign_scores) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -414,7 +414,7 @@ TEST(TestAllInterfaces, test_assign_scores) {
 // ============================================================================
 TEST(TestAllInterfaces, test_assign_scores_only) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -441,7 +441,7 @@ TEST(TestAllInterfaces, test_assign_scores_only) {
 // ============================================================================
 TEST(TestAllInterfaces, test_assign_values) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -468,7 +468,7 @@ TEST(TestAllInterfaces, test_assign_values) {
 // ============================================================================
 TEST(TestAllInterfaces, test_find_value_copy) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -498,7 +498,7 @@ TEST(TestAllInterfaces, test_find_value_copy) {
 // ============================================================================
 TEST(TestAllInterfaces, test_find_with_missed) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -543,7 +543,7 @@ TEST(TestAllInterfaces, test_find_with_missed) {
 // ============================================================================
 TEST(TestAllInterfaces, test_find_ptr) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -571,7 +571,7 @@ TEST(TestAllInterfaces, test_find_ptr) {
 // ============================================================================
 TEST(TestAllInterfaces, test_find_and_update) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -601,7 +601,7 @@ TEST(TestAllInterfaces, test_find_and_update) {
 // ============================================================================
 TEST(TestAllInterfaces, test_contains) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -626,7 +626,7 @@ TEST(TestAllInterfaces, test_contains) {
 // ============================================================================
 TEST(TestAllInterfaces, test_erase) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -652,7 +652,7 @@ TEST(TestAllInterfaces, test_erase) {
 // ============================================================================
 TEST(TestAllInterfaces, test_clear) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -678,7 +678,7 @@ TEST(TestAllInterfaces, test_clear) {
 // ============================================================================
 TEST(TestAllInterfaces, test_export_batch_with_counter) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -723,7 +723,7 @@ TEST(TestAllInterfaces, test_export_batch_with_counter) {
 // ============================================================================
 TEST(TestAllInterfaces, test_export_batch_return_size) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -752,7 +752,7 @@ TEST(TestAllInterfaces, test_export_batch_return_size) {
 // ============================================================================
 TEST(TestAllInterfaces, test_empty) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
   EXPECT_EQ(table->empty(), true);
 
   DeviceData<K, V, S> device_data;
@@ -774,7 +774,7 @@ TEST(TestAllInterfaces, test_empty) {
 // ============================================================================
 TEST(TestAllInterfaces, test_size) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
 
   DeviceData<K, V, S> device_data;
   device_data.malloc(KEY_NUM);
@@ -798,7 +798,7 @@ TEST(TestAllInterfaces, test_size) {
 // ============================================================================
 TEST(TestAllInterfaces, test_reserve) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
   size_t original_cap = table->capacity();
 
   table->reserve(TABLE_CAPACITY / 2, nullptr);
@@ -813,7 +813,7 @@ TEST(TestAllInterfaces, test_reserve) {
 // ============================================================================
 TEST(TestAllInterfaces, test_load_factor) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
   EXPECT_GE(table->load_factor(), 0.0f);
 
   DeviceData<K, V, S> device_data;
@@ -838,7 +838,7 @@ TEST(TestAllInterfaces, test_load_factor) {
 // ============================================================================
 TEST(TestAllInterfaces, test_set_max_capacity) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
   size_t new_max = TABLE_CAPACITY * 2;
   table->set_max_capacity(new_max);
   EXPECT_EQ(table->capacity(), new_max);
@@ -849,6 +849,6 @@ TEST(TestAllInterfaces, test_set_max_capacity) {
 // ============================================================================
 TEST(TestAllInterfaces, test_is_pure_hbm_mode) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::klru>>();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
   EXPECT_TRUE(table->is_pure_hbm_mode());
 }
