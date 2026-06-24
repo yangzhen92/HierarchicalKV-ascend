@@ -35,7 +35,7 @@ constexpr size_t TABLE_CAPACITY = 1024;
 constexpr size_t KEY_NUM = 128;
 constexpr size_t DIM = 8;
 constexpr size_t HBM_FOR_VALUES = 1024UL * 1024;
-constexpr size_t HALF_TABLE_CAPACITY = 512;
+constexpr size_t LITTLE_TABLE_CAPACITY = 256;
 
 // 统一的建表函数：表大小=1024
 template <typename Table>
