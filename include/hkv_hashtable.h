@@ -2471,9 +2471,14 @@ class HashTable : public HashTableBase<K, V, S> {
                       table_->capacity_divisor_shift, pred, d_counter)));
 
     size_type count = 0;
+#ifdef SIM_MODE
+    NPU_CHECK(aclrtMemcpy(&count, sizeof(count), d_counter, sizeof(count),
+                          ACL_MEMCPY_DEVICE_TO_HOST));
+#else
     NPU_CHECK(aclrtMemcpyAsync(&count, sizeof(size_type), d_counter,
                                sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST,
                                stream));
+#endif
     NPU_CHECK(aclrtSynchronizeStream(stream));
 
     NpuCheckError();
