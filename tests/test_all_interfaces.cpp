@@ -87,8 +87,8 @@ TEST(TestAllInterfaces, test_insert_or_assign) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 }
@@ -136,16 +136,16 @@ TEST(TestAllInterfaces, test_insert_and_evict_with_counter) {
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_evicted_scores),
                         KEY_NUM * sizeof(S), ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_counter),
-                        sizeof(size_t), ACL_MEM_MALLOC_HUGE_FIRST),
+  ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_counter), sizeof(size_t),
+                        ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMemset(d_counter, sizeof(size_t), 0, sizeof(size_t)),
             ACL_ERROR_NONE);
 
   table->insert_and_evict(KEY_NUM, device_data.device_keys,
-                          device_data.device_values, nullptr,
-                          d_evicted_keys, d_evicted_values,
-                          d_evicted_scores, d_counter, device_data.stream);
+                          device_data.device_values, nullptr, d_evicted_keys,
+                          d_evicted_values, d_evicted_scores, d_counter,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   size_t host_counter = 0;
@@ -202,9 +202,8 @@ TEST(TestAllInterfaces, test_insert_and_evict_return_size) {
             ACL_ERROR_NONE);
 
   size_t evicted = table->insert_and_evict(
-      KEY_NUM, device_data.device_keys, device_data.device_values,
-      nullptr, d_evicted_keys, d_evicted_values,
-      d_evicted_scores, device_data.stream);
+      KEY_NUM, device_data.device_keys, device_data.device_values, nullptr,
+      d_evicted_keys, d_evicted_values, d_evicted_scores, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_GE(evicted, 0);
 
@@ -234,19 +233,19 @@ TEST(TestAllInterfaces, test_accum_or_assign) {
 
   // 先插入一批key
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   // 准备 accum_or_assign 所需的 bool 数组（全为false表示assign）
   bool* d_accum_or_assigns = nullptr;
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_accum_or_assigns),
-            KEY_NUM * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST),
+                        KEY_NUM * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
 
   table->accum_or_assign(KEY_NUM, device_data.device_keys,
-                      device_data.device_values, d_accum_or_assigns,
-                      nullptr, device_data.stream);
+                         device_data.device_values, d_accum_or_assigns, nullptr,
+                         device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 
@@ -273,9 +272,7 @@ TEST(TestAllInterfaces, test_find_or_insert_value_copy) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->find_or_insert(KEY_NUM, device_data.device_keys,
-                       device_data.device_values,
-                       nullptr,
-                       device_data.stream);
+                        device_data.device_values, nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 }
@@ -303,7 +300,7 @@ TEST(TestAllInterfaces, test_find_or_insert_ptr) {
   bool* d_found = device_data.device_found;
 
   table->find_or_insert(KEY_NUM, device_data.device_keys, d_values_ptr, d_found,
-                       nullptr, device_data.stream);
+                        nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 }
@@ -326,25 +323,25 @@ TEST(TestAllInterfaces, test_lock_unlock_keys) {
   device_data.copy_values(host_values, KEY_NUM, DIM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   K** d_locked_ptrs = nullptr;
   bool* d_succeededs = nullptr;
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_locked_ptrs),
-            KEY_NUM * sizeof(K*), ACL_MEM_MALLOC_HUGE_FIRST),
+                        KEY_NUM * sizeof(K*), ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_succeededs),
-            KEY_NUM * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST),
+                        KEY_NUM * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
 
   table->lock_keys(KEY_NUM, device_data.device_keys, d_locked_ptrs,
-                    d_succeededs, device_data.stream);
+                   d_succeededs, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   table->unlock_keys(KEY_NUM, d_locked_ptrs, device_data.device_keys,
-                    d_succeededs, device_data.stream);
+                     d_succeededs, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   aclrtFree(d_locked_ptrs);
@@ -371,14 +368,13 @@ TEST(TestAllInterfaces, test_assign_with_values_scores) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   // 重新赋值
-  table->assign(KEY_NUM, device_data.device_keys,
-               device_data.device_values,
-               nullptr, device_data.stream);
+  table->assign(KEY_NUM, device_data.device_keys, device_data.device_values,
+                nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 }
@@ -396,17 +392,17 @@ TEST(TestAllInterfaces, test_assign_scores) {
   vector<K> host_keys(KEY_NUM, 0);
   vector<S> host_scores(KEY_NUM, 0);
   create_continuous_keys<K, S, V, DIM>(host_keys.data(), host_scores.data(),
-                                         nullptr, KEY_NUM);
+                                       nullptr, KEY_NUM);
   device_data.copy_keys(host_keys, KEY_NUM);
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
-  table->assign_scores(KEY_NUM, device_data.device_keys,
-                      nullptr, device_data.stream);
+  table->assign_scores(KEY_NUM, device_data.device_keys, nullptr,
+                       device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 }
 
@@ -423,17 +419,16 @@ TEST(TestAllInterfaces, test_assign_scores_only) {
   vector<K> host_keys(KEY_NUM, 0);
   vector<S> host_scores(KEY_NUM, 0);
   create_continuous_keys<K, S, V, DIM>(host_keys.data(), host_scores.data(),
-                                     nullptr, KEY_NUM);
+                                       nullptr, KEY_NUM);
   device_data.copy_keys(host_keys, KEY_NUM);
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
-  table->assign(KEY_NUM, device_data.device_keys,
-                nullptr, device_data.stream);
+  table->assign(KEY_NUM, device_data.device_keys, nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 }
 
@@ -455,12 +450,12 @@ TEST(TestAllInterfaces, test_assign_values) {
   device_data.copy_values(host_values, KEY_NUM, DIM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   table->assign_values(KEY_NUM, device_data.device_keys,
-                     device_data.device_values, device_data.stream);
+                       device_data.device_values, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 }
 
@@ -484,13 +479,12 @@ TEST(TestAllInterfaces, test_find_value_copy) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   table->find(KEY_NUM, device_data.device_keys, device_data.device_values,
-               device_data.device_found, nullptr,
-               device_data.stream);
+              device_data.device_found, nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 }
 
@@ -512,8 +506,8 @@ TEST(TestAllInterfaces, test_find_with_missed) {
   device_data.copy_values(host_values, KEY_NUM, DIM);
 
   table->insert_or_assign(KEY_NUM / 2, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   K* d_missed_keys = nullptr;
@@ -525,13 +519,13 @@ TEST(TestAllInterfaces, test_find_with_missed) {
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_missed_indices),
                         KEY_NUM * sizeof(int), ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_missed_size),
-                        sizeof(int), ACL_MEM_MALLOC_HUGE_FIRST),
+  ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_missed_size), sizeof(int),
+                        ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
 
   table->find(KEY_NUM, device_data.device_keys, device_data.device_values,
-             d_missed_keys, d_missed_indices, d_missed_size,
-             nullptr, device_data.stream);
+              d_missed_keys, d_missed_indices, d_missed_size, nullptr,
+              device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   aclrtFree(d_missed_keys);
@@ -557,13 +551,12 @@ TEST(TestAllInterfaces, test_find_ptr) {
   device_data.copy_values(host_values, KEY_NUM, DIM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
-  table->find(KEY_NUM, device_data.device_keys,
-              device_data.device_values_ptr, device_data.device_found,
-              nullptr, device_data.stream);
+  table->find(KEY_NUM, device_data.device_keys, device_data.device_values_ptr,
+              device_data.device_found, nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 }
 
@@ -587,13 +580,13 @@ TEST(TestAllInterfaces, test_find_and_update) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   table->find_and_update(KEY_NUM, device_data.device_keys,
-                      device_data.device_values_ptr, device_data.device_found,
-                      nullptr, device_data.stream);
+                         device_data.device_values_ptr,
+                         device_data.device_found, nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 }
 
@@ -613,12 +606,12 @@ TEST(TestAllInterfaces, test_contains) {
   device_data.copy_keys(host_keys, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
-  table->contains(KEY_NUM, device_data.device_keys,
-                 device_data.device_found, device_data.stream);
+  table->contains(KEY_NUM, device_data.device_keys, device_data.device_found,
+                  device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 }
 
@@ -638,8 +631,8 @@ TEST(TestAllInterfaces, test_erase) {
   device_data.copy_keys(host_keys, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 
@@ -664,8 +657,8 @@ TEST(TestAllInterfaces, test_clear) {
   device_data.copy_keys(host_keys, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   table->clear(device_data.stream);
@@ -694,25 +687,24 @@ TEST(TestAllInterfaces, test_export_batch_with_counter) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   size_t* d_counter = nullptr;
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_counter), sizeof(size_t),
-                       ACL_MEM_MALLOC_HUGE_FIRST),
+                        ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMemset(d_counter, sizeof(size_t), 0, sizeof(size_t)),
             ACL_ERROR_NONE);
 
   table->export_batch(KEY_NUM, 0, d_counter, device_data.device_keys,
-                      device_data.device_values, nullptr,
-                      device_data.stream);
+                      device_data.device_values, nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   size_t host_counter = 0;
-  ASSERT_EQ(aclrtMemcpy(&host_counter, sizeof(size_t), d_counter, sizeof(size_t),
-                        ACL_MEMCPY_DEVICE_TO_HOST),
+  ASSERT_EQ(aclrtMemcpy(&host_counter, sizeof(size_t), d_counter,
+                        sizeof(size_t), ACL_MEMCPY_DEVICE_TO_HOST),
             ACL_ERROR_NONE);
   EXPECT_GT(host_counter, 0);
 
@@ -737,13 +729,13 @@ TEST(TestAllInterfaces, test_export_batch_return_size) {
   device_data.copy_values(host_values, KEY_NUM, DIM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   size_t exported = table->export_batch(KEY_NUM, 0, device_data.device_keys,
-                                     device_data.device_values, nullptr,
-                                     device_data.stream);
+                                        device_data.device_values, nullptr,
+                                        device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_GT(exported, 0);
 }
@@ -764,8 +756,8 @@ TEST(TestAllInterfaces, test_empty) {
   device_data.copy_keys(host_keys, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->empty(device_data.stream), false);
 }
@@ -788,8 +780,8 @@ TEST(TestAllInterfaces, test_size) {
   EXPECT_EQ(table->size(), 0);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 }
@@ -826,8 +818,8 @@ TEST(TestAllInterfaces, test_load_factor) {
   device_data.copy_keys(host_keys, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, nullptr,
-                        device_data.stream);
+                          device_data.device_values, nullptr,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   float lf = table->load_factor(device_data.stream);
