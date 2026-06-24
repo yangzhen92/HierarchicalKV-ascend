@@ -842,7 +842,7 @@ TEST(TestAllInterfaces, test_set_max_capacity) {
   auto table = std::make_unique<HashTable<K, V, S, EvictStrategy::kLru>>();
   HashTableOptions options{
       .init_capacity = LITTLE_TABLE_CAPACITY,
-      .max_capacity = TABLE_CAPACITY,
+      .max_capacity = LITTLE_TABLE_CAPACITY,
       .max_hbm_for_vectors = HBM_FOR_VALUES,
       .dim = DIM,
       .io_by_cpu = false,
@@ -850,7 +850,7 @@ TEST(TestAllInterfaces, test_set_max_capacity) {
   table->init(options);
   size_t new_max = TABLE_CAPACITY;
   table->set_max_capacity(new_max);
-  EXPECT_EQ(table->capacity(), new_max);
+  EXPECT_EQ(table->max_capacity(), new_max);
 }
 
 // ============================================================================
