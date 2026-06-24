@@ -242,11 +242,6 @@ TEST(TestAllInterfaces, test_accum_or_assign) {
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_accum_or_assigns),
             KEY_NUM * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
-  vector<bool> host_accum_or_assigns(KEY_NUM, false);
-  ASSERT_EQ(aclrtMemcpy(d_accum_or_assigns, KEY_NUM * sizeof(bool),
-                        host_accum_or_assigns.data(), KEY_NUM * sizeof(bool),
-                        ACL_MEMCPY_HOST_TO_DEVICE),
-            ACL_ERROR_NONE);
 
   table->accum_or_assign(KEY_NUM, device_data.device_keys,
                       device_data.device_values, d_accum_or_assigns,
