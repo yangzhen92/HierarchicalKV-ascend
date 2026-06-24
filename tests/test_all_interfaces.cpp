@@ -35,6 +35,7 @@ constexpr size_t TABLE_CAPACITY = 1024;
 constexpr size_t KEY_NUM = 128;
 constexpr size_t DIM = 8;
 constexpr size_t HBM_FOR_VALUES = 1024UL * 1024;
+constexpr size_t HALF_TABLE_CAPACITY = 512;
 
 // 统一的建表函数：表大小=1024
 template <typename Table>
@@ -86,7 +87,7 @@ TEST(TestAllInterfaces, test_insert_or_assign) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, device_data.device_scores,
+                        device_data.device_values, nullptr,
                         device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
@@ -142,7 +143,7 @@ TEST(TestAllInterfaces, test_insert_and_evict_with_counter) {
             ACL_ERROR_NONE);
 
   table->insert_and_evict(KEY_NUM, device_data.device_keys,
-                          device_data.device_values, device_data.device_scores,
+                          device_data.device_values, nullptr,
                           d_evicted_keys, d_evicted_values,
                           d_evicted_scores, d_counter, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
@@ -202,7 +203,7 @@ TEST(TestAllInterfaces, test_insert_and_evict_return_size) {
 
   size_t evicted = table->insert_and_evict(
       KEY_NUM, device_data.device_keys, device_data.device_values,
-      device_data.device_scores, d_evicted_keys, d_evicted_values,
+      nullptr, d_evicted_keys, d_evicted_values,
       d_evicted_scores, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_GE(evicted, 0);
@@ -233,7 +234,7 @@ TEST(TestAllInterfaces, test_accum_or_assign) {
 
   // 先插入一批key
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, device_data.device_scores,
+                        device_data.device_values, nullptr,
                         device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
@@ -245,7 +246,7 @@ TEST(TestAllInterfaces, test_accum_or_assign) {
 
   table->accum_or_assign(KEY_NUM, device_data.device_keys,
                       device_data.device_values, d_accum_or_assigns,
-                      device_data.device_scores, device_data.stream);
+                      nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 
@@ -273,7 +274,7 @@ TEST(TestAllInterfaces, test_find_or_insert_value_copy) {
 
   table->find_or_insert(KEY_NUM, device_data.device_keys,
                        device_data.device_values,
-                       device_data.device_scores,
+                       nullptr,
                        device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
@@ -302,7 +303,7 @@ TEST(TestAllInterfaces, test_find_or_insert_ptr) {
   bool* d_found = device_data.device_found;
 
   table->find_or_insert(KEY_NUM, device_data.device_keys, d_values_ptr, d_found,
-                       device_data.device_scores, device_data.stream);
+                       nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 }
@@ -370,14 +371,14 @@ TEST(TestAllInterfaces, test_assign_with_values_scores) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, device_data.device_scores,
+                        device_data.device_values, nullptr,
                         device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   // 重新赋值
   table->assign(KEY_NUM, device_data.device_keys,
                device_data.device_values,
-               device_data.device_scores, device_data.stream);
+               nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 }
@@ -400,12 +401,12 @@ TEST(TestAllInterfaces, test_assign_scores) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, device_data.device_scores,
+                        device_data.device_values, nullptr,
                         device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   table->assign_scores(KEY_NUM, device_data.device_keys,
-                      device_data.device_scores, device_data.stream);
+                      nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 }
 
@@ -427,12 +428,12 @@ TEST(TestAllInterfaces, test_assign_scores_only) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, device_data.device_scores,
+                        device_data.device_values, nullptr,
                         device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   table->assign(KEY_NUM, device_data.device_keys,
-                device_data.device_scores, device_data.stream);
+                nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 }
 
@@ -483,12 +484,12 @@ TEST(TestAllInterfaces, test_find_value_copy) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, device_data.device_scores,
+                        device_data.device_values, nullptr,
                         device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   table->find(KEY_NUM, device_data.device_keys, device_data.device_values,
-               device_data.device_found, device_data.device_scores,
+               device_data.device_found, nullptr,
                device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 }
@@ -586,13 +587,13 @@ TEST(TestAllInterfaces, test_find_and_update) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, device_data.device_scores,
+                        device_data.device_values, nullptr,
                         device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   table->find_and_update(KEY_NUM, device_data.device_keys,
                       device_data.device_values_ptr, device_data.device_found,
-                      device_data.device_scores, device_data.stream);
+                      nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 }
 
@@ -693,7 +694,7 @@ TEST(TestAllInterfaces, test_export_batch_with_counter) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                        device_data.device_values, device_data.device_scores,
+                        device_data.device_values, nullptr,
                         device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
@@ -705,7 +706,7 @@ TEST(TestAllInterfaces, test_export_batch_with_counter) {
             ACL_ERROR_NONE);
 
   table->export_batch(KEY_NUM, 0, d_counter, device_data.device_keys,
-                      device_data.device_values, device_data.device_scores,
+                      device_data.device_values, nullptr,
                       device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
@@ -838,8 +839,16 @@ TEST(TestAllInterfaces, test_load_factor) {
 // ============================================================================
 TEST(TestAllInterfaces, test_set_max_capacity) {
   init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
-  size_t new_max = TABLE_CAPACITY * 2;
+  auto table = std::make_unique<HashTable<K, V, S, EvictStrategy::kLru>>();
+  HashTableOptions options{
+      .init_capacity = HALF_TABLE_CAPACITY,
+      .max_capacity = TABLE_CAPACITY,
+      .max_hbm_for_vectors = HBM_FOR_VALUES,
+      .dim = DIM,
+      .io_by_cpu = false,
+  };
+  table->init(options);
+  size_t new_max = TABLE_CAPACITY;
   table->set_max_capacity(new_max);
   EXPECT_EQ(table->capacity(), new_max);
 }
