@@ -21,6 +21,7 @@
 #include "acl/acl.h"
 #include "hkv_hashtable.h"
 #include "test_device_data.h"
+#include "test_template_func.h"
 #include "test_util.h"
 
 using namespace std;
@@ -851,4 +852,204 @@ TEST(TestAllInterfaces, test_is_pure_hbm_mode) {
   init_env();
   auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
   EXPECT_TRUE(table->is_pure_hbm_mode());
+}
+
+// ============================================================================
+// PredFunctors for export_batch_if / erase_if tests
+// ============================================================================
+
+// v1: 模板模板参数形式（2 模板参数 K, S），用于 erase_if / export_batch_if
+template <class K, class S>
+struct AllInterfacesExportIfPredFunctor {
+  __forceinline__ __simt_callee__ bool operator()(const K& key, const S& score,
+                                                   const K& pattern,
+                                                   const S& threshold) {
+    (void)pattern;
+    return score < threshold;
+  }
+};
+
+// v2: functor 对象形式（3 模板参数 K, V, S），用于 erase_if_v2 / export_batch_if_v2
+template <class K, class V, class S>
+struct AllInterfacesExportIfPredFunctorV2 {
+  K pattern;
+  S threshold;
+  AllInterfacesExportIfPredFunctorV2(K pattern, S threshold)
+      : pattern(pattern), threshold(threshold) {}
+
+  __forceinline__ __simt_callee__ bool operator()(const K& key,
+                                                   const __gm__ V* value,
+                                                   const S& score,
+                                                   int32_t group_size) {
+    (void)pattern;
+    (void)value;
+    (void)group_size;
+    return score < threshold;
+  }
+};
+
+// ============================================================================
+// UT 28. erase_if
+// ============================================================================
+TEST(TestAllInterfaces, test_erase_if) {
+  init_env();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
+
+  DeviceData<K, V, S> device_data;
+  device_data.malloc(KEY_NUM);
+
+  vector<K> host_keys(KEY_NUM, 0);
+  vector<S> host_scores(KEY_NUM, 0);
+  create_continuous_keys<K, S, V, DIM>(host_keys.data(), host_scores.data(),
+                                       nullptr, KEY_NUM);
+  device_data.copy_keys(host_keys, KEY_NUM);
+  device_data.copy_scores(host_scores, KEY_NUM);
+
+  table->insert_or_assign(KEY_NUM, device_data.device_keys,
+                          device_data.device_values,
+                          device_data.device_scores, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
+
+  // erase: score > threshold 的 key 被删除（score 从 1 开始递增，threshold=KEY_NUM/2）
+  K pattern = 0;
+  S threshold = KEY_NUM / 2;
+  size_t erased = table->template erase_if<EraseIfPredFunctor>(
+      pattern, threshold, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  EXPECT_GT(erased, 0);
+  EXPECT_LT(table->size(device_data.stream), KEY_NUM);
+}
+
+// ============================================================================
+// UT 29. erase_if_v2
+// ============================================================================
+TEST(TestAllInterfaces, test_erase_if_v2) {
+  init_env();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
+
+  DeviceData<K, V, S> device_data;
+  device_data.malloc(KEY_NUM);
+
+  vector<K> host_keys(KEY_NUM, 0);
+  vector<S> host_scores(KEY_NUM, 0);
+  create_continuous_keys<K, S, V, DIM>(host_keys.data(), host_scores.data(),
+                                       nullptr, KEY_NUM);
+  device_data.copy_keys(host_keys, KEY_NUM);
+  device_data.copy_scores(host_scores, KEY_NUM);
+
+  table->insert_or_assign(KEY_NUM, device_data.device_keys,
+                          device_data.device_values,
+                          device_data.device_scores, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
+
+  K pattern = 0;
+  S threshold = KEY_NUM / 2;
+  EraseIfPredFunctorV2<K, V, S> pred(pattern, threshold);
+  size_t erased = table->template erase_if_v2<EraseIfPredFunctorV2<K, V, S>>(
+      pred, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  EXPECT_GT(erased, 0);
+  EXPECT_LT(table->size(device_data.stream), KEY_NUM);
+}
+
+// ============================================================================
+// UT 30. export_batch_if
+// ============================================================================
+TEST(TestAllInterfaces, test_export_batch_if) {
+  init_env();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
+
+  DeviceData<K, V, S> device_data;
+  device_data.malloc(KEY_NUM);
+
+  vector<K> host_keys(KEY_NUM, 0);
+  vector<V> host_values(KEY_NUM * DIM, 0);
+  vector<S> host_scores(KEY_NUM, 0);
+  create_continuous_keys<K, S, V, DIM>(host_keys.data(), host_scores.data(),
+                                       host_values.data(), KEY_NUM);
+  device_data.copy_keys(host_keys, KEY_NUM);
+  device_data.copy_values(host_values, KEY_NUM, DIM);
+  device_data.copy_scores(host_scores, KEY_NUM);
+
+  table->insert_or_assign(KEY_NUM, device_data.device_keys,
+                          device_data.device_values,
+                          device_data.device_scores, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
+
+  // export: score < threshold 的 key 被导出（threshold 设为 KEY_NUM，所有 key 都会匹配）
+  size_t* d_counter = nullptr;
+  ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_counter), sizeof(size_t),
+                        ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemset(d_counter, sizeof(size_t), 0, sizeof(size_t)),
+            ACL_ERROR_NONE);
+
+  K pattern = 0;
+  S threshold = static_cast<S>(KEY_NUM);
+  table->template export_batch_if<AllInterfacesExportIfPredFunctor>(
+      pattern, threshold, KEY_NUM, 0, d_counter,
+      device_data.device_keys, device_data.device_values,
+      device_data.device_scores, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+
+  size_t host_counter = 0;
+  ASSERT_EQ(aclrtMemcpy(&host_counter, sizeof(size_t), d_counter,
+                        sizeof(size_t), ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
+  EXPECT_GT(host_counter, 0);
+
+  aclrtFree(d_counter);
+}
+
+// ============================================================================
+// UT 31. export_batch_if_v2
+// ============================================================================
+TEST(TestAllInterfaces, test_export_batch_if_v2) {
+  init_env();
+  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
+
+  DeviceData<K, V, S> device_data;
+  device_data.malloc(KEY_NUM);
+
+  vector<K> host_keys(KEY_NUM, 0);
+  vector<V> host_values(KEY_NUM * DIM, 0);
+  vector<S> host_scores(KEY_NUM, 0);
+  create_continuous_keys<K, S, V, DIM>(host_keys.data(), host_scores.data(),
+                                       host_values.data(), KEY_NUM);
+  device_data.copy_keys(host_keys, KEY_NUM);
+  device_data.copy_values(host_values, KEY_NUM, DIM);
+  device_data.copy_scores(host_scores, KEY_NUM);
+
+  table->insert_or_assign(KEY_NUM, device_data.device_keys,
+                          device_data.device_values,
+                          device_data.device_scores, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+  EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
+
+  size_t* d_counter = nullptr;
+  ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_counter), sizeof(size_t),
+                        ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemset(d_counter, sizeof(size_t), 0, sizeof(size_t)),
+            ACL_ERROR_NONE);
+
+  K pattern = 0;
+  S threshold = static_cast<S>(KEY_NUM);
+  AllInterfacesExportIfPredFunctorV2<K, V, S> pred(pattern, threshold);
+  table->template export_batch_if_v2<AllInterfacesExportIfPredFunctorV2<K, V, S>>(
+      pred, KEY_NUM, 0, d_counter,
+      device_data.device_keys, device_data.device_values,
+      device_data.device_scores, device_data.stream);
+  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
+
+  size_t host_counter = 0;
+  ASSERT_EQ(aclrtMemcpy(&host_counter, sizeof(size_t), d_counter,
+                        sizeof(size_t), ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
+  EXPECT_GT(host_counter, 0);
+
+  aclrtFree(d_counter);
 }
