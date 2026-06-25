@@ -862,14 +862,14 @@ TEST(TestAllInterfaces, test_is_pure_hbm_mode) {
 template <class K, class S>
 struct AllInterfacesExportIfPredFunctor {
   __forceinline__ __simt_callee__ bool operator()(const K& key, const S& score,
-                                                   const K& pattern,
-                                                   const S& threshold) {
-    (void)pattern;
-    return score < threshold;
+                                                  const K& pattern,
+                                                  const S& threshold) {
+    return score > threshold;
   }
 };
 
-// v2: functor 对象形式（3 模板参数 K, V, S），用于 erase_if_v2 / export_batch_if_v2
+// v2: functor 对象形式（3 模板参数 K, V, S），用于 erase_if_v2 /
+// export_batch_if_v2
 template <class K, class V, class S>
 struct AllInterfacesExportIfPredFunctorV2 {
   K pattern;
@@ -877,14 +877,11 @@ struct AllInterfacesExportIfPredFunctorV2 {
   AllInterfacesExportIfPredFunctorV2(K pattern, S threshold)
       : pattern(pattern), threshold(threshold) {}
 
+  template <int GroupSize>
   __forceinline__ __simt_callee__ bool operator()(const K& key,
-                                                   const __gm__ V* value,
-                                                   const S& score,
-                                                   int32_t group_size) {
-    (void)pattern;
-    (void)value;
-    (void)group_size;
-    return score < threshold;
+                                                  const __gm__ V* value,
+                                                  const S& score) {
+    return ((!npu::hkv::IS_RESERVED_KEY<K>(key)) && (score > threshold));
   }
 };
 
@@ -906,12 +903,13 @@ TEST(TestAllInterfaces, test_erase_if) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                          device_data.device_values,
-                          device_data.device_scores, device_data.stream);
+                          device_data.device_values, device_data.device_scores,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 
-  // erase: score > threshold 的 key 被删除（score 从 1 开始递增，threshold=KEY_NUM/2）
+  // erase: score > threshold 的 key 被删除（score 从 1
+  // 开始递增，threshold=KEY_NUM/2）
   K pattern = 0;
   S threshold = KEY_NUM / 2;
   size_t erased = table->template erase_if<EraseIfPredFunctor>(
@@ -939,8 +937,8 @@ TEST(TestAllInterfaces, test_erase_if_v2) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                          device_data.device_values,
-                          device_data.device_scores, device_data.stream);
+                          device_data.device_values, device_data.device_scores,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 
@@ -974,12 +972,13 @@ TEST(TestAllInterfaces, test_export_batch_if) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                          device_data.device_values,
-                          device_data.device_scores, device_data.stream);
+                          device_data.device_values, device_data.device_scores,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 
-  // export: score < threshold 的 key 被导出（threshold 设为 KEY_NUM，所有 key 都会匹配）
+  // export: score < threshold 的 key 被导出（threshold 设为 KEY_NUM，所有 key
+  // 都会匹配）
   size_t* d_counter = nullptr;
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_counter), sizeof(size_t),
                         ACL_MEM_MALLOC_HUGE_FIRST),
@@ -990,9 +989,8 @@ TEST(TestAllInterfaces, test_export_batch_if) {
   K pattern = 0;
   S threshold = static_cast<S>(KEY_NUM);
   table->template export_batch_if<AllInterfacesExportIfPredFunctor>(
-      pattern, threshold, KEY_NUM, 0, d_counter,
-      device_data.device_keys, device_data.device_values,
-      device_data.device_scores, device_data.stream);
+      pattern, threshold, KEY_NUM, 0, d_counter, device_data.device_keys,
+      device_data.device_values, device_data.device_scores, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   size_t host_counter = 0;
@@ -1024,8 +1022,8 @@ TEST(TestAllInterfaces, test_export_batch_if_v2) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                          device_data.device_values,
-                          device_data.device_scores, device_data.stream);
+                          device_data.device_values, device_data.device_scores,
+                          device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
 
@@ -1039,10 +1037,10 @@ TEST(TestAllInterfaces, test_export_batch_if_v2) {
   K pattern = 0;
   S threshold = static_cast<S>(KEY_NUM);
   AllInterfacesExportIfPredFunctorV2<K, V, S> pred(pattern, threshold);
-  table->template export_batch_if_v2<AllInterfacesExportIfPredFunctorV2<K, V, S>>(
-      pred, KEY_NUM, 0, d_counter,
-      device_data.device_keys, device_data.device_values,
-      device_data.device_scores, device_data.stream);
+  table->template export_batch_if_v2<
+      AllInterfacesExportIfPredFunctorV2<K, V, S>>(
+      pred, KEY_NUM, 0, d_counter, device_data.device_keys,
+      device_data.device_values, device_data.device_scores, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   size_t host_counter = 0;
