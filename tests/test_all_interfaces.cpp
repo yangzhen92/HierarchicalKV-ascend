@@ -903,7 +903,7 @@ TEST(TestAllInterfaces, test_erase_if) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                          device_data.device_values, device_data.device_scores,
+                          device_data.device_values, nullptr,
                           device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
@@ -937,7 +937,7 @@ TEST(TestAllInterfaces, test_erase_if_v2) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                          device_data.device_values, device_data.device_scores,
+                          device_data.device_values, nullptr,
                           device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
@@ -972,7 +972,7 @@ TEST(TestAllInterfaces, test_export_batch_if) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                          device_data.device_values, device_data.device_scores,
+                          device_data.device_values, nullptr,
                           device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
@@ -990,7 +990,7 @@ TEST(TestAllInterfaces, test_export_batch_if) {
   S threshold = static_cast<S>(KEY_NUM);
   table->template export_batch_if<AllInterfacesExportIfPredFunctor>(
       pattern, threshold, KEY_NUM, 0, d_counter, device_data.device_keys,
-      device_data.device_values, device_data.device_scores, device_data.stream);
+      device_data.device_values, nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   size_t host_counter = 0;
@@ -1022,7 +1022,7 @@ TEST(TestAllInterfaces, test_export_batch_if_v2) {
   device_data.copy_scores(host_scores, KEY_NUM);
 
   table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                          device_data.device_values, device_data.device_scores,
+                          device_data.device_values, nullptr,
                           device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
@@ -1040,7 +1040,7 @@ TEST(TestAllInterfaces, test_export_batch_if_v2) {
   table->template export_batch_if_v2<
       AllInterfacesExportIfPredFunctorV2<K, V, S>>(
       pred, KEY_NUM, 0, d_counter, device_data.device_keys,
-      device_data.device_values, device_data.device_scores, device_data.stream);
+      device_data.device_values, nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
   size_t host_counter = 0;
