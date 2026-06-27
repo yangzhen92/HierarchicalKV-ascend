@@ -699,7 +699,7 @@ TEST(TestAllInterfaces, test_export_batch_with_counter) {
   ASSERT_EQ(aclrtMemset(d_counter, sizeof(size_t), 0, sizeof(size_t)),
             ACL_ERROR_NONE);
 
-  table->export_batch(KEY_NUM, 0, d_counter, device_data.device_keys,
+  table->export_batch(TABLE_CAPACITY, 0, d_counter, device_data.device_keys,
                       device_data.device_values, nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
@@ -707,7 +707,7 @@ TEST(TestAllInterfaces, test_export_batch_with_counter) {
   ASSERT_EQ(aclrtMemcpy(&host_counter, sizeof(size_t), d_counter,
                         sizeof(size_t), ACL_MEMCPY_DEVICE_TO_HOST),
             ACL_ERROR_NONE);
-  EXPECT_GT(host_counter, 0);
+  ASSERT_EQ(host_counter, KEY_NUM);
 
   aclrtFree(d_counter);
 }
@@ -734,11 +734,11 @@ TEST(TestAllInterfaces, test_export_batch_return_size) {
                           device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
-  size_t exported = table->export_batch(KEY_NUM, 0, device_data.device_keys,
+  size_t exported = table->export_batch(TABLE_CAPACITY, 0, device_data.device_keys,
                                         device_data.device_values, nullptr,
                                         device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
-  EXPECT_GT(exported, 0);
+  ASSERT_EQ(exported, KEY_NUM);
 }
 
 // ============================================================================
@@ -989,7 +989,7 @@ TEST(TestAllInterfaces, test_export_batch_if) {
   K pattern = 0;
   S threshold = static_cast<S>(KEY_NUM);
   table->template export_batch_if<AllInterfacesExportIfPredFunctor>(
-      pattern, threshold, KEY_NUM, 0, d_counter, device_data.device_keys,
+      pattern, threshold, TABLE_CAPACITY, 0, d_counter, device_data.device_keys,
       device_data.device_values, nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
@@ -998,6 +998,7 @@ TEST(TestAllInterfaces, test_export_batch_if) {
                         sizeof(size_t), ACL_MEMCPY_DEVICE_TO_HOST),
             ACL_ERROR_NONE);
   EXPECT_GT(host_counter, 0);
+  EXPECT_LT(host_counter, KEY_NUM);
 
   aclrtFree(d_counter);
 }
@@ -1039,7 +1040,7 @@ TEST(TestAllInterfaces, test_export_batch_if_v2) {
   AllInterfacesExportIfPredFunctorV2<K, V, S> pred(pattern, threshold);
   table->template export_batch_if_v2<
       AllInterfacesExportIfPredFunctorV2<K, V, S>>(
-      pred, KEY_NUM, 0, d_counter, device_data.device_keys,
+      pred, TABLE_CAPACITY, 0, d_counter, device_data.device_keys,
       device_data.device_values, nullptr, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
 
@@ -1048,6 +1049,7 @@ TEST(TestAllInterfaces, test_export_batch_if_v2) {
                         sizeof(size_t), ACL_MEMCPY_DEVICE_TO_HOST),
             ACL_ERROR_NONE);
   EXPECT_GT(host_counter, 0);
+  EXPECT_LT(host_counter, KEY_NUM);
 
   aclrtFree(d_counter);
 }

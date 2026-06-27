@@ -2426,14 +2426,15 @@ class HashTable : public HashTableBase<K, V, S> {
 
     size_type count = 0;
 #ifdef SIM_MODE
+    NPU_CHECK(aclrtSynchronizeStream(stream));
     NPU_CHECK(aclrtMemcpy(&count, sizeof(count), d_counter, sizeof(count),
                           ACL_MEMCPY_DEVICE_TO_HOST));
 #else
     NPU_CHECK(aclrtMemcpyAsync(&count, sizeof(size_type), d_counter,
                                sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST,
                                stream));
-#endif
     NPU_CHECK(aclrtSynchronizeStream(stream));
+#endif
 
     NpuCheckError();
     return count;
@@ -2472,14 +2473,15 @@ class HashTable : public HashTableBase<K, V, S> {
 
     size_type count = 0;
 #ifdef SIM_MODE
+    NPU_CHECK(aclrtSynchronizeStream(stream));
     NPU_CHECK(aclrtMemcpy(&count, sizeof(count), d_counter, sizeof(count),
                           ACL_MEMCPY_DEVICE_TO_HOST));
 #else
     NPU_CHECK(aclrtMemcpyAsync(&count, sizeof(size_type), d_counter,
                                sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST,
                                stream));
-#endif
     NPU_CHECK(aclrtSynchronizeStream(stream));
+#endif
 
     NpuCheckError();
     return count;
@@ -2581,14 +2583,15 @@ class HashTable : public HashTableBase<K, V, S> {
 
     size_type counter = 0;
 #ifdef SIM_MODE
+    NPU_CHECK(aclrtSynchronizeStream(stream));
     NPU_CHECK(aclrtMemcpy(&counter, sizeof(counter), d_counter, sizeof(counter),
                           ACL_MEMCPY_DEVICE_TO_HOST));
 #else
     NPU_CHECK(aclrtMemcpyAsync(&counter, sizeof(size_type), d_counter,
                                sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST,
                                stream));
-#endif
     NPU_CHECK(aclrtSynchronizeStream(stream));
+#endif
 
     return counter;
   }
@@ -2829,14 +2832,15 @@ class HashTable : public HashTableBase<K, V, S> {
 
     int64_t h_total_size = 0;
 #ifdef SIM_MODE
+    NPU_CHECK(aclrtSynchronizeStream(stream));
     NPU_CHECK(aclrtMemcpy(&h_total_size, sizeof(h_total_size), out.get_data(),
                           out.get_data_size(), ACL_MEMCPY_DEVICE_TO_HOST));
 #else
     NPU_CHECK(aclrtMemcpyAsync(&h_total_size, sizeof(h_total_size),
                                out.get_data(), out.get_data_size(),
                                ACL_MEMCPY_DEVICE_TO_HOST, stream));
-#endif
     NPU_CHECK(aclrtSynchronizeStream(stream));
+#endif
     return h_total_size;
   }
 
@@ -3280,14 +3284,15 @@ class HashTable : public HashTableBase<K, V, S> {
 
     int64_t h_total_size = 0;
 #ifdef SIM_MODE
+    NPU_CHECK(aclrtSynchronizeStream(stream));
     NPU_CHECK(aclrtMemcpy(&h_total_size, sizeof(h_total_size), out.get_data(),
                           out.get_data_size(), ACL_MEMCPY_DEVICE_TO_HOST));
 #else
     NPU_CHECK(aclrtMemcpyAsync(&h_total_size, sizeof(h_total_size),
                                out.get_data(), out.get_data_size(),
                                ACL_MEMCPY_DEVICE_TO_HOST, stream));
-#endif
     NPU_CHECK(aclrtSynchronizeStream(stream));
+#endif
     NpuCheckError();
     return static_cast<float>((delta * 1.0) / (capacity() * 1.0) +
                               (h_total_size * 1.0) /
