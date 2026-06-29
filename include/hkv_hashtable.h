@@ -2189,8 +2189,12 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+#ifdef SIM_MODE
+    NPU_CHECK(aclrtMemset(missed_size, sizeof(int), 0, sizeof(int)));
+#else
     NPU_CHECK(
         aclrtMemsetAsync(missed_size, sizeof(int), 0, sizeof(int), stream));
+#endif
 
     std::unique_ptr<read_shared_lock> lock_ptr;
     if (options_.api_lock) {
