@@ -21,28 +21,82 @@
 #include <cstdint>
 #include <kernel_operator.h>
 #include "find_utils.h"
+#include "mte_task_queue.h"
 #include "simt_vf_dispatcher.h"
 
 namespace npu {
 namespace hkv {
 using namespace AscendC;
 
+template <uint32_t RING_BUFFER_SZ = 512>
+class FindValueTaskQueue : public MTETaskQueue<RING_BUFFER_SZ> {
+public:
+  __aicore__ FindValueTaskQueue() {}
+
+  __simt_callee__ inline void drain(const uint32_t& new_task_end_id) {
+    while (true) {
+      uint32_t mte_finish_id =
+          *reinterpret_cast<__ubuf__ volatile uint32_t*>(
+              MTETaskQueue<RING_BUFFER_SZ>::MTE_FINISH_ID_ADDR);
+      if (new_task_end_id - mte_finish_id <= RING_BUFFER_SZ) {
+        break;
+      }
+    }
+  }
+
+  __simt_callee__ inline void assign_warp_task(const uint64_t& in_ddr,
+                                               const uint64_t& out_ddr,
+                                               const bool& need_assign) {
+    uint32_t write_mask = __ballot(need_assign);
+    uint32_t warp_write_count = __popc(write_mask);
+    if (warp_write_count == 0) {
+      return;
+    }
+
+    uint32_t curr_simt_alloc_pos = 0;
+    if (laneid() == 0) {
+      curr_simt_alloc_pos =
+          MTETaskQueue<RING_BUFFER_SZ>::apply_ID(warp_write_count);
+    }
+    curr_simt_alloc_pos = __shfl(curr_simt_alloc_pos, 0);
+
+    uint32_t new_simt_alloc_pos = curr_simt_alloc_pos + warp_write_count;
+    drain(new_simt_alloc_pos);
+
+    if (need_assign) {
+      uint32_t offset_in_warp = __popc(write_mask & lanemask_lt());
+      uint32_t my_slot_id =
+          (curr_simt_alloc_pos + offset_in_warp) &
+          MTETaskQueue<RING_BUFFER_SZ>::RING_BUFFER_MASK;
+      MTETaskQueue<RING_BUFFER_SZ>::fill_task_info(my_slot_id, in_ddr,
+                                                   out_ddr);
+    }
+
+    __threadfence();
+
+    if (laneid() == 0) {
+      MTETaskQueue<RING_BUFFER_SZ>::assign_task(curr_simt_alloc_pos,
+                                                new_simt_alloc_pos);
+    }
+  }
+};
+
 template <typename K = uint64_t, typename V = float, typename S = uint64_t,
           typename VecV = int32_t>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void find_with_digest_kernel_vf(
+    FindValueTaskQueue<THREAD_NUM_512> find_task_queue,
     __gm__ Bucket<K, V, S>* buckets, uint64_t capacity, uint64_t buckets_num,
-    uint32_t bucket_capacity, uint32_t dim, __gm__ K* keys,
-    __gm__ V* values, __gm__ S* scores, __gm__ bool* founds,
-    uint64_t n, const uint64_t total_thread_num,
-    uint64_t global_epoch, uint32_t block_id,
+    uint32_t bucket_capacity, uint32_t dim, __gm__ K* keys, __gm__ V* values,
+    __gm__ S* scores, __gm__ bool* founds, uint64_t n,
+    const uint64_t total_thread_num, uint64_t global_epoch, uint32_t block_id,
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
-    uint64_t capacity_divisor_shift, uint64_t n_align_warp, uint32_t group_size) {
+    uint64_t capacity_divisor_shift, uint64_t n_align_warp,
+    uint32_t group_size) {
   if (buckets == nullptr || keys == nullptr || values == nullptr) {
     return;
   }
   using BUCKET = Bucket<K, V, S>;
-  __gm__ VecV* values_vec = reinterpret_cast<__gm__ VecV*>(values);
 
   for (uint64_t kv_idx = block_id * blockDim.x + threadIdx.x;
        kv_idx < n_align_warp; kv_idx += total_thread_num) {
@@ -84,26 +138,23 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void find_with_digest_kernel_vf(
       }
     }
 
-    // 5、协程组协作搬运value（从bucket拷贝到输出缓冲区）
-    auto cg_rank_id = threadIdx.x % group_size;
-    for (int32_t i = 0; i < group_size; i++) {
-      bool found_sync = asc_shfl(found, i, group_size);
-      if (found_sync) {
-        auto kv_idx_sync = asc_shfl(kv_idx, i, group_size);
-        auto target_pos_sync = asc_shfl(target_pos, i, group_size);
-        uint64_t bucket_values_sync =
-            asc_shfl(bucket_values_uintptr, i, group_size);
-        auto value_start = kv_idx_sync * dim;
-        auto bucket_value_start = target_pos_sync * dim;
-        for (uint32_t j = cg_rank_id; j < dim; j += group_size) {
-          values_vec[value_start + j] =
-              __ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-                    L1CacheType::NON_CACHEABLE>(
-                  reinterpret_cast<__gm__ VecV*>(bucket_values_sync) +
-                  bucket_value_start + j);
-        }
-      }
+    // 5. Queue hit value copy from bucket storage to output buffer.
+    uint64_t value_base_addr = 0;
+    uint64_t bucket_value_base_addr = 0;
+    if (found) {
+      value_base_addr = reinterpret_cast<uint64_t>(
+          reinterpret_cast<__gm__ VecV*>(values) + kv_idx * dim);
+      bucket_value_base_addr =
+          bucket_values_uintptr + target_pos * dim * sizeof(VecV);
     }
+    find_task_queue.assign_warp_task(bucket_value_base_addr, value_base_addr,
+                                     found);
+  }
+
+  __syncthreads();
+
+  if (threadIdx.x == 0) {
+    find_task_queue.assignment_finish();
   }
 }
 
@@ -115,15 +166,32 @@ __global__ __vector__ void find_with_digest_kernel(
     uint32_t max_bucket_shift, uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
     uint64_t n_align_warp, uint32_t group_size) {
 
-  const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
+  KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIV_ONLY);
 
-  DISPATCH_VALUE_SIZE(
-    value_size,
-    (asc_vf_call<find_with_digest_kernel_vf<K, V, S, DTYPE>>(
-          dim3{static_cast<uint32_t>(THREAD_NUM_512), 1, 1}, buckets,
-          capacity, buckets_num, bucket_capacity, dim, keys, values, scores, founds,
-          n, thread_all, global_epoch, GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
-          capacity_divisor_shift, n_align_warp, group_size)));
+  if ASCEND_IS_AIV {
+    if (buckets == nullptr || keys == nullptr || values == nullptr) {
+      return;
+    }
+
+    FindValueTaskQueue<THREAD_NUM_512> find_task_queue;
+    find_task_queue.init();
+
+    pipe_barrier(PIPE_ALL);
+
+    const uint64_t thread_all = THREAD_NUM_512 * GetBlockNum();
+
+    DISPATCH_VALUE_SIZE(
+        value_size,
+        (Simt::VF_CALL<find_with_digest_kernel_vf<K, V, S, DTYPE>>(
+            Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_512)}, find_task_queue,
+            buckets, capacity, buckets_num, bucket_capacity, dim, keys, values,
+            scores, founds, n, thread_all, global_epoch, GetBlockIdx(),
+            max_bucket_shift, capacity_divisor_magic, capacity_divisor_shift,
+            n_align_warp, group_size)));
+
+    uint32_t value_dim_size = dim * value_size;
+    find_task_queue.run_task(value_dim_size);
+  }
 }
 }  // namespace hkv
 }  // namespace npu
