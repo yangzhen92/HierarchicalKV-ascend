@@ -3265,12 +3265,14 @@ class HashTable : public HashTableBase<K, V, S> {
         // Partial batch: copy each array separately
 #ifdef SIM_MODE
         NPU_CHECK(aclrtMemcpy(d_keys, sizeof(key_type) * count, h_keys,
-                                sizeof(key_type) * count,
-                                ACL_MEMCPY_HOST_TO_DEVICE));
-        NPU_CHECK(aclrtMemcpy(d_scores, sizeof(score_type) * count,
-                                ACL_MEMCPY_HOST_TO_DEVICE));
-        NPU_CHECK(aclrtMemcpy(d_values, sizeof(value_type) * count,
-                                ACL_MEMCPY_HOST_TO_DEVICE));
+                              sizeof(key_type) * count,
+                              ACL_MEMCPY_HOST_TO_DEVICE));
+        NPU_CHECK(aclrtMemcpy(d_scores, sizeof(score_type) * count, h_scores,
+                              sizeof(score_type) * count,
+                              ACL_MEMCPY_HOST_TO_DEVICE));
+        NPU_CHECK(aclrtMemcpy(d_values, sizeof(value_type) * count, h_values,
+                              sizeof(value_type) * count,
+                              ACL_MEMCPY_HOST_TO_DEVICE));
 #else
         NPU_CHECK(aclrtMemcpyAsync(d_keys, sizeof(key_type) * count, h_keys,
                                    sizeof(key_type) * count,
