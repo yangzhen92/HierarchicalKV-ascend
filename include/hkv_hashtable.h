@@ -2521,10 +2521,9 @@ class HashTable : public HashTableBase<K, V, S> {
     n = std::min(table_->capacity - offset, n);
     size_type n_align = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     if (is_fast_mode()) {
-      dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
+      new_dump_kernel<K, V, S><<<block_dim_, GetMixedOpUbSize(), stream>>>(
           d_table_, table_->buckets, keys, values, scores, offset, n, n_align,
-          d_counter, value_move_opt_.size, value_move_opt_.cg_size,
-          value_move_opt_.dim);
+          d_counter, table_->dim);
     } else {
       size_t size_all = n * sizeof(value_type*);
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
@@ -3051,10 +3050,9 @@ class HashTable : public HashTableBase<K, V, S> {
           ((batch_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
 
       if (is_fast_mode()) {
-        dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
+        new_dump_kernel<K, V, S><<<block_dim_, GetMixedOpUbSize(), stream>>>(
             d_table_, table_->buckets, d_keys, d_values, d_scores, i,
-            batch_size, batch_size_align, d_count, value_move_opt_.size,
-            value_move_opt_.cg_size, value_move_opt_.dim);
+            batch_size, batch_size_align, d_count, table_->dim);
       } else {
         size_t size_all = n * sizeof(value_type*);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};

@@ -67,7 +67,7 @@ public:
   }
 
   // 消费执行任务
-  __aicore__ inline void run_task(const uint32_t &value_size) {
+  __aicore__ inline virtual void run_task(const uint32_t &value_size) {
     int value_size_aligned = (value_size + UB_ALIGN_SIZE - 1) / UB_ALIGN_SIZE * UB_ALIGN_SIZE;
     uint32_t max_proc_batch = DATA_BUFFER_SZ / (value_size_aligned);
     max_proc_batch = min(max_proc_batch, queue_limited);
@@ -119,28 +119,28 @@ public:
   }
 
 protected:
-  const uint32_t queue_limited = 32;  // 一次最多处理32个任务
-  const uint32_t FINISH_FLAG = 1;  // 任务完成标志1，未完成0
-  const uint32_t RING_BUFFER_MASK = RING_BUFFER_SZ - 1;
-  const uint32_t DATA_BUFFER_SZ = 128 * 1024;  // 默认缓冲区大小128KB，可根据实际情况调整
+  static constexpr uint32_t queue_limited = 32;  // 一次最多处理32个任务
+  static constexpr uint32_t FINISH_FLAG = 1;  // 任务完成标志1，未完成0
+  static constexpr uint32_t RING_BUFFER_MASK = RING_BUFFER_SZ - 1;
+  static constexpr uint32_t DATA_BUFFER_SZ = 128 * 1024;  // 默认缓冲区大小128KB，可根据实际情况调整
 
   // 队列数据
-  const uint32_t RING_BUFFER_IN_ADDR_QUEUE_ADDR = 0;
-  const uint32_t RING_BUFFER_OUT_ADDR_QUEUE_ADDR = RING_BUFFER_IN_ADDR_QUEUE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
+  static constexpr uint32_t RING_BUFFER_IN_ADDR_QUEUE_ADDR = 0;
+  static constexpr uint32_t RING_BUFFER_OUT_ADDR_QUEUE_ADDR = RING_BUFFER_IN_ADDR_QUEUE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
 
   // 控制数据
   // 全局任务ID
-  const uint32_t GLOBAL_ID_ADDR = RING_BUFFER_OUT_ADDR_QUEUE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
+  static constexpr uint32_t GLOBAL_ID_ADDR = RING_BUFFER_OUT_ADDR_QUEUE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
   // MTE已完成ID
-  const uint32_t MTE_FINISH_ID_ADDR = GLOBAL_ID_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t MTE_FINISH_ID_ADDR = GLOBAL_ID_ADDR + UB_ALIGN_SIZE;
   // SIMT下发ID
-  const uint32_t SIMT_ASSIGN_ID_ADDR = MTE_FINISH_ID_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t SIMT_ASSIGN_ID_ADDR = MTE_FINISH_ID_ADDR + UB_ALIGN_SIZE;
   // 任务完成标记
-  const uint32_t TASK_FINISH_FLAG_ADDR = SIMT_ASSIGN_ID_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t TASK_FINISH_FLAG_ADDR = SIMT_ASSIGN_ID_ADDR + UB_ALIGN_SIZE;
 
   // buffer区
-  const uint32_t DATA_BUFFER_START_ADDR = TASK_FINISH_FLAG_ADDR + UB_ALIGN_SIZE;
-  const uint32_t DATA_BUFFER_END_ADDR = DATA_BUFFER_START_ADDR + DATA_BUFFER_SZ;
+  static constexpr uint32_t DATA_BUFFER_START_ADDR = TASK_FINISH_FLAG_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t DATA_BUFFER_END_ADDR = DATA_BUFFER_START_ADDR + DATA_BUFFER_SZ;
 };
 
 }
