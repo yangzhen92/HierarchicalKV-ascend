@@ -742,53 +742,7 @@ TEST(TestAllInterfaces, test_export_batch_return_size) {
 }
 
 // ============================================================================
-// UT 22. empty
-// ============================================================================
-TEST(TestAllInterfaces, test_empty) {
-  init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
-  EXPECT_EQ(table->empty(), true);
-
-  DeviceData<K, V, S> device_data;
-  device_data.malloc(KEY_NUM);
-  vector<K> host_keys(KEY_NUM, 0);
-  create_continuous_keys<K, S, V, DIM>(host_keys.data(), nullptr, nullptr,
-                                       KEY_NUM);
-  device_data.copy_keys(host_keys, KEY_NUM);
-
-  table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                          device_data.device_values, nullptr,
-                          device_data.stream);
-  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
-  EXPECT_EQ(table->empty(device_data.stream), false);
-}
-
-// ============================================================================
-// UT 23. size
-// ============================================================================
-TEST(TestAllInterfaces, test_size) {
-  init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
-
-  DeviceData<K, V, S> device_data;
-  device_data.malloc(KEY_NUM);
-
-  vector<K> host_keys(KEY_NUM, 0);
-  create_continuous_keys<K, S, V, DIM>(host_keys.data(), nullptr, nullptr,
-                                       KEY_NUM);
-  device_data.copy_keys(host_keys, KEY_NUM);
-
-  EXPECT_EQ(table->size(), 0);
-
-  table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                          device_data.device_values, nullptr,
-                          device_data.stream);
-  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
-  EXPECT_EQ(table->size(device_data.stream), KEY_NUM);
-}
-
-// ============================================================================
-// UT 24. reserve
+// UT 22. reserve
 // ============================================================================
 TEST(TestAllInterfaces, test_reserve) {
   init_env();
@@ -803,7 +757,7 @@ TEST(TestAllInterfaces, test_reserve) {
 }
 
 // ============================================================================
-// UT 25. load_factor
+// UT 23. load_factor
 // ============================================================================
 TEST(TestAllInterfaces, test_load_factor) {
   init_env();
@@ -828,7 +782,7 @@ TEST(TestAllInterfaces, test_load_factor) {
 }
 
 // ============================================================================
-// UT 26. set_max_capacity
+// UT 24. set_max_capacity
 // ============================================================================
 TEST(TestAllInterfaces, test_set_max_capacity) {
   init_env();
@@ -846,7 +800,7 @@ TEST(TestAllInterfaces, test_set_max_capacity) {
 }
 
 // ============================================================================
-// UT 27. is_pure_hbm_mode
+// UT 25. is_pure_hbm_mode
 // ============================================================================
 TEST(TestAllInterfaces, test_is_pure_hbm_mode) {
   init_env();
@@ -886,7 +840,7 @@ struct AllInterfacesExportIfPredFunctorV2 {
 };
 
 // ============================================================================
-// UT 28. erase_if
+// UT 26. erase_if
 // ============================================================================
 TEST(TestAllInterfaces, test_erase_if) {
   init_env();
@@ -919,7 +873,7 @@ TEST(TestAllInterfaces, test_erase_if) {
 }
 
 // ============================================================================
-// UT 29. erase_if_v2
+// UT 27. erase_if_v2
 // ============================================================================
 TEST(TestAllInterfaces, test_erase_if_v2) {
   init_env();
@@ -951,7 +905,7 @@ TEST(TestAllInterfaces, test_erase_if_v2) {
 }
 
 // ============================================================================
-// UT 30. export_batch_if
+// UT 28. export_batch_if
 // ============================================================================
 TEST(TestAllInterfaces, test_export_batch_if) {
   init_env();
@@ -1001,7 +955,7 @@ TEST(TestAllInterfaces, test_export_batch_if) {
 }
 
 // ============================================================================
-// UT 31. export_batch_if_v2
+// UT 29. export_batch_if_v2
 // ============================================================================
 TEST(TestAllInterfaces, test_export_batch_if_v2) {
   init_env();

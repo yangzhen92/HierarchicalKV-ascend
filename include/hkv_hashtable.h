@@ -3156,7 +3156,7 @@ class HashTable : public HashTableBase<K, V, S> {
 #ifdef SIM_MODE
       NPU_CHECK(aclrtSynchronizeStream(stream));
       NPU_CHECK(aclrtMemcpy(&count, sizeof(size_type), d_count,
-                                 sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST));
+                            sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST));
 #else
       NPU_CHECK(aclrtMemcpyAsync(&count, sizeof(size_type), d_count,
                                  sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST,
@@ -3170,7 +3170,7 @@ class HashTable : public HashTableBase<K, V, S> {
           // Full batch: can copy all at once since memory layout matches
 #ifdef SIM_MODE
           NPU_CHECK(aclrtMemcpy(h_keys, host_ws_size, d_keys, host_ws_size,
-                                     ACL_MEMCPY_DEVICE_TO_HOST));
+                                ACL_MEMCPY_DEVICE_TO_HOST));
 #else
           NPU_CHECK(aclrtMemcpyAsync(h_keys, host_ws_size, d_keys, host_ws_size,
                                      ACL_MEMCPY_DEVICE_TO_HOST, stream));
@@ -3260,7 +3260,7 @@ class HashTable : public HashTableBase<K, V, S> {
         // Full batch: can copy all at once since memory layout matches
 #ifdef SIM_MODE
         NPU_CHECK(aclrtMemcpy(d_keys, ws_size, h_keys, ws_size,
-                                 ACL_MEMCPY_HOST_TO_DEVICE));
+                              ACL_MEMCPY_HOST_TO_DEVICE));
 #else
         NPU_CHECK(aclrtMemcpyAsync(d_keys, ws_size, h_keys, ws_size,
                                    ACL_MEMCPY_HOST_TO_DEVICE, stream));
