@@ -53,14 +53,14 @@ public:
     *reinterpret_cast<__ubuf__ volatile size_t*>(BLOCK_TASK_GLOBAL_OFFSET_ADDR) = 0;
   }
 
-  __simt_callee__ inline void assign_warp_task(const uint64_t &in_ddr, const uint64_t &key, const uint64_t &score, const bool &need_assign) {
+  __simt_callee__ inline void assign_warp_task(const uint64_t &in_ddr, const uint64_t &key, const uint64_t &score, const bool &need_assign, const uint32_t &blockIdx) {
     // 1. 统计warp任务数
     uint32_t write_mask = __ballot(need_assign);
     uint32_t warp_write_count = __popc(write_mask);
 
     // 2. 统计block任务数
     if (threadIdx.x == 0) {
-      *reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_ACC_ADDR) = 0;
+      *reinterpret_cast<__ubuf__ volatile  uint32_t*>(BLOCK_ACC_ADDR) = 0;
     }
 
     asc_syncthreads();
@@ -79,7 +79,7 @@ public:
     if (threadIdx.x == 0) {
       global_task_offset = asc_atomic_add(dump_count_gm, block_task_num);
       // 6. 等待任务空闲
-      while (*reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_FINISH_FLAG_ADDR) == !MTETaskQueue<RING_BUFFER_SZ>::FINISH_FLAG) {}
+      while (*reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_FINISH_FLAG_ADDR)  == !MTETaskQueue<RING_BUFFER_SZ>::FINISH_FLAG) {}
     }
 
     asc_syncthreads();
@@ -123,6 +123,8 @@ public:
     __ubuf__ volatile size_t* block_task_global_offset_addr = reinterpret_cast<__ubuf__ volatile size_t*>(BLOCK_TASK_GLOBAL_OFFSET_ADDR);
     uint32_t mte_finish_id = 0;
     uint32_t block_finish_flag = 0;
+    GlobalTensor<uint8_t> dst;
+    LocalTensor<uint8_t> src(AscendC::TPosition::VECCALC, MTETaskQueue<RING_BUFFER_SZ>::DATA_BUFFER_START_ADDR, MTETaskQueue<RING_BUFFER_SZ>::DATA_BUFFER_SZ);
     while (true) {
       block_finish_flag = *block_finish_flag_addr;
       if (block_finish_flag == MTETaskQueue<RING_BUFFER_SZ>::FINISH_FLAG) {
@@ -148,11 +150,10 @@ public:
         set_flag(PIPE_MTE2, PIPE_MTE3, 0);
         wait_flag(PIPE_MTE2, PIPE_MTE3, 0);
 
-        copy_ubuf_to_gm_align_v2(
-          reinterpret_cast<__gm__ uint8_t*>(d_val_gm + (block_task_global_offset + i * max_proc_batch) * value_size),
-          reinterpret_cast<__ubuf__ uint8_t*>(MTETaskQueue<RING_BUFFER_SZ>::DATA_BUFFER_START_ADDR),
-          0, cur_batch, value_size, 0, 0, 0);
-        
+        dst.SetGlobalBuffer(d_val_gm + (block_task_global_offset + i * max_proc_batch) * value_size);
+        DataCopyParams params {static_cast<uint16_t>(cur_batch), static_cast<uint16_t>(value_size), 0, 0};
+        DataCopyPad<uint8_t>(dst, src, params);
+  
         copy_ubuf_to_gm_align_v2(
           reinterpret_cast<__gm__ uint8_t*>(d_key_gm + (block_task_global_offset + i * max_proc_batch) * sizeof(uint64_t)),
           reinterpret_cast<__ubuf__ uint8_t*>(RING_BUFFER_KEY_ADDR),
@@ -235,7 +236,7 @@ __simt_vf__ __aicore__ LAUNCH_BOUND(THREAD_NUM_512) inline void new_dump_kernel_
         }
       }
     }
-    dump_task_queue.assign_warp_task(value_ddr, key, score, dump_flag);
+    dump_task_queue.assign_warp_task(value_ddr, key, score, dump_flag, blockIdx);
   }
 
   asc_syncthreads();
@@ -262,6 +263,7 @@ __global__ __vector__ void new_dump_kernel(
     reinterpret_cast<__gm__ uint8_t*>(scores), reinterpret_cast<__gm__ uint8_t*>(keys));
   dump_task_queue.init();
 
+  pipe_barrier(PIPE_ALL);
 
   Simt::VF_CALL<new_dump_kernel_vf<K, V, S>>(
     Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_512)}, dump_task_queue, table, buckets,
