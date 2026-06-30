@@ -143,25 +143,25 @@ public:
         for (uint32_t j = 0; j < cur_batch; j++) {
           copy_gm_to_ubuf_align_v2(
             reinterpret_cast<__ubuf__ uint8_t*>(MTETaskQueue<RING_BUFFER_SZ>::DATA_BUFFER_START_ADDR) + j * value_size_aligned,
-            reinterpret_cast<__gm__ uint8_t*>(ring_buffer_in_addr_queue_addr[i * max_proc_batch + j]),
+            reinterpret_cast<__gm__ uint8_t*>(ring_buffer_in_addr_queue_addr[i + j]),
             0, 1, value_size, 0, 0, 0, 0, 0, 0);
         }
 
         set_flag(PIPE_MTE2, PIPE_MTE3, 0);
         wait_flag(PIPE_MTE2, PIPE_MTE3, 0);
 
-        dst.SetGlobalBuffer(d_val_gm + (block_task_global_offset + i * max_proc_batch) * value_size);
+        dst.SetGlobalBuffer(d_val_gm + (block_task_global_offset + i) * value_size);
         DataCopyParams params {static_cast<uint16_t>(cur_batch), static_cast<uint16_t>(value_size), 0, 0};
         DataCopyPad<uint8_t>(dst, src, params);
   
         copy_ubuf_to_gm_align_v2(
-          reinterpret_cast<__gm__ uint8_t*>(d_key_gm + (block_task_global_offset + i * max_proc_batch) * sizeof(uint64_t)),
+          reinterpret_cast<__gm__ uint8_t*>(d_key_gm + (block_task_global_offset + i) * sizeof(uint64_t)),
           reinterpret_cast<__ubuf__ uint8_t*>(RING_BUFFER_KEY_ADDR),
           0, 1, cur_batch * sizeof(uint64_t), 0, 0, 0);
 
         if (d_score_gm != nullptr) {
           copy_ubuf_to_gm_align_v2(
-            reinterpret_cast<__gm__ uint8_t*>(d_score_gm + (block_task_global_offset + i * max_proc_batch) * sizeof(uint64_t)),  
+            reinterpret_cast<__gm__ uint8_t*>(d_score_gm + (block_task_global_offset + i) * sizeof(uint64_t)),  
             reinterpret_cast<__ubuf__ uint8_t*>(RING_BUFFER_SCORE_ADDR),
             0, 1, cur_batch * sizeof(uint64_t), 0, 0, 0);
         }
@@ -206,8 +206,8 @@ private:
 };
 
 template <class K, class V, class S>
-__simt_vf__ __aicore__ LAUNCH_BOUND(THREAD_NUM_512) inline void new_dump_kernel_vf(
-    DumpTaskQueue<THREAD_NUM_512> dump_task_queue,
+__simt_vf__ __aicore__ LAUNCH_BOUND(THREAD_NUM_2048) inline void new_dump_kernel_vf(
+    DumpTaskQueue<THREAD_NUM_2048> dump_task_queue,
     __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
     const size_t offset, const bool dump_score, const uint32_t dim,
     const size_t search_length, const size_t search_length_align,
@@ -258,15 +258,15 @@ __global__ __vector__ void new_dump_kernel(
 
   bool dump_score = (scores != nullptr);
 
-  const uint64_t total_thread_num = THREAD_NUM_512 * GetBlockNum();
-  DumpTaskQueue<THREAD_NUM_512> dump_task_queue(dump_counter, reinterpret_cast<__gm__ uint8_t*>(vals),
+  const uint64_t total_thread_num = THREAD_NUM_2048 * GetBlockNum();
+  DumpTaskQueue<THREAD_NUM_2048> dump_task_queue(dump_counter, reinterpret_cast<__gm__ uint8_t*>(vals),
     reinterpret_cast<__gm__ uint8_t*>(scores), reinterpret_cast<__gm__ uint8_t*>(keys));
   dump_task_queue.init();
 
   pipe_barrier(PIPE_ALL);
 
   Simt::VF_CALL<new_dump_kernel_vf<K, V, S>>(
-    Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_512)}, dump_task_queue, table, buckets,
+    Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, dump_task_queue, table, buckets,
     offset, dump_score, dim, search_length, search_length_align,
     total_thread_num, dump_counter, GetBlockIdx());
 
