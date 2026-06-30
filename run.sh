@@ -99,6 +99,16 @@ if [[ " $RUN_MODE_LIST " != *" $RUN_MODE "* ]]; then
     exit -1
 fi
 
+# 校验 SOC_VERSION 格式，仅允许字母、数字、下划线、连字符，防止路径穿越
+if [[ -n "$SOC_VERSION" ]]; then
+    if [[ "$SOC_VERSION" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        echo "[INFO] : SOC_VERSION [$SOC_VERSION] format check passed"
+    else
+        echo "[ERROR]: SOC_VERSION [$SOC_VERSION] contains invalid characters, only letters, digits, '-', '_' are allowed (to prevent path traversal)!"
+        exit 1
+    fi
+fi
+
 if [ -n "$ASCEND_INSTALL_PATH" ]; then
     _ASCEND_INSTALL_PATH=$ASCEND_INSTALL_PATH
 elif [ -n "$ASCEND_HOME_PATH" ]; then
@@ -113,6 +123,11 @@ fi
 
 if [ "$RUN_MODE" = "sim" ]; then
     _CAMODEL_PATH=${_ASCEND_INSTALL_PATH}/tools/simulator/${SOC_VERSION}/camodel
+    if [ ! -d "${_CAMODEL_PATH}" ]; then
+        echo "[ERROR]: CAMODEL_PATH [${_CAMODEL_PATH}] not found!"
+        echo "        Please check if SOC_VERSION [${SOC_VERSION}] is correct, or install the simulator package."
+        exit 1
+    fi
     COMPILE_ONLY=1
 else
     _CAMODEL_PATH=""
@@ -146,13 +161,13 @@ set -e
 rm -rf build ${INSTALL_PREFIX}
 mkdir -p build
 cmake -B build \
-    -DRUN_MODE=${RUN_MODE} \
-    -DCAMODEL_PATH=${_CAMODEL_PATH} \
+    -DRUN_MODE="${RUN_MODE}" \
+    -DCAMODEL_PATH="${_CAMODEL_PATH}" \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
-    -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-    -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+    -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+    -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
     -DBUILD_SHARED_LIBS=ON \
-    -DENABLE_TEST=${ENABLE_TEST}
+    -DENABLE_TEST="${ENABLE_TEST}"
 cmake --build build -j 16 --verbose
 cmake --install build
 
