@@ -154,21 +154,24 @@ public:
         DataCopyParams params {static_cast<uint16_t>(cur_batch), static_cast<uint16_t>(value_size), 0, 0};
         DataCopyPad<uint8_t>(dst, src, params);
   
-        copy_ubuf_to_gm_align_v2(
-          reinterpret_cast<__gm__ uint8_t*>(d_key_gm + (block_task_global_offset + i) * sizeof(uint64_t)),
-          reinterpret_cast<__ubuf__ uint8_t*>(RING_BUFFER_KEY_ADDR),
-          0, 1, cur_batch * sizeof(uint64_t), 0, 0, 0);
-
-        if (d_score_gm != nullptr) {
-          copy_ubuf_to_gm_align_v2(
-            reinterpret_cast<__gm__ uint8_t*>(d_score_gm + (block_task_global_offset + i) * sizeof(uint64_t)),  
-            reinterpret_cast<__ubuf__ uint8_t*>(RING_BUFFER_SCORE_ADDR),
-            0, 1, cur_batch * sizeof(uint64_t), 0, 0, 0);
-        }
-
         set_flag(PIPE_MTE3, PIPE_S, 0);
         wait_flag(PIPE_MTE3, PIPE_S, 0);
       }
+
+      copy_ubuf_to_gm_align_v2(
+        reinterpret_cast<__gm__ uint8_t*>(d_key_gm + (block_task_global_offset) * sizeof(uint64_t)),
+        reinterpret_cast<__ubuf__ uint8_t*>(RING_BUFFER_KEY_ADDR),
+        0, 1, block_task_num * sizeof(uint64_t), 0, 0, 0);
+
+      if (d_score_gm != nullptr) {
+        copy_ubuf_to_gm_align_v2(
+          reinterpret_cast<__gm__ uint8_t*>(d_score_gm + (block_task_global_offset) * sizeof(uint64_t)),  
+          reinterpret_cast<__ubuf__ uint8_t*>(RING_BUFFER_SCORE_ADDR),
+          0, 1, block_task_num * sizeof(uint64_t), 0, 0, 0);
+      }
+
+      set_flag(PIPE_MTE3, PIPE_S, 0);
+      wait_flag(PIPE_MTE3, PIPE_S, 0);
 
       // 消费完成，累加消费进展
       *block_finish_flag_addr = MTETaskQueue<RING_BUFFER_SZ>::FINISH_FLAG;
