@@ -29,7 +29,7 @@ using namespace npu::hkv;
 using namespace test_util;
 
 // 通用测试配置结构体
-struct ExportTestConfig {
+struct ExportBatchTestConfig {
   size_t key_num;         // 键数量
   bool test_overload;     // 是否测试重载版本
   bool test_empty_table;  // 是否测试空表
@@ -42,7 +42,7 @@ struct ExportTestConfig {
 // 这样可以避免使用变量传递DIM的问题
 
 template <typename K, typename V, typename S, size_t DIM>
-void run_export_test(const ExportTestConfig& config) {
+void run_export_test(const ExportBatchTestConfig& config) {
   // 1. 初始化环境
   init_env();
 
@@ -250,32 +250,32 @@ void run_export_test(const ExportTestConfig& config) {
 
 // 测试用例定义
 TEST(test_export_batch, test_export_basic) {
-  ExportTestConfig config = {1024, false, false, 0, false};
+  ExportBatchTestConfig config = {1024, false, false, 0, false};
   RUN_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
   RUN_EXPORT_TEST(int64_t, double, uint64_t, 16, config);
 }
 
 TEST(test_export_batch, test_export_overload) {
-  ExportTestConfig config = {1024, true, false, 0, true};
+  ExportBatchTestConfig config = {1024, true, false, 0, true};
   RUN_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch, test_export_empty) {
-  ExportTestConfig config = {0, false, true, 0, false};
+  ExportBatchTestConfig config = {0, false, true, 0, false};
   RUN_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch, test_export_offset) {
   // 测试不同偏移量下的导出功能
   // 注意：当offset > 0时，不能保证导出数量等于key_num
-  ExportTestConfig config = {1024, false, false, 1000, false};
+  ExportBatchTestConfig config = {1024, false, false, 1000, false};
   RUN_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
   config.offset = 5000;
   RUN_EXPORT_TEST(int64_t, double, uint64_t, 16, config);
 }
 
 template <typename K, typename V, typename S, size_t DIM>
-void run_export_hybrid_test(const ExportTestConfig& config) {
+void run_export_hybrid_test(const ExportBatchTestConfig& config) {
   // 1. 初始化环境
   init_env();
 
@@ -449,7 +449,7 @@ void run_export_hybrid_test(const ExportTestConfig& config) {
 
 // 测试用例定义
 TEST(test_export_batch, test_export_hybrid_basic) {
-  ExportTestConfig config = {1024, false, false, 0, false};
+  ExportBatchTestConfig config = {1024, false, false, 0, false};
   RUN_EXPORT_HYBRID_TEST(uint64_t, float, uint64_t, 8, config);
   RUN_EXPORT_HYBRID_TEST(uint64_t, double, uint64_t, 8, config);
   RUN_EXPORT_HYBRID_TEST(uint64_t, uint16_t, uint64_t, 8, config);
@@ -457,23 +457,23 @@ TEST(test_export_batch, test_export_hybrid_basic) {
 }
 
 TEST(test_export_batch, test_export_hybrid_overload) {
-  ExportTestConfig config = {1024, true, false, 0, true};
+  ExportBatchTestConfig config = {1024, true, false, 0, true};
   RUN_EXPORT_HYBRID_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch, test_export_hybrid_empty) {
-  ExportTestConfig config = {0, false, true, 0, false};
+  ExportBatchTestConfig config = {0, false, true, 0, false};
   RUN_EXPORT_HYBRID_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch, test_export_hybrid_offset) {
   // 测试不同偏移量下的导出功能
   // 注意：当offset > 0时，不能保证导出数量等于key_num
-  ExportTestConfig config = {1024, false, false, 5000, false};
+  ExportBatchTestConfig config = {1024, false, false, 5000, false};
   RUN_EXPORT_HYBRID_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch, test_export_hybrid_large) {
-  ExportTestConfig config = {128 * 1024, false, false, 0, false};
+  ExportBatchTestConfig config = {128 * 1024, false, false, 0, false};
   RUN_EXPORT_HYBRID_TEST(uint64_t, float, uint64_t, 8, config);
 }

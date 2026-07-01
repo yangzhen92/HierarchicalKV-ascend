@@ -36,10 +36,10 @@ using S = uint64_t;
 
 // 测试用简单文件实现
 template <class K, class V, class S>
-class MemoryKVFile : public BaseKVFile<K, V, S> {
+class SaveMemoryKVFile : public BaseKVFile<K, V, S> {
  public:
-  MemoryKVFile() = default;
-  ~MemoryKVFile() override = default;
+  SaveMemoryKVFile() = default;
+  ~SaveMemoryKVFile() override = default;
 
   size_t read(const size_t n, const size_t dim, K* keys, V* values,
               S* scores) override {
@@ -197,7 +197,7 @@ TEST_F(SaveTest, basic_function) {
   EXPECT_EQ(table.size(), key_num);
 
   // 保存到文件
-  MemoryKVFile<K, V, S> file;
+  SaveMemoryKVFile<K, V, S> file;
   size_t saved_count = table.save(&file, 1L * 1024 * 1024, stream_);
 
   // 验证保存的数量
@@ -224,7 +224,8 @@ TEST_F(SaveTest, basic_function) {
     size_t orig_idx = key_to_idx[saved_keys[i]];
     // 验证 values
     for (size_t j = 0; j < dim; j++) {
-      EXPECT_FLOAT_EQ(saved_values[i * dim + j], host_values[orig_idx * dim + j])
+      EXPECT_FLOAT_EQ(saved_values[i * dim + j],
+                      host_values[orig_idx * dim + j])
           << "Value mismatch at key " << saved_keys[i] << " dim " << j;
     }
   }
@@ -250,7 +251,7 @@ TEST_F(SaveTest, empty_table) {
   EXPECT_EQ(table.size(), 0);
 
   // 在空表上执行 save 应该不会崩溃
-  MemoryKVFile<K, V, S> file;
+  SaveMemoryKVFile<K, V, S> file;
   size_t saved_count = table.save(&file, 1L * 1024 * 1024, stream_);
 
   EXPECT_EQ(saved_count, 0);
@@ -290,7 +291,7 @@ TEST_F(SaveTest, single_key) {
   EXPECT_EQ(table.size(), key_num);
 
   // 保存到文件
-  MemoryKVFile<K, V, S> file;
+  SaveMemoryKVFile<K, V, S> file;
   size_t saved_count = table.save(&file, 1L * 1024 * 1024, stream_);
 
   EXPECT_EQ(saved_count, key_num);
@@ -348,7 +349,7 @@ TEST_F(SaveTest, different_dimensions) {
     EXPECT_EQ(table.size(), key_num);
 
     // 保存到文件
-    MemoryKVFile<K, V, S> file;
+    SaveMemoryKVFile<K, V, S> file;
     size_t saved_count = table.save(&file, 1L * 1024 * 1024, stream_);
 
     EXPECT_EQ(saved_count, key_num) << "Failed for dim=" << dim;
@@ -395,7 +396,7 @@ TEST_F(SaveTest, large_scale) {
   EXPECT_EQ(table.size(), key_num);
 
   // 保存到文件
-  MemoryKVFile<K, V, S> file;
+  SaveMemoryKVFile<K, V, S> file;
   size_t saved_count = table.save(&file, 1L * 1024 * 1024, stream_);
 
   EXPECT_EQ(saved_count, key_num);
@@ -441,7 +442,7 @@ TEST_F(SaveTest, random_keys) {
   EXPECT_EQ(table.size(), key_num);
 
   // 保存到文件
-  MemoryKVFile<K, V, S> file;
+  SaveMemoryKVFile<K, V, S> file;
   size_t saved_count = table.save(&file, 1L * 1024 * 1024, stream_);
 
   EXPECT_EQ(saved_count, key_num);
@@ -495,11 +496,11 @@ TEST_F(SaveTest, different_workspace_sizes) {
 
   // 测试不同的工作空间大小
   vector<size_t> workspace_sizes = {
-      1L * 1024,           // 1KB - 小工作空间，需要多次迭代
-      64L * 1024,          // 64KB
-      256L * 1024,         // 256KB
-      1L * 1024 * 1024,    // 1MB
-      4L * 1024 * 1024,    // 4MB - 大工作空间
+      1L * 1024,         // 1KB - 小工作空间，需要多次迭代
+      64L * 1024,        // 64KB
+      256L * 1024,       // 256KB
+      1L * 1024 * 1024,  // 1MB
+      4L * 1024 * 1024,  // 4MB - 大工作空间
   };
 
   for (size_t ws_size : workspace_sizes) {
@@ -509,13 +510,11 @@ TEST_F(SaveTest, different_workspace_sizes) {
       continue;  // 跳过太小的工作空间
     }
 
-    MemoryKVFile<K, V, S> file;
+    SaveMemoryKVFile<K, V, S> file;
     size_t saved_count = table.save(&file, ws_size, stream_);
 
-    EXPECT_EQ(saved_count, key_num)
-        << "Failed for workspace_size=" << ws_size;
-    EXPECT_EQ(file.size(), key_num)
-        << "Failed for workspace_size=" << ws_size;
+    EXPECT_EQ(saved_count, key_num) << "Failed for workspace_size=" << ws_size;
+    EXPECT_EQ(file.size(), key_num) << "Failed for workspace_size=" << ws_size;
   }
 
   free_device_mem(device_keys);
@@ -556,7 +555,7 @@ TEST_F(SaveTest, different_evict_strategies) {
     ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
     EXPECT_EQ(table.size(), key_num);
 
-    MemoryKVFile<K, V, S> file;
+    SaveMemoryKVFile<K, V, S> file;
     size_t saved_count = table.save(&file, 1L * 1024 * 1024, stream_);
     EXPECT_EQ(saved_count, key_num) << "Failed for kLru strategy";
 
@@ -595,7 +594,7 @@ TEST_F(SaveTest, different_evict_strategies) {
     ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
     EXPECT_EQ(table.size(), key_num);
 
-    MemoryKVFile<K, V, S> file;
+    SaveMemoryKVFile<K, V, S> file;
     size_t saved_count = table.save(&file, 1L * 1024 * 1024, stream_);
     EXPECT_EQ(saved_count, key_num) << "Failed for kLfu strategy";
 
@@ -636,7 +635,7 @@ TEST_F(SaveTest, different_evict_strategies) {
     ASSERT_EQ(aclrtSynchronizeStream(stream_), ACL_ERROR_NONE);
     EXPECT_EQ(table.size(), key_num);
 
-    MemoryKVFile<K, V, S> file;
+    SaveMemoryKVFile<K, V, S> file;
     size_t saved_count = table.save(&file, 1L * 1024 * 1024, stream_);
     EXPECT_EQ(saved_count, key_num) << "Failed for kEpochLfu strategy";
 
@@ -681,11 +680,11 @@ TEST_F(SaveTest, multiple_saves) {
   EXPECT_EQ(table.size(), key_num);
 
   // 第一次保存
-  MemoryKVFile<K, V, S> file1;
+  SaveMemoryKVFile<K, V, S> file1;
   size_t saved_count1 = table.save(&file1, 1L * 1024 * 1024, stream_);
 
   // 第二次保存
-  MemoryKVFile<K, V, S> file2;
+  SaveMemoryKVFile<K, V, S> file2;
   size_t saved_count2 = table.save(&file2, 1L * 1024 * 1024, stream_);
 
   // 验证两次保存的数量相同
@@ -739,7 +738,7 @@ TEST_F(SaveTest, save_after_insert) {
   EXPECT_EQ(table.size(), key_num1);
 
   // 第一次保存
-  MemoryKVFile<K, V, S> file1;
+  SaveMemoryKVFile<K, V, S> file1;
   size_t saved_count1 = table.save(&file1, 1L * 1024 * 1024, stream_);
   EXPECT_EQ(saved_count1, key_num1);
 
@@ -765,7 +764,7 @@ TEST_F(SaveTest, save_after_insert) {
   EXPECT_EQ(table.size(), key_num1 + key_num2);
 
   // 第二次保存
-  MemoryKVFile<K, V, S> file2;
+  SaveMemoryKVFile<K, V, S> file2;
   size_t saved_count2 = table.save(&file2, 1L * 1024 * 1024, stream_);
   EXPECT_EQ(saved_count2, key_num1 + key_num2);
 
@@ -833,9 +832,12 @@ TEST_F(SaveTest, local_kv_file_write_basic) {
   ASSERT_TRUE(values_file.is_open());
   ASSERT_TRUE(scores_file.is_open());
 
-  EXPECT_EQ(keys_file.tellg(), static_cast<std::streamsize>(key_num * sizeof(K)));
-  EXPECT_EQ(values_file.tellg(), static_cast<std::streamsize>(key_num * dim * sizeof(V)));
-  EXPECT_EQ(scores_file.tellg(), static_cast<std::streamsize>(key_num * sizeof(S)));
+  EXPECT_EQ(keys_file.tellg(),
+            static_cast<std::streamsize>(key_num * sizeof(K)));
+  EXPECT_EQ(values_file.tellg(),
+            static_cast<std::streamsize>(key_num * dim * sizeof(V)));
+  EXPECT_EQ(scores_file.tellg(),
+            static_cast<std::streamsize>(key_num * sizeof(S)));
 
   keys_file.close();
   values_file.close();
@@ -985,7 +987,8 @@ TEST_F(SaveTest, local_kv_file_write_large_scale) {
 
   // 验证文件大小正确
   std::ifstream keys_file(keys_path, std::ios::binary | std::ios::ate);
-  EXPECT_EQ(keys_file.tellg(), static_cast<std::streamsize>(key_num * sizeof(K)));
+  EXPECT_EQ(keys_file.tellg(),
+            static_cast<std::streamsize>(key_num * sizeof(K)));
   keys_file.close();
 
   // 清理测试文件
@@ -1035,7 +1038,8 @@ TEST_F(SaveTest, local_kv_file_write_direct) {
   LocalKVFile<K, V, S> write_file;
   ASSERT_TRUE(write_file.open(keys_path, values_path, scores_path, "wb"));
 
-  size_t written = write_file.write(n, dim, keys.data(), values.data(), scores.data());
+  size_t written =
+      write_file.write(n, dim, keys.data(), values.data(), scores.data());
   write_file.close();
 
   EXPECT_EQ(written, n);
@@ -1110,7 +1114,8 @@ TEST_F(SaveTest, local_kv_file_write_batched) {
 
   // 验证文件大小
   std::ifstream keys_file(keys_path, std::ios::binary | std::ios::ate);
-  EXPECT_EQ(keys_file.tellg(), static_cast<std::streamsize>(total_n * sizeof(K)));
+  EXPECT_EQ(keys_file.tellg(),
+            static_cast<std::streamsize>(total_n * sizeof(K)));
   keys_file.close();
 
   // 读取并验证
