@@ -27,8 +27,10 @@ using namespace std;
 using namespace npu::hkv;
 using namespace test_util;
 
+namespace {
+
 // 通用测试配置结构体
-struct ExportTestConfig {
+struct ExportBatchLargeTestConfig {
   size_t key_num;         // 键数量
   bool test_overload;     // 是否测试重载版本
   bool test_empty_table;  // 是否测试空表
@@ -38,7 +40,7 @@ struct ExportTestConfig {
 // 大数据量测试模板函数 - 使用key/value比值验证
 // 直接验证value == key * 0.00001的关系，避免构建reference_map
 template <typename K, typename V, typename S, size_t DIM>
-void run_large_scale_export_test(const ExportTestConfig& config) {
+void run_large_scale_export_test(const ExportBatchLargeTestConfig& config) {
   init_env();
 
   size_t total_mem = 0;
@@ -218,43 +220,45 @@ void run_large_scale_export_test(const ExportTestConfig& config) {
   ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
 }
 
+}  // namespace
+
 #define RUN_LARGE_SCALE_EXPORT_TEST(K, V, S, DIM, config) \
   run_large_scale_export_test<K, V, S, DIM>(config)
 
 // 大数据量测试用例 - 使用key/value比值验证
 TEST(test_export_batch, test_large_scale_export_basic) {
   // 测试100K数据量的导出
-  ExportTestConfig config = {1 * 1024, false, false, 0, false};
+  ExportBatchLargeTestConfig config = {1 * 1024, false, false, 0, false};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
   RUN_LARGE_SCALE_EXPORT_TEST(int64_t, double, uint64_t, 16, config);
 }
 
 TEST(test_export_batch, test_large_scale_export_with_scores) {
   // 测试带分数的大数据量导出
-  ExportTestConfig config = {5 * 1024, true, false, 0, true};
+  ExportBatchLargeTestConfig config = {5 * 1024, true, false, 0, true};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch, test_large_scale_export_overload) {
   // 测试大数据量的重载版本
-  ExportTestConfig config = {1 * 1024, true, false, 0, true};
+  ExportBatchLargeTestConfig config = {1 * 1024, true, false, 0, true};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch, test_large_scale_export_offset) {
   // 测试大数据量带偏移的导出
-  ExportTestConfig config = {1 * 1024, false, false, 10000, false};
+  ExportBatchLargeTestConfig config = {1 * 1024, false, false, 10000, false};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch, test_large_scale_export_empty) {
   // 测试大数据量空表导出
-  ExportTestConfig config = {0, false, true, 0, false};
+  ExportBatchLargeTestConfig config = {0, false, true, 0, false};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
 
 TEST(test_export_batch, test_large_scale_export_max_capacity) {
   // 测试接近最大容量的数据量
-  ExportTestConfig config = {128 * 1024, false, false, 0, false};
+  ExportBatchLargeTestConfig config = {128 * 1024, false, false, 0, false};
   RUN_LARGE_SCALE_EXPORT_TEST(uint64_t, float, uint64_t, 8, config);
 }
