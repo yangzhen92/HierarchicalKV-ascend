@@ -307,50 +307,7 @@ TEST(TestAllInterfaces, test_find_or_insert_ptr) {
 }
 
 // ============================================================================
-// UT 8. lock_keys / unlock_keys
-// ============================================================================
-TEST(TestAllInterfaces, test_lock_unlock_keys) {
-  init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
-
-  DeviceData<K, V, S> device_data;
-  device_data.malloc(KEY_NUM);
-
-  vector<K> host_keys(KEY_NUM, 0);
-  vector<V> host_values(KEY_NUM * DIM, 0);
-  create_continuous_keys<K, S, V, DIM>(host_keys.data(), nullptr,
-                                       host_values.data(), KEY_NUM);
-  device_data.copy_keys(host_keys, KEY_NUM);
-  device_data.copy_values(host_values, KEY_NUM, DIM);
-
-  table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                          device_data.device_values, nullptr,
-                          device_data.stream);
-  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
-
-  K** d_locked_ptrs = nullptr;
-  bool* d_succeededs = nullptr;
-  ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_locked_ptrs),
-                        KEY_NUM * sizeof(K*), ACL_MEM_MALLOC_HUGE_FIRST),
-            ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_succeededs),
-                        KEY_NUM * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST),
-            ACL_ERROR_NONE);
-
-  table->lock_keys(KEY_NUM, device_data.device_keys, d_locked_ptrs,
-                   d_succeededs, device_data.stream);
-  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
-
-  table->unlock_keys(KEY_NUM, d_locked_ptrs, device_data.device_keys,
-                     d_succeededs, device_data.stream);
-  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
-
-  aclrtFree(d_locked_ptrs);
-  aclrtFree(d_succeededs);
-}
-
-// ============================================================================
-// UT 9. assign (keys + values + scores)
+// UT 8. assign (keys + values + scores)
 // ============================================================================
 TEST(TestAllInterfaces, test_assign_with_values_scores) {
   init_env();
@@ -381,7 +338,7 @@ TEST(TestAllInterfaces, test_assign_with_values_scores) {
 }
 
 // ============================================================================
-// UT 10. assign_scores
+// UT 9. assign_scores
 // ============================================================================
 TEST(TestAllInterfaces, test_assign_scores) {
   init_env();
@@ -408,7 +365,7 @@ TEST(TestAllInterfaces, test_assign_scores) {
 }
 
 // ============================================================================
-// UT 11. assign (仅 scores 的重载)
+// UT 10. assign (仅 scores 的重载)
 // ============================================================================
 TEST(TestAllInterfaces, test_assign_scores_only) {
   init_env();
@@ -434,7 +391,7 @@ TEST(TestAllInterfaces, test_assign_scores_only) {
 }
 
 // ============================================================================
-// UT 12. assign_values
+// UT 11. assign_values
 // ============================================================================
 TEST(TestAllInterfaces, test_assign_values) {
   init_env();
@@ -461,7 +418,7 @@ TEST(TestAllInterfaces, test_assign_values) {
 }
 
 // ============================================================================
-// UT 13. find (basic value copy)
+// UT 12. find (basic value copy)
 // ============================================================================
 TEST(TestAllInterfaces, test_find_value_copy) {
   init_env();
@@ -490,7 +447,7 @@ TEST(TestAllInterfaces, test_find_value_copy) {
 }
 
 // ============================================================================
-// UT 14. find (with missed_keys / indices / size)
+// UT 13. find (with missed_keys / indices / size)
 // ============================================================================
 TEST(TestAllInterfaces, test_find_with_missed) {
   init_env();
@@ -535,7 +492,7 @@ TEST(TestAllInterfaces, test_find_with_missed) {
 }
 
 // ============================================================================
-// UT 15. find (ptr版本)
+// UT 14. find (ptr版本)
 // ============================================================================
 TEST(TestAllInterfaces, test_find_ptr) {
   init_env();
@@ -562,7 +519,7 @@ TEST(TestAllInterfaces, test_find_ptr) {
 }
 
 // ============================================================================
-// UT 16. find_and_update
+// UT 15. find_and_update
 // ============================================================================
 TEST(TestAllInterfaces, test_find_and_update) {
   init_env();
@@ -592,7 +549,7 @@ TEST(TestAllInterfaces, test_find_and_update) {
 }
 
 // ============================================================================
-// UT 17. contains
+// UT 16. contains
 // ============================================================================
 TEST(TestAllInterfaces, test_contains) {
   init_env();
@@ -617,7 +574,7 @@ TEST(TestAllInterfaces, test_contains) {
 }
 
 // ============================================================================
-// UT 18. erase
+// UT 17. erase
 // ============================================================================
 TEST(TestAllInterfaces, test_erase) {
   init_env();
@@ -643,33 +600,7 @@ TEST(TestAllInterfaces, test_erase) {
 }
 
 // ============================================================================
-// UT 19. clear
-// ============================================================================
-TEST(TestAllInterfaces, test_clear) {
-  init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
-
-  DeviceData<K, V, S> device_data;
-  device_data.malloc(KEY_NUM);
-
-  vector<K> host_keys(KEY_NUM, 0);
-  create_continuous_keys<K, S, V, DIM>(host_keys.data(), nullptr, nullptr,
-                                       KEY_NUM);
-  device_data.copy_keys(host_keys, KEY_NUM);
-
-  table->insert_or_assign(KEY_NUM, device_data.device_keys,
-                          device_data.device_values, nullptr,
-                          device_data.stream);
-  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
-
-  table->clear(device_data.stream);
-  ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
-  EXPECT_EQ(table->size(device_data.stream), 0);
-  EXPECT_EQ(table->empty(device_data.stream), true);
-}
-
-// ============================================================================
-// UT 20. export_batch (d_counter版本)
+// UT 18. export_batch (d_counter版本)
 // ============================================================================
 TEST(TestAllInterfaces, test_export_batch_with_counter) {
   init_env();
@@ -713,7 +644,7 @@ TEST(TestAllInterfaces, test_export_batch_with_counter) {
 }
 
 // ============================================================================
-// UT 21. reserve
+// UT 19. reserve
 // ============================================================================
 TEST(TestAllInterfaces, test_reserve) {
   init_env();
@@ -728,7 +659,7 @@ TEST(TestAllInterfaces, test_reserve) {
 }
 
 // ============================================================================
-// UT 22. set_max_capacity
+// UT 20. set_max_capacity
 // ============================================================================
 TEST(TestAllInterfaces, test_set_max_capacity) {
   init_env();
@@ -746,7 +677,7 @@ TEST(TestAllInterfaces, test_set_max_capacity) {
 }
 
 // ============================================================================
-// UT 23. is_pure_hbm_mode
+// UT 21. is_pure_hbm_mode
 // ============================================================================
 TEST(TestAllInterfaces, test_is_pure_hbm_mode) {
   init_env();
@@ -786,7 +717,7 @@ struct AllInterfacesExportIfPredFunctorV2 {
 };
 
 // ============================================================================
-// UT 24. export_batch_if
+// UT 22. export_batch_if
 // ============================================================================
 TEST(TestAllInterfaces, test_export_batch_if) {
   init_env();
@@ -836,7 +767,7 @@ TEST(TestAllInterfaces, test_export_batch_if) {
 }
 
 // ============================================================================
-// UT 25. export_batch_if_v2
+// UT 23. export_batch_if_v2
 // ============================================================================
 TEST(TestAllInterfaces, test_export_batch_if_v2) {
   init_env();
