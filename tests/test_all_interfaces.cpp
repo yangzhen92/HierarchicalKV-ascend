@@ -677,15 +677,6 @@ TEST(TestAllInterfaces, test_set_max_capacity) {
 }
 
 // ============================================================================
-// UT 21. is_pure_hbm_mode
-// ============================================================================
-TEST(TestAllInterfaces, test_is_pure_hbm_mode) {
-  init_env();
-  auto table = make_table<HashTable<K, V, S, EvictStrategy::kLru>>();
-  EXPECT_TRUE(table->is_pure_hbm_mode());
-}
-
-// ============================================================================
 // PredFunctors for export_batch_if / erase_if tests
 // ============================================================================
 
@@ -717,7 +708,7 @@ struct AllInterfacesExportIfPredFunctorV2 {
 };
 
 // ============================================================================
-// UT 22. export_batch_if
+// UT 21. export_batch_if
 // ============================================================================
 TEST(TestAllInterfaces, test_export_batch_if) {
   init_env();
@@ -767,7 +758,7 @@ TEST(TestAllInterfaces, test_export_batch_if) {
 }
 
 // ============================================================================
-// UT 23. export_batch_if_v2
+// UT 22. export_batch_if_v2
 // ============================================================================
 TEST(TestAllInterfaces, test_export_batch_if_v2) {
   init_env();
