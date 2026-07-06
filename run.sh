@@ -176,7 +176,6 @@ if [ $COMPILE_ONLY -eq 1 ]; then
 fi
 
 export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:${INSTALL_PREFIX}/lib64:${_ASCEND_INSTALL_PATH}/lib64:$LD_LIBRARY_PATH
-ulimit -n 65535
 
 echo "======================ctest======================"
 if [ $ENABLE_TEST -eq 1 ]; then
