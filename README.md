@@ -222,3 +222,6 @@ mkdir cannsim
 cd cannsim
 cannsim record "../build/test/test_main --test_filter='*test_find_or_insert_ptr.hash_collisions*'" -s Ascend950 -g -o ./
 ```
+## License
+
+Apache License Version 2.0，详见[LICENSE文件](LICENSE)。

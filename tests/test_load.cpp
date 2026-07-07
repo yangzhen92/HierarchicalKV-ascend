@@ -35,12 +35,14 @@ using K = uint64_t;
 using V = float;
 using S = uint64_t;
 
+namespace {
+
 // 测试用简单文件实现
 template <class K, class V, class S>
-class MemoryKVFile : public BaseKVFile<K, V, S> {
+class LoadMemoryKVFile : public BaseKVFile<K, V, S> {
  public:
-  MemoryKVFile() = default;
-  ~MemoryKVFile() override = default;
+  LoadMemoryKVFile() = default;
+  ~LoadMemoryKVFile() override = default;
 
   size_t read(const size_t n, const size_t dim, K* keys, V* values,
               S* scores) override {
@@ -171,6 +173,8 @@ class LoadTest : public ::testing::Test {
   aclrtStream stream_ = nullptr;
 };
 
+}  // namespace
+
 // 测试1：基本功能测试 - 从文件加载数据到空表
 TEST_F(LoadTest, basic_function) {
   constexpr size_t dim = 8;
@@ -184,7 +188,7 @@ TEST_F(LoadTest, basic_function) {
                                        host_values.data(), key_num);
 
   // 创建内存文件并设置数据
-  MemoryKVFile<K, V, S> file;
+  LoadMemoryKVFile<K, V, S> file;
   file.set_data(host_keys, host_values, host_scores, dim);
 
   // 创建空表并加载数据
@@ -265,7 +269,7 @@ TEST_F(LoadTest, empty_file) {
   EXPECT_EQ(table.size(), 0);
 
   // 加载空文件
-  MemoryKVFile<K, V, S> file;
+  LoadMemoryKVFile<K, V, S> file;
   size_t loaded_count = table.load(&file, 1L * 1024 * 1024, stream_);
 
   EXPECT_EQ(loaded_count, 0);
@@ -282,7 +286,7 @@ TEST_F(LoadTest, single_key) {
   vector<V> host_values(dim, 1.5f);
 
   // 创建内存文件并设置数据
-  MemoryKVFile<K, V, S> file;
+  LoadMemoryKVFile<K, V, S> file;
   file.set_data({host_key}, host_values, {host_score}, dim);
 
   HashTableOptions options{
@@ -349,7 +353,7 @@ TEST_F(LoadTest, different_dimensions) {
                                 host_values.data(), key_num);
 
     // 创建内存文件并设置数据
-    MemoryKVFile<K, V, S> file;
+    LoadMemoryKVFile<K, V, S> file;
     file.set_data(host_keys, host_values, host_scores, dim);
 
     HashTableOptions options{
@@ -382,7 +386,7 @@ TEST_F(LoadTest, large_scale) {
                                        host_values.data(), key_num);
 
   // 创建内存文件并设置数据
-  MemoryKVFile<K, V, S> file;
+  LoadMemoryKVFile<K, V, S> file;
   file.set_data(host_keys, host_values, host_scores, dim);
 
   HashTableOptions options{
@@ -414,7 +418,7 @@ TEST_F(LoadTest, random_keys) {
                               host_values.data(), key_num);
 
   // 创建内存文件并设置数据
-  MemoryKVFile<K, V, S> file;
+  LoadMemoryKVFile<K, V, S> file;
   file.set_data(host_keys, host_values, host_scores, dim);
 
   HashTableOptions options{
@@ -478,11 +482,11 @@ TEST_F(LoadTest, different_workspace_sizes) {
 
   // 测试不同的工作空间大小
   vector<size_t> workspace_sizes = {
-    1L * 1024,         // 1KB - 小工作空间，需要多次迭代
-    64L * 1024,        // 64KB
-    256L * 1024,       // 256KB
-    1L * 1024 * 1024,  // 1MB
-    4L * 1024 * 1024,  // 4MB - 大工作空间
+      1L * 1024,         // 1KB - 小工作空间，需要多次迭代
+      64L * 1024,        // 64KB
+      256L * 1024,       // 256KB
+      1L * 1024 * 1024,  // 1MB
+      4L * 1024 * 1024,  // 4MB - 大工作空间
   };
 
   for (size_t ws_size : workspace_sizes) {
@@ -493,7 +497,7 @@ TEST_F(LoadTest, different_workspace_sizes) {
     }
 
     // 创建内存文件并设置数据
-    MemoryKVFile<K, V, S> file;
+    LoadMemoryKVFile<K, V, S> file;
     file.set_data(host_keys, host_values, host_scores, dim);
 
     HashTableOptions options{
@@ -527,7 +531,7 @@ TEST_F(LoadTest, different_evict_strategies) {
 
   // LRU 策略
   {
-    MemoryKVFile<K, V, S> file;
+    LoadMemoryKVFile<K, V, S> file;
     file.set_data(host_keys, host_values, host_scores, dim);
 
     HashTableOptions options{
@@ -547,7 +551,7 @@ TEST_F(LoadTest, different_evict_strategies) {
 
   // LFU 策略
   {
-    MemoryKVFile<K, V, S> file;
+    LoadMemoryKVFile<K, V, S> file;
     file.set_data(host_keys, host_values, host_scores, dim);
 
     HashTableOptions options{
@@ -567,7 +571,7 @@ TEST_F(LoadTest, different_evict_strategies) {
 
   // EpochLfu 策略
   {
-    MemoryKVFile<K, V, S> file;
+    LoadMemoryKVFile<K, V, S> file;
     file.set_data(host_keys, host_values, host_scores, dim);
 
     HashTableOptions options{
@@ -631,7 +635,7 @@ TEST_F(LoadTest, load_to_non_empty_table) {
                                        key_num1 + 1);
 
   // 创建内存文件并设置数据
-  MemoryKVFile<K, V, S> file;
+  LoadMemoryKVFile<K, V, S> file;
   file.set_data(host_keys2, host_values2, host_scores2, dim);
 
   // 加载第二批数据
@@ -681,7 +685,7 @@ TEST_F(LoadTest, save_then_load) {
   EXPECT_EQ(src_table.size(), key_num);
 
   // 保存源表数据到文件
-  MemoryKVFile<K, V, S> file;
+  LoadMemoryKVFile<K, V, S> file;
   size_t saved_count = src_table.save(&file, 1L * 1024 * 1024, stream_);
   EXPECT_EQ(saved_count, key_num);
 
@@ -761,7 +765,7 @@ TEST_F(LoadTest, multiple_loads) {
                                          host_values.data(), key_num,
                                          batch * key_num + 1);
 
-    MemoryKVFile<K, V, S> file;
+    LoadMemoryKVFile<K, V, S> file;
     file.set_data(host_keys, host_values, host_scores, dim);
 
     size_t loaded_count = table.load(&file, 1L * 1024 * 1024, stream_);
@@ -816,7 +820,7 @@ TEST_F(LoadTest, load_overwrite_existing_keys) {
   // 准备新数据（相同的 keys，不同的 values）
   vector<V> host_values2(key_num * dim, 2.0f);  // 新 values 全为 2.0
 
-  MemoryKVFile<K, V, S> file;
+  LoadMemoryKVFile<K, V, S> file;
   file.set_data(host_keys, host_values2, host_scores, dim);
 
   // 加载新数据（应覆盖已存在的 keys）
@@ -1058,8 +1062,8 @@ TEST_F(LoadTest, local_kv_file_read_direct) {
   // 写入测试数据
   LocalKVFile<K, V, S> write_file;
   ASSERT_TRUE(write_file.open(keys_path, values_path, scores_path, "wb"));
-  size_t written = write_file.write(n, dim, keys.data(), values.data(),
-                                    scores.data());
+  size_t written =
+      write_file.write(n, dim, keys.data(), values.data(), scores.data());
   write_file.close();
   EXPECT_EQ(written, n);
 
@@ -1118,8 +1122,8 @@ TEST_F(LoadTest, local_kv_file_read_batched) {
   // 写入测试数据
   LocalKVFile<K, V, S> write_file;
   ASSERT_TRUE(write_file.open(keys_path, values_path, scores_path, "wb"));
-  size_t written = write_file.write(total_n, dim, keys.data(), values.data(),
-                                    scores.data());
+  size_t written =
+      write_file.write(total_n, dim, keys.data(), values.data(), scores.data());
   write_file.close();
   ASSERT_EQ(written, total_n);
 
@@ -1135,8 +1139,9 @@ TEST_F(LoadTest, local_kv_file_read_batched) {
     vector<V> batch_values(batch_size * dim);
     vector<S> batch_scores(batch_size);
 
-    size_t read_count = read_file.read(batch_size, dim, batch_keys.data(),
-                                       batch_values.data(), batch_scores.data());
+    size_t read_count =
+        read_file.read(batch_size, dim, batch_keys.data(), batch_values.data(),
+                       batch_scores.data());
 
     if (read_count == 0) break;
 

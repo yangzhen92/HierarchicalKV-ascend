@@ -19,26 +19,26 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
-
 #include "acl/acl.h"
 #include "hkv_hashtable.h"
-#include "test_util.h"
 #include "test_device_data.h"
+#include "test_util.h"
 #include "types.h"
 
 using namespace std;
 using namespace npu::hkv;
 using namespace test_util;
 
+namespace {
+
 /**
  * @brief Predicate functor: counts keys with score < threshold
- * This matches the ExportIfPredFunctor in open-source HKV
  */
 template <class K, class S>
-struct ExportIfPredFunctor {
+struct SizeIfScoreLtPredFunctor {
   __forceinline__ __simt_callee__ bool operator()(const K& key, const S& score,
-                                             const K& pattern,
-                                             const S& threshold) {
+                                                  const K& pattern,
+                                                  const S& threshold) {
     return score < threshold;
   }
 };
@@ -49,8 +49,8 @@ struct ExportIfPredFunctor {
 template <class K, class S>
 struct ScoreGtePredFunctor {
   __forceinline__ __simt_callee__ bool operator()(const K& key, const S& score,
-                                             const K& pattern,
-                                             const S& threshold) {
+                                                  const K& pattern,
+                                                  const S& threshold) {
     return score >= threshold;
   }
 };
@@ -61,8 +61,8 @@ struct ScoreGtePredFunctor {
 template <class K, class S>
 struct KeyMatchPredFunctor {
   __forceinline__ __simt_callee__ bool operator()(const K& key, const S& score,
-                                             const K& pattern,
-                                             const S& threshold) {
+                                                  const K& pattern,
+                                                  const S& threshold) {
     return (key & pattern) == pattern;
   }
 };
@@ -120,23 +120,28 @@ void run_size_if_vs_export_test() {
 
   size_t* d_cnt = nullptr;
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_cnt), sizeof(size_t),
-                        ACL_MEM_MALLOC_HUGE_FIRST), ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)), ACL_ERROR_NONE);
+                        ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)),
+            ACL_ERROR_NONE);
 
   // size_if: count keys with score < 40 (scores 15 and 30 should match)
   S threshold = 40;
   size_t h_cnt_size_if = 0;
-  table->template size_if<ExportIfPredFunctor>(0, threshold, d_cnt,
-                                                device_data.stream);
+  table->template size_if<SizeIfScoreLtPredFunctor>(0, threshold, d_cnt,
+                                                    device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMemcpy(&h_cnt_size_if, sizeof(size_t), d_cnt, sizeof(size_t),
-                        ACL_MEMCPY_DEVICE_TO_HOST), ACL_ERROR_NONE);
+                        ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
 
   // export_batch_if: export keys with score < 40
-  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)), ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)),
+            ACL_ERROR_NONE);
   size_t* d_export_cnt = nullptr;
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_export_cnt), sizeof(size_t),
-                        ACL_MEM_MALLOC_HUGE_FIRST), ACL_ERROR_NONE);
+                        ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
 
   K* d_export_keys = nullptr;
   V* d_export_values = nullptr;
@@ -153,14 +158,15 @@ void run_size_if_vs_export_test() {
                         scan_len * sizeof(S), ACL_MEM_MALLOC_HUGE_FIRST),
             ACL_ERROR_NONE);
 
-  table->template export_batch_if<ExportIfPredFunctor>(
-      0, threshold, scan_len, 0, d_export_cnt, d_export_keys,
-      d_export_values, d_export_scores, device_data.stream);
+  table->template export_batch_if<SizeIfScoreLtPredFunctor>(
+      0, threshold, scan_len, 0, d_export_cnt, d_export_keys, d_export_values,
+      d_export_scores, device_data.stream);
 
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   size_t h_cnt_export = 0;
   ASSERT_EQ(aclrtMemcpy(&h_cnt_export, sizeof(size_t), d_export_cnt,
-                        sizeof(size_t), ACL_MEMCPY_DEVICE_TO_HOST), ACL_ERROR_NONE);
+                        sizeof(size_t), ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
 
   // Verify both return the same count
   ASSERT_EQ(h_cnt_size_if, h_cnt_export)
@@ -188,17 +194,20 @@ void run_size_if_empty_test() {
 
   size_t* d_cnt = nullptr;
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_cnt), sizeof(size_t),
-                        ACL_MEM_MALLOC_HUGE_FIRST), ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)), ACL_ERROR_NONE);
+                        ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)),
+            ACL_ERROR_NONE);
 
   aclrtStream stream = nullptr;
   ASSERT_EQ(aclrtCreateStream(&stream), ACL_ERROR_NONE);
 
   size_t h_cnt = 0;
-  table->template size_if<ExportIfPredFunctor>(0, 100, d_cnt, stream);
+  table->template size_if<SizeIfScoreLtPredFunctor>(0, 100, d_cnt, stream);
   ASSERT_EQ(aclrtSynchronizeStream(stream), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMemcpy(&h_cnt, sizeof(size_t), d_cnt, sizeof(size_t),
-                        ACL_MEMCPY_DEVICE_TO_HOST), ACL_ERROR_NONE);
+                        ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
 
   ASSERT_EQ(h_cnt, 0);
 
@@ -245,16 +254,19 @@ void run_size_if_all_match_test() {
 
   size_t* d_cnt = nullptr;
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_cnt), sizeof(size_t),
-                        ACL_MEM_MALLOC_HUGE_FIRST), ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)), ACL_ERROR_NONE);
+                        ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)),
+            ACL_ERROR_NONE);
 
   // Use ScoreGtePredFunctor with threshold=1, all scores >= 1 should match
   size_t h_cnt = 0;
   table->template size_if<ScoreGtePredFunctor>(0, static_cast<S>(1), d_cnt,
-                                                device_data.stream);
+                                               device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMemcpy(&h_cnt, sizeof(size_t), d_cnt, sizeof(size_t),
-                        ACL_MEMCPY_DEVICE_TO_HOST), ACL_ERROR_NONE);
+                        ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
 
   ASSERT_EQ(h_cnt, key_num);
 
@@ -300,16 +312,19 @@ void run_size_if_no_match_test() {
 
   size_t* d_cnt = nullptr;
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_cnt), sizeof(size_t),
-                        ACL_MEM_MALLOC_HUGE_FIRST), ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)), ACL_ERROR_NONE);
+                        ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)),
+            ACL_ERROR_NONE);
 
   // Use ScoreGtePredFunctor with threshold > max score, no match
   size_t h_cnt = 0;
   table->template size_if<ScoreGtePredFunctor>(0, static_cast<S>(key_num + 100),
-                                                d_cnt, device_data.stream);
+                                               d_cnt, device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMemcpy(&h_cnt, sizeof(size_t), d_cnt, sizeof(size_t),
-                        ACL_MEMCPY_DEVICE_TO_HOST), ACL_ERROR_NONE);
+                        ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
 
   ASSERT_EQ(h_cnt, 0);
 
@@ -355,17 +370,20 @@ void run_size_if_key_pattern_test() {
 
   size_t* d_cnt = nullptr;
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_cnt), sizeof(size_t),
-                        ACL_MEM_MALLOC_HUGE_FIRST), ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)), ACL_ERROR_NONE);
+                        ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)),
+            ACL_ERROR_NONE);
 
   // Test: count keys where (key & 0xF) == 0xF
   K pattern = 0xF;
   size_t h_cnt = 0;
   table->template size_if<KeyMatchPredFunctor>(pattern, 0, d_cnt,
-                                                device_data.stream);
+                                               device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMemcpy(&h_cnt, sizeof(size_t), d_cnt, sizeof(size_t),
-                        ACL_MEMCPY_DEVICE_TO_HOST), ACL_ERROR_NONE);
+                        ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
 
   // Expected: keys 15, 31, 47, 63, ..., 4095
   size_t expected = 0;
@@ -418,19 +436,23 @@ void run_size_if_large_test() {
 
   size_t* d_cnt = nullptr;
   ASSERT_EQ(aclrtMalloc(reinterpret_cast<void**>(&d_cnt), sizeof(size_t),
-                        ACL_MEM_MALLOC_HUGE_FIRST), ACL_ERROR_NONE);
-  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)), ACL_ERROR_NONE);
+                        ACL_MEM_MALLOC_HUGE_FIRST),
+            ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtMemset(d_cnt, sizeof(size_t), 0, sizeof(size_t)),
+            ACL_ERROR_NONE);
 
   // Use ScoreGtePredFunctor with threshold=50, scores 50-100 should match
   size_t h_cnt = 0;
   table->template size_if<ScoreGtePredFunctor>(0, static_cast<S>(50), d_cnt,
-                                                device_data.stream);
+                                               device_data.stream);
   ASSERT_EQ(aclrtSynchronizeStream(device_data.stream), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtMemcpy(&h_cnt, sizeof(size_t), d_cnt, sizeof(size_t),
-                        ACL_MEMCPY_DEVICE_TO_HOST), ACL_ERROR_NONE);
+                        ACL_MEMCPY_DEVICE_TO_HOST),
+            ACL_ERROR_NONE);
 
   // Expected: scores 50-100 (51 values), each repeats
-  size_t expected = (key_num / 100) * 51 + ((key_num % 100) >= 50 ? (key_num % 100) - 50 + 1 : 0);
+  size_t expected = (key_num / 100) * 51 +
+                    ((key_num % 100) >= 50 ? (key_num % 100) - 50 + 1 : 0);
   ASSERT_EQ(h_cnt, expected);
 
   ASSERT_EQ(aclrtFree(d_cnt), ACL_ERROR_NONE);
@@ -439,6 +461,8 @@ void run_size_if_large_test() {
 // ============================================================================
 // Test cases
 // ============================================================================
+
+}  // namespace
 
 // Test 1: size_if vs export_batch_if consistency
 TEST(test_size_if, test_size_if_vs_export) {
