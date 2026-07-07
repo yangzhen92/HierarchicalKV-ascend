@@ -210,3 +210,7 @@ cd HierarchicalKV-ascend
 ```bash
 bash run.sh -d 3
 ```
+
+## License
+
+Apache License Version 2.0，详见[LICENSE文件](LICENSE)。
