@@ -2421,7 +2421,8 @@ class HashTable : public HashTableBase<K, V, S> {
         options_.max_bucket_size, pattern, threshold, d_counter);
 
     size_type count = 0;
-    count = npu_memcpy_d2h_scalar<size_type>(d_counter, sizeof(size_type), stream);
+    count =
+        npu_memcpy_d2h_scalar<size_type>(d_counter, sizeof(size_type), stream);
 
     NpuCheckError();
     return count;
@@ -2458,7 +2459,8 @@ class HashTable : public HashTableBase<K, V, S> {
                       table_->capacity_divisor_shift, pred, d_counter)));
 
     size_type count = 0;
-    count = npu_memcpy_d2h_scalar<size_type>(d_counter, sizeof(size_type), stream);
+    count =
+        npu_memcpy_d2h_scalar<size_type>(d_counter, sizeof(size_type), stream);
 
     NpuCheckError();
     return count;
@@ -2557,7 +2559,8 @@ class HashTable : public HashTableBase<K, V, S> {
     NPU_CHECK(aclrtSynchronizeStream(stream));
 
     size_type counter = 0;
-    counter = npu_memcpy_d2h_scalar<size_type>(d_counter, sizeof(size_type), stream);
+    counter =
+        npu_memcpy_d2h_scalar<size_type>(d_counter, sizeof(size_type), stream);
 
     return counter;
   }
@@ -2795,8 +2798,8 @@ class HashTable : public HashTableBase<K, V, S> {
                   keep_dims, out_data_type, out);
 
     int64_t h_total_size = 0;
-    h_total_size = npu_memcpy_d2h_scalar<int64_t>(
-        out.get_data(), out.get_data_size(), stream);
+    h_total_size = npu_memcpy_d2h_scalar<int64_t>(out.get_data(),
+                                                  out.get_data_size(), stream);
     return h_total_size;
   }
 
@@ -3063,8 +3066,8 @@ class HashTable : public HashTableBase<K, V, S> {
       }
       NpuCheckError();
       // Copy counter from device to host
-      size_type count = npu_memcpy_d2h_scalar<size_type>(
-          d_count, sizeof(size_type), stream);
+      size_type count =
+          npu_memcpy_d2h_scalar<size_type>(d_count, sizeof(size_type), stream);
 
       if (count > 0) {
         // Copy data from device to host
@@ -3182,9 +3185,8 @@ class HashTable : public HashTableBase<K, V, S> {
     T hostVal = 0;
 #ifdef SIM_MODE
     NPU_CHECK(aclrtSynchronizeStream(stream));
-    NPU_CHECK(
-        aclrtMemcpy(&hostVal, sizeof(hostVal), devPtr, count,
-                    ACL_MEMCPY_DEVICE_TO_HOST));
+    NPU_CHECK(aclrtMemcpy(&hostVal, sizeof(hostVal), devPtr, count,
+                          ACL_MEMCPY_DEVICE_TO_HOST));
 #else
     NPU_CHECK(aclrtMemcpyAsync(&hostVal, sizeof(hostVal), devPtr, count,
                                ACL_MEMCPY_DEVICE_TO_HOST, stream));
@@ -3207,9 +3209,8 @@ class HashTable : public HashTableBase<K, V, S> {
   }
 
   // H→D 批量内存复制
-  inline void npu_memcpy_h2d(void* devPtr, size_t devCount,
-                             const void* hostPtr, size_t hostCount,
-                             aclrtStream stream) const {
+  inline void npu_memcpy_h2d(void* devPtr, size_t devCount, const void* hostPtr,
+                             size_t hostCount, aclrtStream stream) const {
 #ifdef SIM_MODE
     NPU_CHECK(aclrtMemcpy(devPtr, devCount, hostPtr, hostCount,
                           ACL_MEMCPY_HOST_TO_DEVICE));
