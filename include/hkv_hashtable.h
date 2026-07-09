@@ -3145,11 +3145,7 @@ class HashTable : public HashTableBase<K, V, S> {
                        sizeof(key_type) * count, stream);
         npu_memcpy_h2d(d_scores, sizeof(score_type) * count, h_scores,
                        sizeof(score_type) * count, stream);
-#ifdef SIM_MODE
-        size_t values_size = sizeof(value_type) * count;
-#else
         size_t values_size = sizeof(value_type) * dim() * count;
-#endif
         npu_memcpy_h2d(d_values, values_size, h_values, values_size, stream);
       }
 
@@ -3171,7 +3167,7 @@ class HashTable : public HashTableBase<K, V, S> {
  private:
   // SIM_MODE 封装：统一一个 #ifdef 判断
   inline void npu_memset(void* devPtr, int value, size_t count,
-                         aclrtStream stream) {
+                         aclrtStream stream) const {
 #ifdef SIM_MODE
     NPU_CHECK(aclrtMemset(devPtr, count, value, count));
 #else
@@ -3182,7 +3178,7 @@ class HashTable : public HashTableBase<K, V, S> {
   // 从设备读取标量值
   template <typename T>
   T npu_memcpy_d2h_scalar(const void* devPtr, size_t count,
-                          aclrtStream stream) {
+                          aclrtStream stream) const {
     T hostVal = 0;
 #ifdef SIM_MODE
     NPU_CHECK(aclrtSynchronizeStream(stream));
@@ -3200,7 +3196,7 @@ class HashTable : public HashTableBase<K, V, S> {
   // D→H 批量内存复制
   inline void npu_memcpy_d2h(void* hostPtr, size_t hostCount,
                              const void* devPtr, size_t devCount,
-                             aclrtStream stream) {
+                             aclrtStream stream) const {
 #ifdef SIM_MODE
     NPU_CHECK(aclrtMemcpy(hostPtr, hostCount, devPtr, devCount,
                           ACL_MEMCPY_DEVICE_TO_HOST));
@@ -3213,7 +3209,7 @@ class HashTable : public HashTableBase<K, V, S> {
   // H→D 批量内存复制
   inline void npu_memcpy_h2d(void* devPtr, size_t devCount,
                              const void* hostPtr, size_t hostCount,
-                             aclrtStream stream) {
+                             aclrtStream stream) const {
 #ifdef SIM_MODE
     NPU_CHECK(aclrtMemcpy(devPtr, devCount, hostPtr, hostCount,
                           ACL_MEMCPY_HOST_TO_DEVICE));
