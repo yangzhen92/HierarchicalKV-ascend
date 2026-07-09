@@ -3280,8 +3280,8 @@ class HashTable : public HashTableBase<K, V, S> {
                   keep_dims, out_data_type, out);
 
     int64_t h_total_size = 0;
-    h_total_size = npu_memcpy_d2h_scalar<int64_t>(
-        out.get_data(), out.get_data_size(), stream);
+    h_total_size = npu_memcpy_d2h_scalar<int64_t>(out.get_data(),
+                                                  out.get_data_size(), stream);
     NpuCheckError();
     return static_cast<float>((delta * 1.0) / (capacity() * 1.0) +
                               (h_total_size * 1.0) /
