@@ -197,14 +197,14 @@ cd HierarchicalKV-ascend
 | 参数 | 长参数 | 说明 |
 | ---- | ------ | ---- |
 | `-h` | `--help` | 打印帮助信息并退出 |
-| `-r` | `--run-mode MODE` | 设置 `RUN_MODE` 变量，当前仅支持 `npu`（NPU上板） |
-| `-i` | `--install-path PATH` | 设置 `ASCEND_INSTALL_PATH` 变量，作为脚本内 CANN 路径查找的最高优先级 |
-| `-b` | `--build-type TYPE` | 设置 `BUILD_TYPE` 变量，可选 `Release` / `Debug`，默认为 `Release` |
-| `-p` | `--install-prefix PATH` | 设置 `INSTALL_PREFIX` 变量，默认为当前路径下的 `out` 目录 |
-| `-d` | `--device DEVICE_ID` | 设置 `HKV_TEST_DEVICE` 环境变量，指定 testcase、benchmark、demo 运行的 NPU 卡号，默认为 `0` |
-| `-c` | `--compile-only` | 设置 `COMPILE_ONLY` 变量，默认为 `0`，设为 `1` 时仅编译安装，不执行用例 |
-| `-t` | `--enable-test SHIFT` | 设置 `ENABLE_TEST` 变量，`0` 不执行 testcase，`1` 执行 testcase，默认为 `1` |
-| `-g` | `--skip-disabled-test` | 设置 `RUN_DISABLED` 变量，默认为 `1`，设为 `0` 时跳过 gtest 中 `DISABLED_` 用例 |
+| `-r` | `--run-mode MODE` | 指定编译方式，当前仅支持 `npu`（NPU上板），默认为 `npu` |
+| `-i` | `--install-path PATH` | 指定 CANN 安装路径，作为脚本内 CANN 路径查找的最高优先级 |
+| `-b` | `--build-type TYPE` | 指定构建类型，可选 `Release` / `Debug`，默认为 `Release` |
+| `-p` | `--install-prefix PATH` | 指定安装路径，默认为当前路径下的 `out` 目录 |
+| `-d` | `--device DEVICE_ID` | 指定 NPU 卡号，testcase、benchmark 以及 demo 将在该卡上执行，默认为 `0` |
+| `-c` | `--compile-only` | 仅编译安装，不执行用例 |
+| `-t` | `--enable-test SHIFT` | 测试开关，`0` 不执行 testcase，`1` 执行 testcase，默认为 `1` |
+| `-g` | `--skip-disabled-test` | 跳过 gtest 中 `DISABLED_` 用例 |
 
 示例：
 
