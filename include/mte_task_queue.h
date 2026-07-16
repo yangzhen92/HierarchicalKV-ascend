@@ -26,24 +26,44 @@ namespace hkv {
 
 using namespace AscendC;
 
+/*
+ * MteTaskPipelineIntf
+ * 定义MTE任务队列的接口，参考cuda::pipeline的接口定义与使用范式
+ * 但有以下不同点：
+ * 1）cuda粒度为thread，本接口粒度为warp级别；
+ * 2）接口新增额外入参并且新增部分额外接口如init、run_task等；
+ * 不同原因在于：
+ * 1）thread粒度会引入更多的atomic操作，导致性能下降；
+ * 2）节省寄存器，NPU寄存器吃紧，尽量避免类中带有私有数据成员；
+ * 3）由于本质是驱动scalar下发mte指令，因此需额外设计__aicore__接口；
+ */
 class MteTaskPipelineIntf {
 public:
+  // 初始化任务控制数据
   __aicore__ inline virtual void init() = 0;
 
+  // 获取warp级别需要下发任务的mask
   __simt_callee__ inline virtual uint32_t get_acquire_mask(const bool &need_assign) const = 0;
 
+  // 申请任务ID
   __simt_callee__ inline virtual void producer_acquire(const bool &need_assign, const uint32_t &warp_acquire_mask, uint32_t &curr_simt_alloc_pos, uint32_t &new_simt_alloc_pos, uint32_t &assign_task_id) = 0;
-  
+
+  // 下发任务
   __simt_callee__ inline virtual void memcpy_async(const bool &need_assign, const uint32_t & assign_task_id, void *dst, const void *src, size_t len) = 0;
-  
+
+  // 提交任务
   __simt_callee__ inline virtual void producer_commit(const uint32_t & curr_simt_alloc_pos, const uint32_t & new_simt_alloc_pos) = 0;
-  
+
+  // 等待任务完成
   __simt_callee__ inline virtual void consumer_wait(const uint32_t& new_task_end_id) = 0;
 
+  // 释放任务空间
   __simt_callee__ inline virtual void consumer_release(const uint32_t& new_task_end_id) = 0;
 
+  // 下发任务结束
   __simt_callee__ inline virtual void producer_finish() = 0;
 
+  // scalar执行任务
   __aicore__ inline virtual void run_task(const uint32_t len = 0) = 0;
 };
 
@@ -86,7 +106,6 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
     drain(new_simt_alloc_pos);
   }
 
-  // 填充任务信息
   __simt_callee__ inline void memcpy_async(const bool &need_assign, const uint32_t & assign_task_id, void *dst, const void *src, size_t) override {
     if (!need_assign) {
       return;
@@ -98,7 +117,6 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
         RING_BUFFER_OUT_ADDR_QUEUE_ADDR)[assign_task_id] = reinterpret_cast<uint64_t>(dst);
   }
 
-  // 下发任务
   __simt_callee__ inline void producer_commit(const uint32_t & curr_simt_alloc_pos, const uint32_t & new_simt_alloc_pos) override {
     // 确保数据写入UB
     __threadfence();
@@ -128,13 +146,11 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
   __simt_callee__ inline void consumer_release(const uint32_t& new_task_end_id) override {
   }
 
-  // 任务生产结束
   __simt_callee__ inline void producer_finish() override {
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR) =
         FINISH_FLAG;
   }
 
-  // 消费执行任务
   __aicore__ inline void run_task(const uint32_t value_size = 0) override {
     uint32_t value_size_aligned =
         (value_size + UB_ALIGN_SIZE - 1) / UB_ALIGN_SIZE * UB_ALIGN_SIZE;
@@ -155,6 +171,9 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
             RING_BUFFER_OUT_ADDR_QUEUE_ADDR);
     uint32_t mte_finish_id = 0;
     uint32_t simt_assign_id = 0;
+    GlobalTensor<uint8_t> gm_tensor;
+    DataCopyParams data_copy_params(1, value_size, 0, 0);
+    DataCopyPadParams data_copy_pad_params(false, 0, 0, 0);
     while (true) {
       simt_assign_id = *simt_assign_id_addr;
       if (simt_assign_id == mte_finish_id) {
@@ -164,16 +183,15 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
           continue;
         }
       }
-
+      
       uint32_t cur_batch = min(max_proc_batch, simt_assign_id - mte_finish_id);
       for (uint32_t i = 0; i < cur_batch; ++i) {
         uint32_t slot_pos = (mte_finish_id + i) & RING_BUFFER_MASK;
-        copy_gm_to_ubuf_align_v2(
-            reinterpret_cast<__ubuf__ uint8_t*>(DATA_BUFFER_START_ADDR +
-                                                i * value_size_aligned),
-            reinterpret_cast<__gm__ uint8_t*>(
-                ring_buffer_in_addr_queue_addr[slot_pos]),
-            0, 1, value_size, 0, 0, 0, 0, 0, 0);
+        LocalTensor<uint8_t> local_tensor(TPosition::VECCALC, static_cast<uint32_t>(DATA_BUFFER_START_ADDR +
+                                          i * value_size_aligned), static_cast<uint32_t>(0));
+        gm_tensor.SetGlobalBuffer(reinterpret_cast<__gm__ uint8_t*>(
+                ring_buffer_in_addr_queue_addr[slot_pos]));
+        DataCopyPad(local_tensor, gm_tensor, data_copy_params, data_copy_pad_params);
       }
 
       set_flag(PIPE_MTE2, PIPE_MTE3, EVENT_ID0);
@@ -181,12 +199,11 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
 
       for (uint32_t i = 0; i < cur_batch; ++i) {
         uint32_t slot_pos = (mte_finish_id + i) & RING_BUFFER_MASK;
-        copy_ubuf_to_gm_align_v2(
-            reinterpret_cast<__gm__ uint8_t*>(
-                ring_buffer_out_addr_queue_addr[slot_pos]),
-            reinterpret_cast<__ubuf__ uint8_t*>(DATA_BUFFER_START_ADDR +
-                                                i * value_size_aligned),
-            0, 1, value_size, 0, 0, 0);
+        LocalTensor<uint8_t> local_tensor(TPosition::VECCALC, static_cast<uint32_t>(DATA_BUFFER_START_ADDR +
+                                                i * value_size_aligned), static_cast<uint32_t>(0));
+        gm_tensor.SetGlobalBuffer(reinterpret_cast<__gm__ uint8_t*>(
+                ring_buffer_out_addr_queue_addr[slot_pos]));
+        DataCopyPad(gm_tensor, local_tensor, data_copy_params);
       }
 
       set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
@@ -205,6 +222,7 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
   const uint32_t DATA_BUFFER_SZ = MTE_UB_BUFFER_SZ;
 
   // 队列数据
+  // 各任务src/dst地址
   const uint32_t RING_BUFFER_IN_ADDR_QUEUE_ADDR = 0;
   const uint32_t RING_BUFFER_OUT_ADDR_QUEUE_ADDR =
       RING_BUFFER_IN_ADDR_QUEUE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);

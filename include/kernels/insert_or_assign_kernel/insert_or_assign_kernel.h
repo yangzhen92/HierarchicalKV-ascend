@@ -140,14 +140,17 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
 
  private:
   // 队列数据
+  // 各任务key以及key的输出地址
   const uint32_t RING_BUFFER_KEY_ADDR =
       GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::DATA_BUFFER_END_ADDR;
   const uint32_t RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR =
       RING_BUFFER_KEY_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
 
   // 控制数据
+  // 写key任务ID
   const uint32_t ASSIGN_ID_ADDR =
       RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
+  // 写key任务完成ID
   const uint32_t FINISH_ID_ADDR = ASSIGN_ID_ADDR + UB_ALIGN_SIZE;
 };
 
