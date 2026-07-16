@@ -122,7 +122,7 @@ struct ValueMoveOpt {
   uint32_t dim = 0;
   uint32_t size = 0;
   uint32_t cg_size = 0;
-  bool is_large_size = false;
+  bool use_mte_move = false;
 };
 
 /**
@@ -1117,18 +1117,15 @@ class HashTable : public HashTableBase<K, V, S> {
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     if (is_fast_mode()) {
       if (unique_key) {
-        if (value_move_opt_.is_large_size) {
-          insert_or_assign_kernel_with_thread_1024<K, V, S, evict_strategy_>
-              <<<block_dim_, 0, stream>>>(
+        if (value_move_opt_.use_mte_move) {
+          insert_or_assign_kernel_with_mte<K, V, S, evict_strategy_>
+              <<<block_dim_, GetMixedOpUbSize(), stream>>>(
                   static_cast<void*>(table_->buckets), table_->buckets_size,
-                  table_->capacity, table_->bucket_max_size,
-                  value_move_opt_.dim, const_cast<key_type*>(keys),
-                  const_cast<value_type*>(values),
+                  table_->capacity, table_->bucket_max_size, table_->dim,
+                  const_cast<key_type*>(keys), const_cast<value_type*>(values),
                   const_cast<score_type*>(scores), n, global_epoch_,
-                  value_move_opt_.size, table_->max_bucket_shift,
-                  table_->capacity_divisor_magic,
-                  table_->capacity_divisor_shift, n_align_warp,
-                  value_move_opt_.cg_size);
+                  table_->max_bucket_shift, table_->capacity_divisor_magic,
+                  table_->capacity_divisor_shift, n_align_warp);
         } else {
           insert_or_assign_kernel<K, V, S, evict_strategy_>
               <<<block_dim_, 0, stream>>>(
@@ -3339,9 +3336,10 @@ class HashTable : public HashTableBase<K, V, S> {
     uint32_t value_move_group_size_best = opt.size == 8 ? 32 : 16;
     opt.cg_size = std::min(value_move_group_size_best, opt.cg_size);
     opt.cg_size = std::max(2u, opt.cg_size);
-    // based on real data, when size is large enough, we can get better
-    // performance by increasing threads num of cores.
-    opt.is_large_size = move_byte_per_value >= 4096;
+    // mte算子搬运数据buffer设置为128K，且simt按128B为cacheline，因此在value大小为(128,
+    // 128K]时为优势区间
+    opt.use_mte_move =
+        (KB(128) >= move_byte_per_value) && (move_byte_per_value > 128);
 
     return opt;
   }
