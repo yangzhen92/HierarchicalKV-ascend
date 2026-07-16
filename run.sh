@@ -1,4 +1,8 @@
 #!/bin/bash
+# Copyright (c) 2024 Ascend Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+
 CURRENT_DIR=$(
     cd $(dirname ${BASH_SOURCE:-$0})
     pwd
