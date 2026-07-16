@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <acl/acl.h>
 #include <stdarg.h>
 #include <algorithm>
 #include <cstdint>
@@ -25,14 +26,16 @@
 #include <exception>
 #include <limits>
 #include <string>
-#include "kernel_operator.h"
-#include <acl/acl.h>
 #include <thread>
-#include "kernels/utils_kernel/utils_kernel.h"
 #include "debug.h"
+#include "kernel_operator.h"
+#include "kernels/utils_kernel/utils_kernel.h"
 
 namespace npu {
 namespace hkv {
+constexpr uint32_t MTE_UB_BUFFER_SZ =
+    128 * 1024;  // 占用128K，其他空间存储其他任务元数据，可根据实际情况调整
+constexpr uint32_t UB_ALIGN_SIZE = 32;
 constexpr uint32_t THREAD_NUM_512 = 512;
 constexpr uint32_t THREAD_NUM_1024 = 1024;
 constexpr uint32_t THREAD_NUM_2048 = 2048;
@@ -177,25 +180,20 @@ void write_by_cpu(V** __restrict dst, const V* __restrict src, size_t dim,
 
 template <class V>
 void read_or_write_by_cpu(V** __restrict table_value_addrs,
-                          V* __restrict param_values,
-                          const bool* founds,
+                          V* __restrict param_values, const bool* founds,
                           size_t dim, int N, int n_worker = NET_WORKERS) {
   std::vector<std::thread> thds;
   n_worker = std::max(n_worker, 1);
 
   auto functor = [dim](V** __restrict table_value_addrs,
-                               V* __restrict param_values,
-                               const bool* founds,
-                               int handled_size,
-                               int trunk_size) -> void {
+                       V* __restrict param_values, const bool* founds,
+                       int handled_size, int trunk_size) -> void {
     for (int i = handled_size; i < handled_size + trunk_size; ++i) {
       if (table_value_addrs[i] != nullptr) {
         if (founds[i]) {
-          memcpy(param_values + i * dim, table_value_addrs[i],
-                 sizeof(V) * dim);
+          memcpy(param_values + i * dim, table_value_addrs[i], sizeof(V) * dim);
         } else {
-          memcpy(table_value_addrs[i], param_values + i * dim,
-                 sizeof(V) * dim);
+          memcpy(table_value_addrs[i], param_values + i * dim, sizeof(V) * dim);
         }
       }
     }
@@ -212,7 +210,8 @@ void read_or_write_by_cpu(V** __restrict table_value_addrs,
       cur_trunk_size++;
       trunk_size_remain--;
     }
-    thds.emplace_back(functor, table_value_addrs, param_values, founds, handled_size, cur_trunk_size);
+    thds.emplace_back(functor, table_value_addrs, param_values, founds,
+                      handled_size, cur_trunk_size);
     handled_size += cur_trunk_size;
   }
 
