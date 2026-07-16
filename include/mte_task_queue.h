@@ -30,6 +30,8 @@ class MteTaskPipelineIntf {
 public:
   __aicore__ inline virtual void init() = 0;
 
+  __simt_callee__ inline virtual uint32_t get_acquire_mask(const bool &need_assign) const = 0;
+
   __simt_callee__ inline virtual void producer_acquire(const bool &need_assign, const uint32_t &warp_acquire_mask, uint32_t &curr_simt_alloc_pos, uint32_t &new_simt_alloc_pos, uint32_t &assign_task_id) = 0;
   
   __simt_callee__ inline virtual void memcpy_async(const bool &need_assign, const uint32_t & assign_task_id, void *dst, const void *src, size_t len) = 0;
@@ -39,8 +41,6 @@ public:
   __simt_callee__ inline virtual void consumer_wait(const uint32_t& new_task_end_id) = 0;
 
   __simt_callee__ inline virtual void consumer_release(const uint32_t& new_task_end_id) = 0;
-
-  __simt_callee__ inline virtual void consumer_wait_all() = 0;
 
   __simt_callee__ inline virtual void producer_finish() = 0;
 
@@ -62,8 +62,28 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR) = 0;
   }
 
+  __simt_callee__ inline uint32_t get_acquire_mask(const bool &need_assign) const override {
+    return asc_ballot(need_assign);
+  }
+
   // 申请任务ID
   __simt_callee__ inline void producer_acquire(const bool &need_assign, const uint32_t &warp_acquire_mask, uint32_t &curr_simt_alloc_pos, uint32_t &new_simt_alloc_pos, uint32_t &assign_task_id) override {
+    // 1. 统计warp内有多少调用本接口的线程
+    uint32_t warp_acquire_count = __popc(warp_acquire_mask);
+
+    // 2. 申请任务ID
+    if (laneid() == 0) {
+      curr_simt_alloc_pos = 
+          asc_atomic_add(reinterpret_cast<__ubuf__ uint32_t*>(GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::GLOBAL_ID_ADDR), warp_acquire_count);
+    }
+    curr_simt_alloc_pos = __shfl(curr_simt_alloc_pos, 0);
+
+    assign_task_id = curr_simt_alloc_pos + __popc(warp_acquire_mask & lanemask_lt());
+    assign_task_id &= GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::RING_BUFFER_MASK;
+
+    // 3. 等待任务队列空间足够
+    new_simt_alloc_pos = curr_simt_alloc_pos + warp_acquire_count;
+    drain(new_simt_alloc_pos);
   }
 
   // 填充任务信息
@@ -93,15 +113,19 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
     }
   }
 
-  // 打桩
+  __simt_callee__ inline virtual void drain(const uint32_t &new_task_end_id) {
+    while (true) {
+      uint32_t finish_id = *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTE_FINISH_ID_ADDR);
+      if (new_task_end_id - finish_id <= RING_BUFFER_SZ) {
+        break;
+      }
+    }
+  }
+
   __simt_callee__ inline void consumer_wait(const uint32_t& new_task_end_id) override {
   }
 
-  // 打桩
   __simt_callee__ inline void consumer_release(const uint32_t& new_task_end_id) override {
-  }
-
-  __simt_callee__ inline void consumer_wait_all() override {
   }
 
   // 任务生产结束
@@ -112,7 +136,7 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
 
   // 消费执行任务
   __aicore__ inline void run_task(const uint32_t value_size = 0) override {
-    int value_size_aligned =
+    uint32_t value_size_aligned =
         (value_size + UB_ALIGN_SIZE - 1) / UB_ALIGN_SIZE * UB_ALIGN_SIZE;
     uint32_t max_proc_batch = DATA_BUFFER_SZ / (value_size_aligned);
     max_proc_batch = min(max_proc_batch, queue_limited);
@@ -178,8 +202,7 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
   const uint32_t queue_limited = 32;  // 一次最多处理32个任务
   const uint32_t FINISH_FLAG = 1;     // 任务完成标志1，未完成0
   const uint32_t RING_BUFFER_MASK = RING_BUFFER_SZ - 1;
-  const uint32_t DATA_BUFFER_SZ =
-      128 * 1024;  // 默认缓冲区大小128KB，可根据实际情况调整
+  const uint32_t DATA_BUFFER_SZ = MTE_UB_BUFFER_SZ;
 
   // 队列数据
   const uint32_t RING_BUFFER_IN_ADDR_QUEUE_ADDR = 0;

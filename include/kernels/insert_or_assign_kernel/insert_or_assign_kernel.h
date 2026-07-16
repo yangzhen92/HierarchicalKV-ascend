@@ -41,10 +41,33 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(FINISH_ID_ADDR) = 0;
   }
 
-  __simt_callee__ inline void consumer_wait_all() override {
+  __simt_callee__ inline void consumer_wait_all() {
     uint32_t last_task_id = *reinterpret_cast<__ubuf__ volatile uint32_t*>(
         GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::SIMT_ASSIGN_ID_ADDR);
     consumer_key_wait<true>(last_task_id);
+  }
+
+  __simt_callee__ inline void producer_acquire(const bool &need_assign, const uint32_t &warp_acquire_mask, uint32_t &curr_simt_alloc_pos, uint32_t &new_simt_alloc_pos, uint32_t &assign_task_id) override {
+    // 1. 统计warp内有多少调用本接口的线程
+    uint32_t warp_acquire_count = __popc(warp_acquire_mask);
+
+    // 2. 申请任务ID
+    if (laneid() == 0) {
+      curr_simt_alloc_pos = 
+          asc_atomic_add(reinterpret_cast<__ubuf__ uint32_t*>(GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::GLOBAL_ID_ADDR), warp_acquire_count);
+    }
+    curr_simt_alloc_pos = __shfl(curr_simt_alloc_pos, 0);
+
+    assign_task_id = curr_simt_alloc_pos + __popc(warp_acquire_mask & lanemask_lt());
+    assign_task_id &= GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::RING_BUFFER_MASK;
+
+    // 3. 等待任务队列空间足够
+    new_simt_alloc_pos = curr_simt_alloc_pos + warp_acquire_count;
+    UpsertTaskQueue<RING_BUFFER_SZ>::drain(new_simt_alloc_pos);
+  }
+
+  __simt_callee__ inline void drain(const uint32_t &new_task_end_id) override {
+    consumer_key_wait<false>(new_task_end_id);
   }
 
   template <bool all>
@@ -100,26 +123,6 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
         }
       }
     }  // while(true)
-  }
-
-
-  __simt_callee__ inline void producer_acquire(const bool &need_assign, const uint32_t &warp_acquire_mask, uint32_t &curr_simt_alloc_pos, uint32_t &new_simt_alloc_pos, uint32_t &assign_task_id) override {
-    // 1. 统计warp内有多少调用本接口的线程
-    uint32_t warp_acquire_count = __popc(warp_acquire_mask);
-
-    // 2. 申请任务ID
-    if (laneid() == 0) {
-      curr_simt_alloc_pos = 
-          asc_atomic_add(reinterpret_cast<__ubuf__ uint32_t*>(GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::GLOBAL_ID_ADDR), warp_acquire_count);
-    }
-    curr_simt_alloc_pos = __shfl(curr_simt_alloc_pos, 0);
-
-    assign_task_id = curr_simt_alloc_pos + __popc(warp_acquire_mask & lanemask_lt());
-    assign_task_id &= GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::RING_BUFFER_MASK;
-
-    // 3. 等待任务队列空间足够
-    new_simt_alloc_pos = curr_simt_alloc_pos + warp_acquire_count;
-    consumer_key_wait<false>(new_simt_alloc_pos);
   }
 
   __simt_callee__ inline void set_key_async(const bool &need_assign, const uint32_t & assign_task_id,  void *dst, const void *src, uint64_t key, __gm__ uint64_t *key_out_ddr) {
@@ -666,7 +669,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void insert_or_assign_kernel_with_mte_vf(
 
     const bool &need_assign = ((occupy_result != OccupyResult::REFUSED) &&
                         (occupy_result != OccupyResult::ILLEGAL));
-    uint32_t warp_acquire_mask = asc_ballot(need_assign);
+    uint32_t warp_acquire_mask = upsert_task_queue.get_acquire_mask(need_assign);
     if (warp_acquire_mask == 0) {
       continue;
     }

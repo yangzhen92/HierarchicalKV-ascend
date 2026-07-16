@@ -3339,7 +3339,7 @@ class HashTable : public HashTableBase<K, V, S> {
     // mte算子搬运数据buffer设置为128K，且simt按128B为cacheline，因此在value大小为(128,
     // 128K]时为优势区间
     opt.use_mte_move =
-        (KB(128) >= move_byte_per_value) && (move_byte_per_value > 128);
+        (MTE_UB_BUFFER_SZ >= move_byte_per_value) && (move_byte_per_value > 128);
 
     return opt;
   }
