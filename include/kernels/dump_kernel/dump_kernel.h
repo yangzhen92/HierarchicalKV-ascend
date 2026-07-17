@@ -28,10 +28,277 @@
 #include "simt_vf_dispatcher.h"
 #include "types.h"
 #include "utils.h"
+#include "mte_task_queue.h"
 
 namespace npu {
 namespace hkv {
+
 using namespace AscendC;
+
+// MTE搬运任务队列，默认仅支持GM->GM任务
+// RING_BUFFER_SZ 必须是2的整数次幂，且必须大于等于8，否则内存不按32对齐
+template <typename K, typename S, uint32_t RING_BUFFER_SZ = THREAD_NUM_2048>
+class DumpTaskPipelineQueue {
+public:
+  __aicore__ DumpTaskPipelineQueue(
+    __gm__ size_t *dump_count_gm,
+    __gm__ uint8_t *d_key_gm,
+    __gm__ uint8_t *d_val_gm,
+    __gm__ uint8_t *d_score_gm) : dump_count_gm(dump_count_gm), d_key_gm(d_key_gm), d_val_gm(d_val_gm), d_score_gm(d_score_gm) {}
+
+  __aicore__ void init() {
+    *reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR) = 0;
+    *reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_COUNT_ADDR) = 0;
+    *reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_FINISH_FLAG_ADDR) = 1;
+    *reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_TASK_NUM_ADDR) = 0;
+    *reinterpret_cast<__ubuf__ volatile size_t*>(BLOCK_TASK_GLOBAL_OFFSET_ADDR) = 0;
+  }
+
+
+
+  __simt_callee__ inline void assign_warp_task(const bool &need_assign, const K &key, const uint64_t &in_ddr, const S &score) {
+    // 1. 统计warp任务数
+    uint32_t write_mask = __ballot(need_assign);
+    uint32_t warp_write_count = __popc(write_mask);
+
+    // 2. 统计block任务数
+    if (threadIdx.x == 0) {
+      *reinterpret_cast<__ubuf__ volatile  uint32_t*>(BLOCK_COUNT_ADDR) = 0;
+    }
+
+    asc_syncthreads();
+
+    uint32_t block_offset = 0;
+    if (warp_write_count > 0 && laneid() == 0) {
+      block_offset = asc_atomic_add(reinterpret_cast<__ubuf__ uint32_t*>(BLOCK_COUNT_ADDR), warp_write_count);
+    }
+    block_offset = __shfl(block_offset, 0);
+
+    asc_syncthreads();
+
+    uint32_t block_task_num = *reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_COUNT_ADDR);
+    // 3. 统计全局任务偏移数
+    size_t global_task_offset = 0;
+    if (threadIdx.x == 0) {
+      global_task_offset = asc_atomic_add(dump_count_gm, block_task_num);
+      // 6. 等待任务空闲
+      while (*reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_FINISH_FLAG_ADDR)  == !FINISH_FLAG) {}
+    }
+
+    asc_syncthreads();
+
+    if (need_assign) {
+      // 4. 统计warp内任务偏移数
+      uint32_t warp_offset = __popc(write_mask & lanemask_lt());
+
+      // 5. 获取当前线程任务总ID
+      uint32_t cur_task_id = block_offset + warp_offset;
+
+      // 7. 填充任务信息
+      cur_task_id &= RING_BUFFER_MASK;
+      reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_VALUE_ADDR)[cur_task_id] = in_ddr;
+      reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_KEY_ADDR)[cur_task_id] = key;
+      if (d_score_gm != nullptr) {
+        reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_SCORE_ADDR)[cur_task_id] = score;
+      }
+    }
+
+    // 8. 下发任务
+    asc_syncthreads();
+
+    if (threadIdx.x == 0) {
+      *reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_TASK_NUM_ADDR) = block_task_num;
+      *reinterpret_cast<__ubuf__ volatile size_t*>(BLOCK_TASK_GLOBAL_OFFSET_ADDR) = global_task_offset;
+      __threadfence();
+      *reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_FINISH_FLAG_ADDR) = 0;
+    }
+  }
+
+  template<bool DUMP_SCORE>
+  __aicore__ inline void run_task(const uint32_t &value_size) {
+    int value_size_aligned = (value_size + UB_ALIGN_SIZE - 1) / UB_ALIGN_SIZE * UB_ALIGN_SIZE;
+    uint32_t max_proc_batch = DATA_BUFFER_SZ / (value_size_aligned);
+    max_proc_batch = min(max_proc_batch, RING_BUFFER_SZ);
+
+    __ubuf__ volatile uint32_t* block_finish_flag_addr = reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_FINISH_FLAG_ADDR);
+    __ubuf__ volatile uint32_t* task_finish_flag_addr = reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR);
+    __ubuf__ volatile uint64_t* ring_buffer_in_addr_queue_addr = reinterpret_cast<__ubuf__ volatile uint64_t*>(RING_BUFFER_VALUE_ADDR);
+    __ubuf__ volatile uint32_t* block_task_num_addr = reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_TASK_NUM_ADDR);
+    __ubuf__ volatile size_t* block_task_global_offset_addr = reinterpret_cast<__ubuf__ volatile size_t*>(BLOCK_TASK_GLOBAL_OFFSET_ADDR);
+    uint32_t mte_finish_id = 0;
+    uint32_t block_finish_flag = 0;
+    GlobalTensor<uint8_t> dst;
+    LocalTensor<uint8_t> src(AscendC::TPosition::VECCALC, DATA_BUFFER_START_ADDR, DATA_BUFFER_SZ);
+    while (true) {
+      block_finish_flag = *block_finish_flag_addr;
+      if (block_finish_flag == FINISH_FLAG) {
+        if (*task_finish_flag_addr == FINISH_FLAG) {
+          return;
+        } else {
+          continue;
+        }
+      }
+
+      uint32_t block_task_num = *block_task_num_addr;
+      size_t block_task_global_offset = *block_task_global_offset_addr;
+
+      for (uint32_t i = 0; i < block_task_num; i += max_proc_batch) {
+        uint32_t cur_batch = min(max_proc_batch, block_task_num - i);
+        for (uint32_t j = 0; j < cur_batch; j++) {
+          copy_gm_to_ubuf_align_v2(
+            reinterpret_cast<__ubuf__ uint8_t*>(DATA_BUFFER_START_ADDR) + j * value_size_aligned,
+            reinterpret_cast<__gm__ uint8_t*>(ring_buffer_in_addr_queue_addr[i + j]),
+            0, 1, value_size, 0, 0, 0, 0, 0, 0);
+        }
+
+        set_flag(PIPE_MTE2, PIPE_MTE3, 0);
+        wait_flag(PIPE_MTE2, PIPE_MTE3, 0);
+
+        dst.SetGlobalBuffer(d_val_gm + (block_task_global_offset + i) * value_size);
+        DataCopyParams params {static_cast<uint16_t>(cur_batch), static_cast<uint16_t>(value_size), 0, 0};
+        DataCopyPad<uint8_t>(dst, src, params);
+  
+        set_flag(PIPE_MTE3, PIPE_S, 0);
+        wait_flag(PIPE_MTE3, PIPE_S, 0);
+      }
+
+      copy_ubuf_to_gm_align_v2(
+        reinterpret_cast<__gm__ uint8_t*>(d_key_gm + (block_task_global_offset) * sizeof(K)),
+        reinterpret_cast<__ubuf__ uint8_t*>(RING_BUFFER_KEY_ADDR),
+        0, 1, block_task_num * sizeof(K), 0, 0, 0);
+
+      if (DUMP_SCORE) {
+        copy_ubuf_to_gm_align_v2(
+          reinterpret_cast<__gm__ uint8_t*>(d_score_gm + (block_task_global_offset) * sizeof(S)),  
+          reinterpret_cast<__ubuf__ uint8_t*>(RING_BUFFER_SCORE_ADDR),
+          0, 1, block_task_num * sizeof(S), 0, 0, 0);
+      }
+
+      set_flag(PIPE_MTE3, PIPE_S, 0);
+      wait_flag(PIPE_MTE3, PIPE_S, 0);
+
+      // 消费完成，累加消费进展
+      *block_finish_flag_addr = FINISH_FLAG;
+    }
+  }
+
+  __aicore__ inline void assignment_finish() {
+    *reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR) = FINISH_FLAG;
+  }
+
+private:
+  const uint32_t FINISH_FLAG = 1;     // 任务完成标志1，未完成0
+  const uint32_t RING_BUFFER_MASK = RING_BUFFER_SZ - 1;
+  static constexpr uint32_t DATA_BUFFER_SZ = MTE_UB_BUFFER_SZ;
+
+  // 队列数据
+  // 各任务src/dst地址
+  static constexpr uint32_t RING_BUFFER_VALUE_ADDR = 0;
+  static constexpr  uint32_t RING_BUFFER_KEY_ADDR = RING_BUFFER_VALUE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
+  static constexpr  uint32_t RING_BUFFER_SCORE_ADDR = RING_BUFFER_KEY_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
+
+  // 控制数据
+  // MTE已完成ID
+  static constexpr  uint32_t MTE_FINISH_ID_ADDR = RING_BUFFER_SCORE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
+  // 任务完成标记
+  static constexpr  uint32_t TASK_FINISH_FLAG_ADDR = MTE_FINISH_ID_ADDR + UB_ALIGN_SIZE;
+  // 核内累加数
+  static constexpr  uint32_t BLOCK_COUNT_ADDR = TASK_FINISH_FLAG_ADDR + UB_ALIGN_SIZE;
+  // block任务完成标记
+  static constexpr  uint32_t BLOCK_FINISH_FLAG_ADDR = BLOCK_COUNT_ADDR + UB_ALIGN_SIZE;
+  // block任务数
+  static constexpr  uint32_t BLOCK_TASK_NUM_ADDR = BLOCK_FINISH_FLAG_ADDR + UB_ALIGN_SIZE;
+  // block任务起始偏移
+  static constexpr  uint32_t BLOCK_TASK_GLOBAL_OFFSET_ADDR = BLOCK_TASK_NUM_ADDR + UB_ALIGN_SIZE;
+
+  // buffer区
+  static constexpr  uint32_t DATA_BUFFER_START_ADDR = BLOCK_TASK_GLOBAL_OFFSET_ADDR + UB_ALIGN_SIZE;
+  static constexpr  uint32_t DATA_BUFFER_END_ADDR = DATA_BUFFER_START_ADDR + DATA_BUFFER_SZ;
+
+  static_assert(DATA_BUFFER_END_ADDR <= 248 * 1024 - 32 * 1024 - 8 * 1024, "BLOCK_TASK_GLOBAL_OFFSET_ADDR + UB_ALIGN_SIZE must be <= 248KB - 32KB - 8KB");
+
+  // 全局任务ID计数
+  __gm__ size_t *dump_count_gm = nullptr;
+  __gm__ uint8_t* d_key_gm = nullptr;
+  __gm__ uint8_t* d_val_gm = nullptr;
+  __gm__ uint8_t* d_score_gm = nullptr;
+};
+
+template <bool DUMP_SCORE, class K, class V, class S>
+__simt_vf__ __aicore__ LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_by_mte_kernel_vf(
+    DumpTaskPipelineQueue<K, S, THREAD_NUM_2048> dump_task_queue,
+    __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
+    const size_t offset, const uint32_t dim,
+    const size_t search_length, const size_t search_length_align,
+    const uint64_t total_thread_num, __gm__ size_t* d_dump_counter,
+    uint32_t blockIdx) {
+  const size_t bucket_max_size{table->bucket_max_size};
+  size_t tid{blockIdx * blockDim.x + threadIdx.x};
+  K key = 0;
+  S score = 0;
+  uint64_t value = 0;
+  for (; tid < search_length_align; tid += total_thread_num) {
+    bool dump_flag = false;
+    if (tid < search_length) {
+      __gm__ Bucket<K, V, S>* bucket =
+          buckets + (tid + offset) / bucket_max_size;
+      __gm__ K* bucket_keys_ptr = bucket->keys_;
+      const int key_idx{static_cast<int>((tid + offset) % bucket_max_size)};
+      key = bucket_keys_ptr[key_idx];
+
+      if (!IS_RESERVED_KEY<K>(key)) {
+        dump_flag = true;
+        value = reinterpret_cast<uint64_t>(bucket->vectors + key_idx * dim);
+        if (DUMP_SCORE) {
+          __gm__ S* bucket_scores_ptr = bucket->scores_;
+          score = bucket_scores_ptr[key_idx];
+        }
+      }
+    }
+    dump_task_queue.assign_warp_task(dump_flag, key, value, score);
+  }
+
+  asc_syncthreads();
+
+  if (threadIdx.x == 0) {
+    dump_task_queue.assignment_finish();
+  }
+}
+
+template <class K, class V, class S>
+__global__ __vector__ void dump_by_mte_kernel(
+    __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
+    __gm__ K* keys, __gm__ V* vals, __gm__ S* scores, const size_t offset,
+    const size_t search_length, const size_t search_length_align,
+    __gm__ size_t* dump_counter, uint32_t dim) {
+  if ((!table) || (!buckets) || (!keys) || (!vals) || (!dump_counter)) {
+    return;
+  }
+
+  const uint64_t total_thread_num = THREAD_NUM_2048 * GetBlockNum();
+  DumpTaskPipelineQueue<K, S, THREAD_NUM_2048> dump_task_queue(dump_counter, reinterpret_cast<__gm__ uint8_t*>(keys), reinterpret_cast<__gm__ uint8_t*>(vals),
+    reinterpret_cast<__gm__ uint8_t*>(scores));
+  dump_task_queue.init();
+
+  pipe_barrier(PIPE_ALL);
+
+  uint32_t value_size = dim * sizeof(V);
+
+  if (scores != nullptr) {
+    Simt::VF_CALL<dump_by_mte_kernel_vf<true, K, V, S>>(
+      Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, dump_task_queue, table, buckets,
+      offset, dim, search_length, search_length_align,
+      total_thread_num, dump_counter, GetBlockIdx());
+
+    dump_task_queue.run_task<true>(value_size);
+  } else {
+    Simt::VF_CALL<dump_by_mte_kernel_vf<false, K, V, S>>(
+      Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, dump_task_queue, table, buckets,
+      offset, dim, search_length, search_length_align,
+      total_thread_num, dump_counter, GetBlockIdx());
+    dump_task_queue.run_task<false>(value_size);
+  }
+}
 
 template <class K, class V, class S, class VecV>
 __simt_vf__ __aicore__ LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_kernel_vf(
