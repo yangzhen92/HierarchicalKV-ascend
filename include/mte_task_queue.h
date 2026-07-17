@@ -82,7 +82,7 @@ class MteTaskPipelineIntf {
 template <uint32_t RING_BUFFER_SZ = 512>
 class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
  public:
-  __aicore__ GM2GMTaskPipelineQueueBase() {}
+  __callee__ GM2GMTaskPipelineQueueBase() {}
 
   // 初始化控制量
   __aicore__ inline void init() override {

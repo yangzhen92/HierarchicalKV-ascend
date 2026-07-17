@@ -33,7 +33,7 @@ using namespace AscendC;
 template <uint32_t RING_BUFFER_SZ = 512>
 class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
  public:
-  __aicore__ UpsertTaskQueue() {}
+  __callee__ UpsertTaskQueue() {}
 
   __aicore__ inline void init() override {
     GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::init();
@@ -445,11 +445,10 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void insert_or_assign_kernel_with_digest_vf(
   }
 }
 
-template <typename K = uint64_t, typename V = float, typename S = uint64_t,
+template <typename TaskQueue, typename K = uint64_t, typename V = float, typename S = uint64_t,
           int32_t Strategy = -1, int32_t EVICT_GROUP_SIZE = 16>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void insert_or_assign_kernel_with_mte_vf(
-    UpsertTaskQueue<THREAD_NUM_512> upsert_task_queue,
     __gm__ void* buckets_addr_gm, __gm__ int32_t* buckets_size_addr_gm,
     uint64_t capacity, uint32_t bucket_max_size, uint32_t dim,
     __gm__ void* keys_addr_gm, __gm__ void* values_addr_gm,
@@ -469,6 +468,9 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void insert_or_assign_kernel_with_mte_vf(
   if (values_addr_gm == nullptr) {
     return;
   }
+
+  TaskQueue upsert_task_queue;
+
   using BUCKET = Bucket<K, V, S>;
   using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
 
@@ -756,8 +758,10 @@ __global__ __vector__ void insert_or_assign_kernel_with_mte(
     uint64_t capacity_divisor_shift, uint64_t n_align_warp) {
   KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIV_ONLY);
 
+  using TaskQueue = UpsertTaskQueue<THREAD_NUM_512>;
+
   if ASCEND_IS_AIV {
-    UpsertTaskQueue<THREAD_NUM_512> upsert_task_queue;
+    TaskQueue upsert_task_queue;
 
     // 标记位清0
     upsert_task_queue.init();
@@ -770,8 +774,8 @@ __global__ __vector__ void insert_or_assign_kernel_with_mte(
          Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
             ? static_cast<uint64_t>(GetSystemCycle())
             : 0;
-    asc_vf_call<insert_or_assign_kernel_with_mte_vf<K, V, S, Strategy>>(
-        dim3{THREAD_NUM_512}, upsert_task_queue, buckets, buckets_size,
+    asc_vf_call<insert_or_assign_kernel_with_mte_vf<TaskQueue, K, V, S, Strategy>>(
+        dim3{THREAD_NUM_512}, buckets, buckets_size,
         capacity, bucket_max_size, dim, keys, values, scores, cur_score, n,
         global_epoch, GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
         capacity_divisor_shift, n_align_warp, thread_all);
