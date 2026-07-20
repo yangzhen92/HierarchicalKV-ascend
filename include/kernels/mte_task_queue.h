@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include "kernel_operator.h"
+#include "simt_api/device_functions.h"
 #include "utils.h"
 
 namespace npu {
