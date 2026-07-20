@@ -35,6 +35,7 @@ namespace npu {
 namespace hkv {
 constexpr uint32_t MTE_UB_BUFFER_SZ =
     128 * 1024;  // 占用128K，其他空间存储其他任务元数据，可根据实际情况调整
+constexpr uint32_t SIMT_RW_PKG_SZ = 128;
 constexpr uint32_t UB_ALIGN_SIZE = 32;
 constexpr uint32_t THREAD_NUM_512 = 512;
 constexpr uint32_t THREAD_NUM_1024 = 1024;
