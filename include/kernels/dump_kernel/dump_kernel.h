@@ -82,7 +82,7 @@ public:
     if (threadIdx.x == 0) {
       global_task_offset = asc_atomic_add(dump_count_gm, block_task_num);
       // 6. 等待任务空闲
-      while (*reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_FINISH_FLAG_ADDR)  == !FINISH_FLAG) {}
+      while (*reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_FINISH_FLAG_ADDR) == !FINISH_FLAG) {}
     }
 
     asc_syncthreads();
