@@ -16,7 +16,8 @@ if(CMAKE_INSTALL_PREFIX STREQUAL /usr/local)
 endif()
 
 # 3. hkv依赖库
-set(hkv_intf ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(hkv_intf
+  ${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_library(hkv_depends INTERFACE)
 target_include_directories(hkv_depends INTERFACE ${hkv_intf})
 target_link_libraries(hkv_depends INTERFACE

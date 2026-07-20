@@ -26,6 +26,10 @@ namespace hkv {
 
 using namespace AscendC;
 
+#define BOUNDS_ASSERT(expr)          \
+  (static_cast<bool>(expr) ? void(0) \
+                           : __assert_fail(#expr, __FILE__, __LINE__, ""))
+
 /*
  * MteTaskPipelineIntf
  * 定义MTE任务队列的接口，参考cuda::pipeline的接口定义与使用范式
@@ -90,6 +94,7 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTE_FINISH_ID_ADDR) = 0;
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(SIMT_ASSIGN_ID_ADDR) = 0;
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR) = 0;
+    BOUNDS_ASSERT(DATA_BUFFER_END_ADDR <= GetRuntimeUBSize());
   }
 
   __simt_callee__ inline uint32_t get_acquire_mask(
@@ -107,17 +112,15 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
 
     // 2. 申请任务ID
     if (laneid() == 0) {
-      curr_simt_alloc_pos = asc_atomic_add(
-          reinterpret_cast<__ubuf__ uint32_t*>(
-              GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::GLOBAL_ID_ADDR),
-          warp_acquire_count);
+      curr_simt_alloc_pos =
+          asc_atomic_add(reinterpret_cast<__ubuf__ uint32_t*>(GLOBAL_ID_ADDR),
+                         warp_acquire_count);
     }
     curr_simt_alloc_pos = __shfl(curr_simt_alloc_pos, 0);
 
     assign_task_id =
         curr_simt_alloc_pos + __popc(warp_acquire_mask & lanemask_lt());
-    assign_task_id &=
-        GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::RING_BUFFER_MASK;
+    assign_task_id &= RING_BUFFER_MASK;
 
     // 3. 等待任务队列空间足够
     new_simt_alloc_pos = curr_simt_alloc_pos + warp_acquire_count;
@@ -148,23 +151,11 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
 
     if (laneid() == 0) {
       while (true) {
-        if (atomicCAS(reinterpret_cast<__ubuf__ uint32_t*>(
-                          GM2GMTaskPipelineQueueBase<
-                              RING_BUFFER_SZ>::SIMT_ASSIGN_ID_ADDR),
+        if (atomicCAS(reinterpret_cast<__ubuf__ uint32_t*>(SIMT_ASSIGN_ID_ADDR),
                       curr_simt_alloc_pos,
                       new_simt_alloc_pos) == curr_simt_alloc_pos) {
           return;
         }
-      }
-    }
-  }
-
-  __simt_callee__ inline virtual void drain(const uint32_t& new_task_end_id) {
-    while (true) {
-      uint32_t finish_id =
-          *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTE_FINISH_ID_ADDR);
-      if (new_task_end_id - finish_id <= RING_BUFFER_SZ) {
-        break;
       }
     }
   }
@@ -184,7 +175,7 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
     uint32_t value_size_aligned =
         (value_size + UB_ALIGN_SIZE - 1) / UB_ALIGN_SIZE * UB_ALIGN_SIZE;
     uint32_t max_proc_batch = DATA_BUFFER_SZ / (value_size_aligned);
-    max_proc_batch = min(max_proc_batch, queue_limited);
+    max_proc_batch = min(max_proc_batch, QUEUE_LIMITED);
 
     __ubuf__ volatile uint32_t* simt_assign_id_addr =
         reinterpret_cast<__ubuf__ volatile uint32_t*>(SIMT_ASSIGN_ID_ADDR);
@@ -218,9 +209,7 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
       for (uint32_t i = 0; i < cur_batch; ++i) {
         uint32_t slot_pos = (mte_finish_id + i) & RING_BUFFER_MASK;
         LocalTensor<uint8_t> local_tensor(
-            TPosition::VECCALC,
-            static_cast<uint32_t>(DATA_BUFFER_START_ADDR +
-                                  i * value_size_aligned),
+            TPosition::VECCALC, DATA_BUFFER_START_ADDR + i * value_size_aligned,
             static_cast<uint32_t>(0));
         gm_tensor.SetGlobalBuffer(reinterpret_cast<__gm__ uint8_t*>(
             ring_buffer_in_addr_queue_addr[slot_pos]));
@@ -234,9 +223,7 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
       for (uint32_t i = 0; i < cur_batch; ++i) {
         uint32_t slot_pos = (mte_finish_id + i) & RING_BUFFER_MASK;
         LocalTensor<uint8_t> local_tensor(
-            TPosition::VECCALC,
-            static_cast<uint32_t>(DATA_BUFFER_START_ADDR +
-                                  i * value_size_aligned),
+            TPosition::VECCALC, DATA_BUFFER_START_ADDR + i * value_size_aligned,
             static_cast<uint32_t>(0));
         gm_tensor.SetGlobalBuffer(reinterpret_cast<__gm__ uint8_t*>(
             ring_buffer_out_addr_queue_addr[slot_pos]));
@@ -252,32 +239,47 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
     }
   }
 
+ private:
+  __simt_callee__ inline void drain(const uint32_t& new_task_end_id) {
+    while (true) {
+      uint32_t finish_id =
+          *reinterpret_cast<__ubuf__ volatile uint32_t*>(MTE_FINISH_ID_ADDR);
+      if (new_task_end_id - finish_id <= RING_BUFFER_SZ) {
+        break;
+      }
+    }
+  }
+
  protected:
-  const uint32_t queue_limited = 32;  // 一次最多处理32个任务
-  const uint32_t FINISH_FLAG = 1;     // 任务完成标志1，未完成0
-  const uint32_t RING_BUFFER_MASK = RING_BUFFER_SZ - 1;
-  const uint32_t DATA_BUFFER_SZ = MTE_UB_BUFFER_SZ;
+  static constexpr uint32_t QUEUE_LIMITED = 32;  // 一次最多处理32个任务
+  static constexpr uint32_t FINISH_FLAG = 1;  // 任务完成标志1，未完成0
+  static constexpr uint32_t RING_BUFFER_MASK = RING_BUFFER_SZ - 1;
+  static constexpr uint32_t DATA_BUFFER_SZ = MTE_UB_BUFFER_SZ;
 
   // 队列数据
   // 各任务src/dst地址
-  const uint32_t RING_BUFFER_IN_ADDR_QUEUE_ADDR = 0;
-  const uint32_t RING_BUFFER_OUT_ADDR_QUEUE_ADDR =
+  static constexpr uint32_t RING_BUFFER_IN_ADDR_QUEUE_ADDR = 0;
+  static constexpr uint32_t RING_BUFFER_OUT_ADDR_QUEUE_ADDR =
       RING_BUFFER_IN_ADDR_QUEUE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
 
   // 控制数据
   // 全局任务ID
-  const uint32_t GLOBAL_ID_ADDR =
+  static constexpr uint32_t GLOBAL_ID_ADDR =
       RING_BUFFER_OUT_ADDR_QUEUE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
   // MTE已完成ID
-  const uint32_t MTE_FINISH_ID_ADDR = GLOBAL_ID_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t MTE_FINISH_ID_ADDR = GLOBAL_ID_ADDR + UB_ALIGN_SIZE;
   // SIMT下发ID
-  const uint32_t SIMT_ASSIGN_ID_ADDR = MTE_FINISH_ID_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t SIMT_ASSIGN_ID_ADDR =
+      MTE_FINISH_ID_ADDR + UB_ALIGN_SIZE;
   // 任务完成标记
-  const uint32_t TASK_FINISH_FLAG_ADDR = SIMT_ASSIGN_ID_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t TASK_FINISH_FLAG_ADDR =
+      SIMT_ASSIGN_ID_ADDR + UB_ALIGN_SIZE;
 
   // buffer区
-  const uint32_t DATA_BUFFER_START_ADDR = TASK_FINISH_FLAG_ADDR + UB_ALIGN_SIZE;
-  const uint32_t DATA_BUFFER_END_ADDR = DATA_BUFFER_START_ADDR + DATA_BUFFER_SZ;
+  static constexpr uint32_t DATA_BUFFER_START_ADDR =
+      TASK_FINISH_FLAG_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t DATA_BUFFER_END_ADDR =
+      DATA_BUFFER_START_ADDR + DATA_BUFFER_SZ;
 };
 
 }  // namespace hkv
