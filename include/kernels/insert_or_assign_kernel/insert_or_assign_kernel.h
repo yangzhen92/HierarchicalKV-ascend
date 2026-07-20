@@ -19,7 +19,7 @@
 
 #include <cstdint>
 #include "kernel_operator.h"
-#include "mte_task_queue.h"
+#include "kernels/mte_task_queue.h"
 #include "score_functor.h"
 #include "simt_vf_dispatcher.h"
 #include "types.h"
@@ -39,6 +39,7 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
     GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::init();
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(ASSIGN_ID_ADDR) = 0;
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(FINISH_ID_ADDR) = 0;
+    BOUNDS_ASSERT(FINISH_ID_END_ADDR <= GetRuntimeUBSize());
   }
 
   __simt_callee__ inline void consumer_wait_all() {
@@ -70,13 +71,29 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
 
     // 3. 等待任务队列空间足够
     new_simt_alloc_pos = curr_simt_alloc_pos + warp_acquire_count;
-    UpsertTaskQueue<RING_BUFFER_SZ>::drain(new_simt_alloc_pos);
+    consumer_wait_key<false>(new_simt_alloc_pos);
   }
 
-  __simt_callee__ inline void drain(const uint32_t& new_task_end_id) override {
-    consumer_wait_key<false>(new_task_end_id);
+  __simt_callee__ inline void set_key_async(const bool& need_assign,
+                                            const uint32_t& assign_task_id,
+                                            void* dst, const void* src,
+                                            uint64_t key,
+                                            __gm__ uint64_t* key_out_ddr) {
+    if (!need_assign) {
+      return;
+    }
+
+    GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::memcpy_async(
+        need_assign, assign_task_id, dst, src, 0);
+
+    reinterpret_cast<__ubuf__ volatile uint64_t*>(
+        RING_BUFFER_KEY_ADDR)[assign_task_id] = key;
+    reinterpret_cast<__ubuf__ volatile uint64_t*>(
+        RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR)[assign_task_id] =
+        reinterpret_cast<uint64_t>(key_out_ddr);
   }
 
+ private:
   template <bool all>
   __simt_callee__ inline void consumer_wait_key(
       const uint32_t& new_task_end_id) {
@@ -99,7 +116,7 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
           *reinterpret_cast<__ubuf__ volatile uint32_t*>(ASSIGN_ID_ADDR);
       if (assign_id < mte_finish_id) {
         uint32_t cur_batch =
-            min(GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::queue_limited,
+            min(GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::QUEUE_LIMITED,
                 mte_finish_id - assign_id);
         uint32_t my_lane_id = laneid();
         uint32_t cur_assign_id = 0;
@@ -135,25 +152,6 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
     }  // while(true)
   }
 
-  __simt_callee__ inline void set_key_async(const bool& need_assign,
-                                            const uint32_t& assign_task_id,
-                                            void* dst, const void* src,
-                                            uint64_t key,
-                                            __gm__ uint64_t* key_out_ddr) {
-    if (!need_assign) {
-      return;
-    }
-
-    GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::memcpy_async(
-        need_assign, assign_task_id, dst, src, 0);
-
-    reinterpret_cast<__ubuf__ volatile uint64_t*>(
-        RING_BUFFER_KEY_ADDR)[assign_task_id] = key;
-    reinterpret_cast<__ubuf__ volatile uint64_t*>(
-        RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR)[assign_task_id] =
-        reinterpret_cast<uint64_t>(key_out_ddr);
-  }
-
  private:
   // 队列数据
   // 各任务key以及key的输出地址
@@ -168,6 +166,7 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
       RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
   // 写key任务完成ID
   const uint32_t FINISH_ID_ADDR = ASSIGN_ID_ADDR + UB_ALIGN_SIZE;
+  const uint32_t FINISH_ID_END_ADDR = FINISH_ID_ADDR + UB_ALIGN_SIZE;
 };
 
 template <typename K = uint64_t, typename V = float, typename S = uint64_t,
