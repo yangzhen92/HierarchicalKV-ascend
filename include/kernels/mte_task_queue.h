@@ -171,10 +171,10 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
         FINISH_FLAG;
   }
 
-  __aicore__ inline void run_task(const uint32_t value_size = 0) override {
-    uint32_t value_size_aligned =
-        (value_size + UB_ALIGN_SIZE - 1) / UB_ALIGN_SIZE * UB_ALIGN_SIZE;
-    uint32_t max_proc_batch = DATA_BUFFER_SZ / (value_size_aligned);
+  __aicore__ inline void run_task(const uint32_t move_len = 0) override {
+    uint32_t move_len_aligned =
+        (move_len + UB_ALIGN_SIZE - 1) / UB_ALIGN_SIZE * UB_ALIGN_SIZE;
+    uint32_t max_proc_batch = DATA_BUFFER_SZ / (move_len_aligned);
     max_proc_batch = min(max_proc_batch, QUEUE_LIMITED);
 
     __ubuf__ volatile uint32_t* simt_assign_id_addr =
@@ -192,7 +192,7 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
     uint32_t mte_finish_id = 0;
     uint32_t simt_assign_id = 0;
     GlobalTensor<uint8_t> gm_tensor;
-    DataCopyParams data_copy_params(1, value_size, 0, 0);
+    DataCopyParams data_copy_params(1, move_len, 0, 0);
     DataCopyPadParams data_copy_pad_params(false, 0, 0, 0);
     while (true) {
       simt_assign_id = *simt_assign_id_addr;
@@ -209,7 +209,7 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
       for (uint32_t i = 0; i < cur_batch; ++i) {
         uint32_t slot_pos = (mte_finish_id + i) & RING_BUFFER_MASK;
         LocalTensor<uint8_t> local_tensor(
-            TPosition::VECCALC, DATA_BUFFER_START_ADDR + i * value_size_aligned,
+            TPosition::VECCALC, DATA_BUFFER_START_ADDR + i * move_len_aligned,
             static_cast<uint32_t>(0));
         gm_tensor.SetGlobalBuffer(reinterpret_cast<__gm__ uint8_t*>(
             ring_buffer_in_addr_queue_addr[slot_pos]));
@@ -223,7 +223,7 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
       for (uint32_t i = 0; i < cur_batch; ++i) {
         uint32_t slot_pos = (mte_finish_id + i) & RING_BUFFER_MASK;
         LocalTensor<uint8_t> local_tensor(
-            TPosition::VECCALC, DATA_BUFFER_START_ADDR + i * value_size_aligned,
+            TPosition::VECCALC, DATA_BUFFER_START_ADDR + i * move_len_aligned,
             static_cast<uint32_t>(0));
         gm_tensor.SetGlobalBuffer(reinterpret_cast<__gm__ uint8_t*>(
             ring_buffer_out_addr_queue_addr[slot_pos]));

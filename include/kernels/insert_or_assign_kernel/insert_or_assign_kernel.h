@@ -781,8 +781,8 @@ __global__ __vector__ void insert_or_assign_kernel_with_mte(
         max_bucket_shift, capacity_divisor_magic, capacity_divisor_shift,
         n_align_warp, thread_all);
 
-    uint32_t value_size = dim * sizeof(V);
-    upsert_task_queue.run_task(value_size);
+    uint32_t move_len = dim * sizeof(V);
+    upsert_task_queue.run_task(move_len);
   }  // ASCEND_IS_AIV
 }
 
