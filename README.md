@@ -7,6 +7,10 @@
 
 </div>
 
+## Roadmap
+
+[Roadmap(2026Q3)](https://gitcode.com/Ascend/HierarchicalKV-ascend/issues/27)
+
 ## 前言
 
 本项目参考[NVIDIA HierarchicalKV(Beta)](https://github.com/NVIDIA-Merlin/HierarchicalKV)，实现了Ascend950系列架构下HKV HashTable的移植样例。
