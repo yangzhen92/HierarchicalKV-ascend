@@ -315,34 +315,36 @@ __global__ __vector__ void dump_by_mte_kernel(
     __gm__ K* keys, __gm__ V* vals, __gm__ S* scores, const size_t offset,
     const size_t search_length, const size_t search_length_align,
     __gm__ size_t* dump_counter, uint32_t dim) {
-  if ((!table) || (!buckets) || (!keys) || (!vals) || (!dump_counter)) {
-    return;
-  }
+  if ASCEND_IS_AIV {
+    if ((!table) || (!buckets) || (!keys) || (!vals) || (!dump_counter)) {
+      return;
+    }
 
-  using TaskQueue = DumpTaskPipelineQueue<K, S, THREAD_NUM_2048>;
+    using TaskQueue = DumpTaskPipelineQueue<K, S, THREAD_NUM_2048>;
 
-  const uint64_t total_thread_num = THREAD_NUM_2048 * GetBlockNum();
-  TaskQueue dump_task_queue(dump_counter, keys,
-                            reinterpret_cast<__gm__ uint8_t*>(vals), scores);
-  dump_task_queue.init();
+    const uint64_t total_thread_num = THREAD_NUM_2048 * GetBlockNum();
+    TaskQueue dump_task_queue(dump_counter, keys,
+                              reinterpret_cast<__gm__ uint8_t*>(vals), scores);
+    dump_task_queue.init();
 
-  pipe_barrier(PIPE_ALL);
+    pipe_barrier(PIPE_ALL);
 
-  uint32_t move_len = dim * sizeof(V);
-  if (scores != nullptr) {
-    Simt::VF_CALL<dump_by_mte_kernel_vf<true, TaskQueue, K, V, S>>(
-        Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, keys, vals, scores,
-        dump_counter, table, buckets, offset, dim, search_length,
-        search_length_align, total_thread_num, GetBlockIdx());
+    uint32_t move_len = dim * sizeof(V);
+    if (scores != nullptr) {
+      Simt::VF_CALL<dump_by_mte_kernel_vf<true, TaskQueue, K, V, S>>(
+          Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, keys, vals,
+          scores, dump_counter, table, buckets, offset, dim, search_length,
+          search_length_align, total_thread_num, GetBlockIdx());
 
-    dump_task_queue.template run_task<true>(move_len);
-  } else {
-    Simt::VF_CALL<dump_by_mte_kernel_vf<false, TaskQueue, K, V, S>>(
-        Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, keys, vals, scores,
-        dump_counter, table, buckets, offset, dim, search_length,
-        search_length_align, total_thread_num, GetBlockIdx());
-    dump_task_queue.template run_task<false>(move_len);
-  }
+      dump_task_queue.template run_task<true>(move_len);
+    } else {
+      Simt::VF_CALL<dump_by_mte_kernel_vf<false, TaskQueue, K, V, S>>(
+          Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, keys, vals,
+          scores, dump_counter, table, buckets, offset, dim, search_length,
+          search_length_align, total_thread_num, GetBlockIdx());
+      dump_task_queue.template run_task<false>(move_len);
+    }
+  }  // ASCEND_IS_AIV
 }
 
 template <class K, class V, class S, class VecV>
