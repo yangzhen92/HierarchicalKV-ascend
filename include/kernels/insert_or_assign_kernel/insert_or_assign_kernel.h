@@ -30,7 +30,7 @@ namespace hkv {
 
 using namespace AscendC;
 
-template <uint32_t RING_BUFFER_SZ = 512>
+template <class K, uint32_t RING_BUFFER_SZ = 512>
 class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
  public:
   __callee__ UpsertTaskQueue() {}
@@ -49,9 +49,8 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
   }
 
   __simt_callee__ inline void producer_acquire(
-      const bool& need_assign, const uint32_t& warp_acquire_mask,
-      uint32_t& curr_simt_alloc_pos, uint32_t& new_simt_alloc_pos,
-      uint32_t& assign_task_id) override {
+      const uint32_t& warp_acquire_mask, uint32_t& curr_simt_alloc_pos,
+      uint32_t& new_simt_alloc_pos, uint32_t& assign_task_id) override {
     // 1. 统计warp内有多少调用本接口的线程
     uint32_t warp_acquire_count = __popc(warp_acquire_mask);
 
@@ -77,8 +76,8 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
   __simt_callee__ inline void set_key_async(const bool& need_assign,
                                             const uint32_t& assign_task_id,
                                             void* dst, const void* src,
-                                            uint64_t key,
-                                            __gm__ uint64_t* key_out_ddr) {
+                                            const K& key,
+                                            __gm__ uint64_t* key_out_addr) {
     if (!need_assign) {
       return;
     }
@@ -86,11 +85,11 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
     GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::memcpy_async(
         need_assign, assign_task_id, dst, src, 0);
 
-    reinterpret_cast<__ubuf__ volatile uint64_t*>(
+    reinterpret_cast<__ubuf__ volatile K*>(
         RING_BUFFER_KEY_ADDR)[assign_task_id] = key;
     reinterpret_cast<__ubuf__ volatile uint64_t*>(
         RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR)[assign_task_id] =
-        reinterpret_cast<uint64_t>(key_out_ddr);
+        reinterpret_cast<uint64_t>(key_out_addr);
   }
 
  private:
@@ -131,11 +130,10 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
             uint32_t slot_pos =
                 (assign_id + my_lane_id) &
                 GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::RING_BUFFER_MASK;
-            *reinterpret_cast<__gm__ volatile uint64_t*>(
+            *reinterpret_cast<__gm__ volatile K*>(
                 reinterpret_cast<__ubuf__ uint64_t*>(
                     RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR)[slot_pos]) =
-                reinterpret_cast<__ubuf__ uint64_t*>(
-                    RING_BUFFER_KEY_ADDR)[slot_pos];
+                reinterpret_cast<__ubuf__ K*>(RING_BUFFER_KEY_ADDR)[slot_pos];
           }
           __threadfence();
           if (my_lane_id == 0) {
@@ -703,9 +701,8 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void insert_or_assign_kernel_with_mte_vf(
     uint32_t curr_simt_alloc_pos = 0;
     uint32_t new_simt_alloc_pos = 0;
     uint32_t assign_task_id = 0;
-    upsert_task_queue.producer_acquire(need_assign, warp_acquire_mask,
-                                       curr_simt_alloc_pos, new_simt_alloc_pos,
-                                       assign_task_id);
+    upsert_task_queue.producer_acquire(warp_acquire_mask, curr_simt_alloc_pos,
+                                       new_simt_alloc_pos, assign_task_id);
     upsert_task_queue.set_key_async(
         need_assign, assign_task_id,
         reinterpret_cast<void*>(bucket_value_base_addr),
@@ -758,7 +755,7 @@ __global__ __vector__ void insert_or_assign_kernel_with_mte(
     uint64_t capacity_divisor_shift, uint64_t n_align_warp) {
   KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIV_ONLY);
 
-  using TaskQueue = UpsertTaskQueue<THREAD_NUM_512>;
+  using TaskQueue = UpsertTaskQueue<K, THREAD_NUM_512>;
 
   if ASCEND_IS_AIV {
     TaskQueue upsert_task_queue;
