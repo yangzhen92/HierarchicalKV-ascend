@@ -49,9 +49,8 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
   }
 
   __simt_callee__ inline void producer_acquire(
-      const bool& need_assign, const uint32_t& warp_acquire_mask,
-      uint32_t& curr_simt_alloc_pos, uint32_t& new_simt_alloc_pos,
-      uint32_t& assign_task_id) override {
+      const uint32_t& warp_acquire_mask, uint32_t& curr_simt_alloc_pos,
+      uint32_t& new_simt_alloc_pos, uint32_t& assign_task_id) override {
     // 1. 统计warp内有多少调用本接口的线程
     uint32_t warp_acquire_count = __popc(warp_acquire_mask);
 
@@ -74,11 +73,12 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
     consumer_wait_key<false>(new_simt_alloc_pos);
   }
 
+  template <class K>
   __simt_callee__ inline void set_key_async(const bool& need_assign,
                                             const uint32_t& assign_task_id,
                                             void* dst, const void* src,
-                                            uint64_t key,
-                                            __gm__ uint64_t* key_out_ddr) {
+                                            const K& key,
+                                            __gm__ uint64_t* key_out_addr) {
     if (!need_assign) {
       return;
     }
@@ -87,10 +87,10 @@ class UpsertTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
         need_assign, assign_task_id, dst, src, 0);
 
     reinterpret_cast<__ubuf__ volatile uint64_t*>(
-        RING_BUFFER_KEY_ADDR)[assign_task_id] = key;
+        RING_BUFFER_KEY_ADDR)[assign_task_id] = static_cast<K>(key);
     reinterpret_cast<__ubuf__ volatile uint64_t*>(
         RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR)[assign_task_id] =
-        reinterpret_cast<uint64_t>(key_out_ddr);
+        reinterpret_cast<uint64_t>(key_out_addr);
   }
 
  private:
@@ -703,9 +703,8 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void insert_or_assign_kernel_with_mte_vf(
     uint32_t curr_simt_alloc_pos = 0;
     uint32_t new_simt_alloc_pos = 0;
     uint32_t assign_task_id = 0;
-    upsert_task_queue.producer_acquire(need_assign, warp_acquire_mask,
-                                       curr_simt_alloc_pos, new_simt_alloc_pos,
-                                       assign_task_id);
+    upsert_task_queue.producer_acquire(warp_acquire_mask, curr_simt_alloc_pos,
+                                       new_simt_alloc_pos, assign_task_id);
     upsert_task_queue.set_key_async(
         need_assign, assign_task_id,
         reinterpret_cast<void*>(bucket_value_base_addr),

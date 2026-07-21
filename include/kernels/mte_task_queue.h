@@ -53,9 +53,8 @@ class MteTaskPipelineIntf {
 
   // 申请任务ID
   __simt_callee__ inline virtual void producer_acquire(
-      const bool& need_assign, const uint32_t& warp_acquire_mask,
-      uint32_t& curr_simt_alloc_pos, uint32_t& new_simt_alloc_pos,
-      uint32_t& assign_task_id) = 0;
+      const uint32_t& warp_acquire_mask, uint32_t& curr_simt_alloc_pos,
+      uint32_t& new_simt_alloc_pos, uint32_t& assign_task_id) = 0;
 
   // 下发任务
   __simt_callee__ inline virtual void memcpy_async(
@@ -105,9 +104,8 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
 
   // 申请任务ID
   __simt_callee__ inline void producer_acquire(
-      const bool& need_assign, const uint32_t& warp_acquire_mask,
-      uint32_t& curr_simt_alloc_pos, uint32_t& new_simt_alloc_pos,
-      uint32_t& assign_task_id) override {
+      const uint32_t& warp_acquire_mask, uint32_t& curr_simt_alloc_pos,
+      uint32_t& new_simt_alloc_pos, uint32_t& assign_task_id) override {
     // 1. 统计warp内有多少调用本接口的线程
     uint32_t warp_acquire_count = __popc(warp_acquire_mask);
 
