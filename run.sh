@@ -24,7 +24,7 @@ Usage: ${0##*} [OPTIONS] [ARGUMENTS]
 
 OPTIONS（可选参数）：
     -h, --help                打印帮助信息并退出
-    -r, --run-mode MODE       指定编译方式MODE，可选择CPU仿真、NPU上板。支持参数为[sim / npu]，默认值为npu。
+    -r, --run-mode MODE       指定编译方式MODE，可选择SIM仿真、NPU上板。支持参数为[sim / npu]，默认值为npu。
     -i, --install-path PATH   指定cann的安装路径PATH，默认值为环境变量ASCEND_INSTALL_PATH。
     -b, --build-type TYPE     指定构建类型TYPE，默认值为"Release"。
     -p, --install-prefix PATH 指定安装路径PATH，默认为当前路径下的out目录。
@@ -93,7 +93,7 @@ while :; do
     esac
 done
 
-RUN_MODE_LIST="npu sim cpu"
+RUN_MODE_LIST="npu sim"
 if [[ " $RUN_MODE_LIST " != *" $RUN_MODE "* ]]; then
     echo "[ERROR]: RUN_MODE [$RUN_MODE] error, This sample only support specify [$RUN_MODE_LIST]!"
     exit -1
