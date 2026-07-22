@@ -19,11 +19,12 @@
 
 #include <simt_api/common_functions.h>
 #include <cstdint>
+#include "kernel_operator.h"
+#include "kernels/mte_task_queue.h"
 #include "score_functor.h"
 #include "simt_vf_dispatcher.h"
 #include "types.h"
 #include "utils.h"
-#include "kernel_operator.h"
 
 namespace npu {
 namespace hkv {
@@ -372,6 +373,176 @@ __global__ __vector__ void assign_values_kernel_lock_key_hybrid(
       GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
       capacity_divisor_shift, n_align_warp, thread_all, d_dst_values,
       d_dst_keys);
+}
+
+template <typename TaskQueue, typename K = uint64_t, typename V = float,
+          typename S = uint64_t>
+__simt_vf__ __aicore__
+LAUNCH_BOUND(THREAD_NUM_512) inline void assign_values_kernel_with_mte_vf(
+    __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
+    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys,
+    __gm__ void* values_addr_gm, uint64_t n, uint32_t thread_all,
+    uint32_t block_index, uint32_t max_bucket_shift,
+    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
+    uint64_t n_align_warp) {
+  if (!buckets) {
+    return;
+  }
+  if (!keys) {
+    return;
+  }
+  if (!values_addr_gm) {
+    return;
+  }
+
+  TaskQueue upsert_task_queue;
+
+  using BUCKET = Bucket<K, V, S>;
+  __gm__ V* __restrict__ values = reinterpret_cast<__gm__ V*>(values_addr_gm);
+  K key{static_cast<K>(EMPTY_KEY)};
+  __gm__ K* bucket_keys_ptr = buckets->keys_;
+  OccupyResult occupy_result{OccupyResult::INITIAL};
+
+  VecD_Comp target_digests{0};
+  uint32_t key_pos = {0};
+  const VecD_Comp empty_digests_ = empty_digests<K>();
+  __gm__ V* bucket_values = nullptr;
+  for (uint64_t kv_idx = block_index * blockDim.x + threadIdx.x;
+       kv_idx < n_align_warp; kv_idx += thread_all) {
+    if (kv_idx < n) {
+      key = keys[kv_idx];
+      occupy_result = OccupyResult::INITIAL;
+      bool done = false;
+
+      if (!IS_RESERVED_KEY<K>(key)) {
+        const K hashed_key = Murmur3HashDevice(key);
+        target_digests = digests_from_hashed<K>(hashed_key);
+        const uint64_t global_idx =
+            get_global_idx(hashed_key, capacity_divisor_magic,
+                           capacity_divisor_shift, capacity);
+        key_pos = global_idx & (bucket_max_size - 1);
+        const uint64_t bkt_idx = global_idx >> max_bucket_shift;
+        __gm__ Bucket<K, V, S>* bucket = buckets + bkt_idx;
+        bucket_keys_ptr = bucket->keys_;
+        bucket_values = bucket->vectors;
+      } else {
+        occupy_result = OccupyResult::ILLEGAL;
+        done = true;
+      }
+
+      // One more loop to handle empty keys.
+      constexpr uint32_t STRIDE = sizeof(VecD_Comp) / sizeof(D);
+      for (uint32_t offset = 0; offset < bucket_max_size + STRIDE && !done;
+           offset += STRIDE) {
+        uint32_t pos_cur = align_to<STRIDE>(key_pos);
+        pos_cur = (pos_cur + offset) & (bucket_max_size - 1);
+
+        __gm__ D* digests_ptr =
+            BUCKET::digests(bucket_keys_ptr, bucket_max_size, pos_cur);
+
+        const VecD_Comp probe_digests =
+            *(reinterpret_cast<__gm__ VecD_Comp*>(digests_ptr));
+        uint32_t possible_pos = 0;
+        uint32_t cmp_result = vcmpeq4(probe_digests, target_digests);
+        cmp_result &= 0x01010101;
+        while (cmp_result != 0 && !done) {
+          const uint32_t index =
+              (__ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+          cmp_result &= (cmp_result - 1);
+          possible_pos = pos_cur + index;
+
+          __gm__ K* current_key_ptr =
+              BUCKET::keys(bucket_keys_ptr, possible_pos);
+          K try_key =
+              asc_atomic_cas(current_key_ptr, key, static_cast<K>(LOCKED_KEY));
+          if (try_key == key) {
+            occupy_result = OccupyResult::DUPLICATE;
+            key_pos = possible_pos;
+            done = true;
+          }
+        }
+        if (!done) {
+          cmp_result = vcmpeq4(probe_digests, empty_digests_);
+          cmp_result &= 0x01010101;
+          while (cmp_result != 0 && !done) {
+            const uint32_t index =
+                (__ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+            cmp_result &= (cmp_result - 1);
+            possible_pos = pos_cur + index;
+            if (offset == 0 && possible_pos < key_pos) {
+              continue;
+            }
+            K current_key = bucket_keys_ptr[possible_pos];
+            if (current_key == static_cast<K>(EMPTY_KEY)) {
+              occupy_result = OccupyResult::OCCUPIED_EMPTY;
+              done = true;
+            }
+          }
+        }
+      }
+    } else {
+      occupy_result = OccupyResult::ILLEGAL;
+    }
+
+    const bool& need_assign = (occupy_result == OccupyResult::DUPLICATE);
+    uint32_t warp_acquire_mask =
+        upsert_task_queue.get_acquire_mask(need_assign);
+    if (warp_acquire_mask == 0) {
+      continue;
+    }
+    uint64_t value_base_addr =
+        reinterpret_cast<uint64_t>(values + kv_idx * dim);
+    uint64_t bucket_value_base_addr =
+        reinterpret_cast<uint64_t>(bucket_values + key_pos * dim);
+
+    uint32_t curr_simt_alloc_pos = 0;
+    uint32_t new_simt_alloc_pos = 0;
+    uint32_t assign_task_id = 0;
+    upsert_task_queue.producer_acquire(warp_acquire_mask, curr_simt_alloc_pos,
+                                       new_simt_alloc_pos, assign_task_id);
+    upsert_task_queue.set_key_async(
+        need_assign, assign_task_id,
+        reinterpret_cast<void*>(bucket_value_base_addr),
+        reinterpret_cast<void*>(value_base_addr), key,
+        reinterpret_cast<__gm__ uint64_t*>(bucket_keys_ptr + key_pos));
+    upsert_task_queue.producer_commit(curr_simt_alloc_pos, new_simt_alloc_pos);
+  }
+
+  __syncthreads();
+
+  if (threadIdx.x == 0) {
+    upsert_task_queue.producer_finish();
+  }
+
+  upsert_task_queue.consumer_wait_all();
+}
+
+template <class K, class V, class S>
+__global__ __vector__ void assign_values_kernel_with_mte(
+    __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
+    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys, __gm__ void* values,
+    uint64_t n, uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
+    uint64_t capacity_divisor_shift, uint64_t n_align_warp) {
+  KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIV_ONLY);
+
+  using TaskQueue = AssignTaskQueue<K, THREAD_NUM_512>;
+
+  if ASCEND_IS_AIV {
+    TaskQueue upsert_task_queue;
+
+    upsert_task_queue.init();
+
+    pipe_barrier(PIPE_ALL);
+
+    const uint32_t thread_all = THREAD_NUM_512 * GetBlockNum();
+    asc_vf_call<assign_values_kernel_with_mte_vf<TaskQueue, K, V, S>>(
+        dim3{THREAD_NUM_512}, buckets, capacity, bucket_max_size, dim, keys,
+        values, n, thread_all, GetBlockIdx(), max_bucket_shift,
+        capacity_divisor_magic, capacity_divisor_shift, n_align_warp);
+
+    uint32_t move_len = dim * sizeof(V);
+    upsert_task_queue.run_task(move_len);
+  }  // ASCEND_IS_AIV
 }
 }  // namespace hkv
 }  // namespace npu
