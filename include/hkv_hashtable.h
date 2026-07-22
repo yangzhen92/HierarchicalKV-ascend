@@ -1386,11 +1386,10 @@ class HashTable : public HashTableBase<K, V, S> {
                      evicted_scores, d_evicted_counter, stream, unique_key,
                      ignore_evict_strategy);
 
-    size_type h_evicted_counter = 0;
-    h_evicted_counter = npu_memcpy_d2h_scalar<size_type>(
+    size_type counter = npu_memcpy_d2h_scalar<size_type>(
         d_evicted_counter, sizeof(size_type), stream);
     NpuCheckError();
-    return h_evicted_counter;
+    return counter;
   }
 
   /**
@@ -2420,8 +2419,7 @@ class HashTable : public HashTableBase<K, V, S> {
         table_->buckets, table_->buckets_size, table_->buckets_num,
         options_.max_bucket_size, pattern, threshold, d_counter);
 
-    size_type count = 0;
-    count =
+    size_type count =
         npu_memcpy_d2h_scalar<size_type>(d_counter, sizeof(size_type), stream);
 
     NpuCheckError();
@@ -2458,8 +2456,7 @@ class HashTable : public HashTableBase<K, V, S> {
                       table_->max_bucket_shift, table_->capacity_divisor_magic,
                       table_->capacity_divisor_shift, pred, d_counter)));
 
-    size_type count = 0;
-    count =
+    size_type count =
         npu_memcpy_d2h_scalar<size_type>(d_counter, sizeof(size_type), stream);
 
     NpuCheckError();
@@ -2558,8 +2555,7 @@ class HashTable : public HashTableBase<K, V, S> {
     // 同步stream以确保内核函数执行完成
     NPU_CHECK(aclrtSynchronizeStream(stream));
 
-    size_type counter = 0;
-    counter =
+    size_type counter =
         npu_memcpy_d2h_scalar<size_type>(d_counter, sizeof(size_type), stream);
 
     return counter;
@@ -2797,9 +2793,8 @@ class HashTable : public HashTableBase<K, V, S> {
     EXEC_ACLNN_OP(workspace_deleter, stream, aclnnReduceSum, input, dims,
                   keep_dims, out_data_type, out);
 
-    int64_t h_total_size = 0;
-    h_total_size = npu_memcpy_d2h_scalar<int64_t>(out.get_data(),
-                                                  out.get_data_size(), stream);
+    int64_t h_total_size = npu_memcpy_d2h_scalar<int64_t>(
+        out.get_data(), out.get_data_size(), stream);
     return h_total_size;
   }
 
@@ -3279,9 +3274,8 @@ class HashTable : public HashTableBase<K, V, S> {
     EXEC_ACLNN_OP(workspace_deleter, stream, aclnnReduceSum, input, dims,
                   keep_dims, out_data_type, out);
 
-    int64_t h_total_size = 0;
-    h_total_size = npu_memcpy_d2h_scalar<int64_t>(out.get_data(),
-                                                  out.get_data_size(), stream);
+    int64_t h_total_size = npu_memcpy_d2h_scalar<int64_t>(
+        out.get_data(), out.get_data_size(), stream);
     NpuCheckError();
     return static_cast<float>((delta * 1.0) / (capacity() * 1.0) +
                               (h_total_size * 1.0) /
