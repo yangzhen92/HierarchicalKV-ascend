@@ -134,6 +134,23 @@ export HKV_TEST_DEVICE=1
 export HKV_TEST_DEVICE=3
 ```
 
+`HKV_LOG_LEVEL`环境变量控制HKV日志输出级别，支持三个级别：`0`（INFO）、`1`（WARNING）、`2`（ERROR）。不设置时默认为`2`（仅输出ERROR级别日志），生产环境下可保持默认以降低性能开销。
+
+| 环境变量值 | 日志级别 | 输出内容 |
+|-----------|---------|---------|
+| `0` | INFO | 输出所有级别日志（INFO、WARNING、ERROR），包含各对外接口的调用参数、init/reserve等容量与扩容流程数据、HBM与host内存分配统计、参数不生效告警等 |
+| `1` | WARNING | 输出WARNING及以上级别日志，包含参数设置不生效等告警信息 |
+| `2` 或 `其他值` | ERROR | 仅输出ERROR级别日志（默认） |
+
+**配置示例：**
+```bash
+# 开启INFO级别日志，用于问题定位与流程跟踪
+export HKV_LOG_LEVEL=0
+
+# 开启WARNING级别日志，仅关注告警信息
+export HKV_LOG_LEVEL=1
+```
+
 ### 使用约束
 
 - `key_type`必须为`uint64_t`或`int64_t`

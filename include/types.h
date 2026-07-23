@@ -17,13 +17,14 @@
 
 #pragma once
 
+#include <simt_api/device_atomic_functions.h>
+#include <simt_api/device_warp_functions.h>
 #include <stddef.h>
 #include <cstdint>
 #include <cstdio>
 #include <limits>
 #include <string>
-#include <simt_api/device_atomic_functions.h>
-#include <simt_api/device_warp_functions.h>
+#include "debug.h"
 #include "utils.h"
 namespace npu {
 namespace hkv {
@@ -122,7 +123,8 @@ __forceinline__ __simt_callee__ D get_digest(const K& key) {
 }
 
 template <typename K>
-__forceinline__ __simt_callee__ VecD_Comp digests_from_hashed(const K& hashed_key) {
+__forceinline__ __simt_callee__ VecD_Comp
+digests_from_hashed(const K& hashed_key) {
   D digest = static_cast<D>(hashed_key >> 32);
   // Set every byte in VecD_Comp to `digest`.
   return static_cast<VecD_Comp>(digest) * 0x01010101U;
@@ -161,12 +163,16 @@ bool IS_VACANT_KEY(K key) {
   return (VACANT_KEY_MASK_1 & key) == VACANT_KEY_MASK_2;
 }
 
-__attribute__((unused)) static aclError init_reserved_keys(int index) {
+static aclError init_reserved_keys(int index) {
   if (index < 1 || index > MAX_RESERVED_KEY_BIT) {
     // index = 0 is the default,
     // index = 62 is the maximum index can be set for reserved keys.
     return ACL_SUCCESS;
   }
+  HKV_LOG_WARNING(
+      "init_reserved_keys: reserved_key_start_bit={} is set but not applied, "
+      "the modification does not take effect",
+      index);
   return ACL_SUCCESS;
 }
 
@@ -191,20 +197,18 @@ struct Bucket {
   K** keys_addr() { return reinterpret_cast<K**>(&keys_); }
 
   static __forceinline__ __simt_callee__ __gm__ K* keys(__gm__ K* keys,
-                                                   uint32_t offset) {
+                                                        uint32_t offset) {
     return reinterpret_cast<__gm__ K*>(keys) + offset;
   }
 
-  static __forceinline__ __simt_callee__ __gm__ D* digests(__gm__ K* keys,
-                                                      uint32_t bucket_capacity,
-                                                      uint32_t offset) {
+  static __forceinline__ __simt_callee__ __gm__ D* digests(
+      __gm__ K* keys, uint32_t bucket_capacity, uint32_t offset) {
     bucket_capacity = bucket_capacity > 128U ? bucket_capacity : 128U;
     return reinterpret_cast<__gm__ D*>(keys) - bucket_capacity + offset;
   }
 
-  static __forceinline__ __simt_callee__ __gm__ S* scores(__gm__ K* keys,
-                                                     uint32_t bucket_capacity,
-                                                     uint32_t offset) {
+  static __forceinline__ __simt_callee__ __gm__ S* scores(
+      __gm__ K* keys, uint32_t bucket_capacity, uint32_t offset) {
     return reinterpret_cast<__gm__ S*>(keys + bucket_capacity) + offset;
   }
 };
@@ -236,7 +240,7 @@ struct Table {
   size_t remaining_hbm_for_vectors = 0;  // Remaining HBM allocated for vectors
   size_t num_of_buckets_per_alloc = 1;   // Number of buckets allocated in each
                                          // HBM allocation, must be power of 2.
-  bool is_pure_hbm = true;               // unused
+  bool is_pure_hbm = true;               // Is the table only using HBM memory.
   bool primary = true;                   // unused
   int slots_offset = 0;                  // unused
   int slots_number = 0;                  // unused
@@ -478,7 +482,7 @@ __forceinline__ __simt_callee__ OccupyResult find_and_lock_for_update(
     uint32_t vote;
     do {
       expected_key = asc_atomic_cas(bucket_keys + current_pos, key,
-                                     static_cast<K>(LOCKED_KEY));
+                                    static_cast<K>(LOCKED_KEY));
       bool locked = (expected_key == key);
 
       vote = asc_ballot(locked);
