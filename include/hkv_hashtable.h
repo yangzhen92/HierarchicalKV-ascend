@@ -2553,10 +2553,17 @@ class HashTable : public HashTableBase<K, V, S> {
     n = std::min(table_->capacity - offset, n);
     size_type n_align = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     if (is_fast_mode()) {
-      dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
-          d_table_, table_->buckets, keys, values, scores, offset, n, n_align,
-          d_counter, value_move_opt_.size, value_move_opt_.cg_size,
-          value_move_opt_.dim);
+      if (value_move_opt_.use_mte_move) {
+        dump_by_mte_kernel<K, V, S><<<block_dim_, GetMixedOpUbSize(), stream>>>(
+            d_table_, table_->buckets, keys, values, scores, offset, n, n_align,
+            d_counter, table_->dim);
+      } else {
+        // 该算子共使用64KB的UB
+        dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
+            d_table_, table_->buckets, keys, values, scores, offset, n, n_align,
+            d_counter, value_move_opt_.size, value_move_opt_.cg_size,
+            value_move_opt_.dim);
+      }
     } else {
       size_t size_all = n * sizeof(value_type*);
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
@@ -2659,6 +2666,7 @@ class HashTable : public HashTableBase<K, V, S> {
 
     if (is_fast_mode()) {
       DISPATCH_GROUP_SIZE(value_move_opt_.cg_size,
+                          // 该算子共使用64KB的UB
                           (dump_kernel_if<K, V, S, PredFunctor, GROUP_SIZE>
                            <<<block_dim_, 64 * 1024, stream>>>(
                                d_table_, table_->buckets, pattern, threshold,
@@ -2728,6 +2736,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if (is_fast_mode()) {
       DISPATCH_GROUP_SIZE(
           value_move_opt_.cg_size,
+          // 该算子共使用64KB的UB
           (dump_kernel_if_v2<K, V, S, PredFunctor, GROUP_SIZE>
            <<<block_dim_, 64 * 1024, stream>>>(
                pred, d_table_, table_->buckets, keys, values, scores, offset, n,
@@ -3083,10 +3092,18 @@ class HashTable : public HashTableBase<K, V, S> {
           ((batch_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
 
       if (is_fast_mode()) {
-        dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
-            d_table_, table_->buckets, d_keys, d_values, d_scores, i,
-            batch_size, batch_size_align, d_count, value_move_opt_.size,
-            value_move_opt_.cg_size, value_move_opt_.dim);
+        if (value_move_opt_.use_mte_move) {
+          dump_by_mte_kernel<K, V, S>
+              <<<block_dim_, GetMixedOpUbSize(), stream>>>(
+                  d_table_, table_->buckets, d_keys, d_values, d_scores, i,
+                  batch_size, batch_size_align, d_count, table_->dim);
+        } else {
+          // 该算子共使用64KB的UB
+          dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
+              d_table_, table_->buckets, d_keys, d_values, d_scores, i,
+              batch_size, batch_size_align, d_count, value_move_opt_.size,
+              value_move_opt_.cg_size, value_move_opt_.dim);
+        }
       } else {
         size_t size_all = n * sizeof(value_type*);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};

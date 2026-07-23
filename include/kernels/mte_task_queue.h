@@ -191,8 +191,8 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
     uint32_t mte_finish_id = 0;
     uint32_t simt_assign_id = 0;
     GlobalTensor<uint8_t> gm_tensor;
-    DataCopyParams data_copy_params(1, move_len, 0, 0);
-    DataCopyPadParams data_copy_pad_params(false, 0, 0, 0);
+    DataCopyExtParams data_copy_params(1, move_len, 0, 0, 0);
+    DataCopyPadExtParams<uint8_t> data_copy_pad_params(false, 0, 0, 0);
     while (true) {
       simt_assign_id = *simt_assign_id_addr;
       if (simt_assign_id == mte_finish_id) {
