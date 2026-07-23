@@ -148,6 +148,8 @@ void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
       (*table)->bytes_per_slice /
       ((*table)->bucket_max_size * sizeof(V) * (*table)->dim);
   size_t num_of_allocated_buckets = 0;
+  size_t total_hbm_bytes = 0;
+  size_t total_host_bytes = 0;
   constexpr uint32_t value_size = sizeof(V);
   realloc_host<V**>(
       &((*table)->slices), (*table)->num_of_memory_slices * sizeof(V*),
@@ -170,12 +172,14 @@ void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
       allocator->alloc(MemoryType::Device, &((*table)->slices[i]),
                        slice_real_size);
       (*table)->remaining_hbm_for_vectors -= slice_real_size;
+      total_hbm_bytes += slice_real_size;
     } else {
       (*table)->is_pure_hbm = false;
       const size_t host_min_size = MB(2);
       slice_real_size = std::max(host_min_size, slice_real_size);
       allocator->alloc(MemoryType::Pinned, &((*table)->slices[i]),
                        slice_real_size);
+      total_host_bytes += slice_real_size;
       // 申请的host内存地址和映射后的地址相同，因此使用host地址即可
       void* stub_ptr = nullptr;
       NPU_CHECK(aclrtHostRegister(static_cast<void*>((*table)->slices[i]),
@@ -239,6 +243,14 @@ void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
   }
   NPU_CHECK(aclrtSynchronizeDevice());
   NpuCheckError();
+
+  HKV_LOG_INFO(
+      "initialize_buckets: start={}, end={}, buckets_num={}, "
+      "total_size_of_vectors={}, num_of_memory_slices={}, "
+      "hbm_bytes={}, host_bytes={}, is_pure_hbm={}, mixed_hbm={}",
+      start, end, buckets_num, total_size_of_vectors, num_of_memory_slices,
+      total_hbm_bytes, total_host_bytes, (*table)->is_pure_hbm ? 1 : 0,
+      mixed_hbm ? 1 : 0);
 }
 
 template <class K, class V, class S>

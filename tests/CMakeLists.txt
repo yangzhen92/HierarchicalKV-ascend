@@ -21,9 +21,17 @@ set_source_files_properties(
 )
 
 list(REMOVE_ITEM TEST_SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/test_aclnn_helper.cpp)
+list(REMOVE_ITEM TEST_SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/test_log.cpp)
 add_executable(test_main ${TEST_SRC_FILES})
 target_link_libraries(test_main PRIVATE hkv_depends test_depends)
 add_test(NAME test_main COMMAND test_main)
+
+# 纯单元测试，不依赖 NPU 硬件，可独立编译运行
+# 注意：test_log.cpp 自定义了 main（需要在 gtest 初始化前设置 HKV_LOG_LEVEL 环境变量），
+# 不能与 test_main 链接在一起，否则会出现重复定义 main 的链接错误。
+add_executable(test_log ${CMAKE_CURRENT_SOURCE_DIR}/test_log.cpp)
+target_link_libraries(test_log PRIVATE hkv_depends test_depends)
+add_test(NAME test_log COMMAND test_log)
 
 add_executable(test_aclnn_helper ${CMAKE_CURRENT_SOURCE_DIR}/test_aclnn_helper.cpp)
 target_link_libraries(test_aclnn_helper PRIVATE hkv_depends test_depends)
