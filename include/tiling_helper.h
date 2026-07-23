@@ -54,7 +54,7 @@ static uint64_t GetMixedOpUbSize() {
     HKV_CHECK(platform != nullptr, "get platform failed.");
     uint64_t ub_total_size = GetTotalUbSize();
     HKV_CHECK(ub_total_size > RESERVE_UB_SIZE + SIMT_UB_SIZE,
-              log_format("UB size %lu is too small.", ub_total_size));
+              log_format("UB size {} is too small.", ub_total_size));
     valid_ub_size = ub_total_size - RESERVE_UB_SIZE - SIMT_UB_SIZE;
   });
   return valid_ub_size;
@@ -71,7 +71,7 @@ static inline ValueMoveTiling GetValueMoveTiling(
 
   uint32_t max_tile_size = tiling.valid_ub_size / (buffer_num * element_size);
   HKV_CHECK(max_tile_size != 0,
-            log_format("UB size %lu is too small.", tiling.valid_ub_size));
+            log_format("UB size {} is too small.", tiling.valid_ub_size));
   tiling.tile_size = (dim <= max_tile_size) ? dim : max_tile_size;
   tiling.num_tiles = (dim + tiling.tile_size - 1) / tiling.tile_size;
 
