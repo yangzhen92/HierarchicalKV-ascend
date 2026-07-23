@@ -24,7 +24,6 @@
 
 #include <kernel_operator.h>
 #include <cstdint>
-#include "kernels/mte_task_queue.h"
 #include "simt_api/asc_simt.h"
 #include "simt_vf_dispatcher.h"
 #include "types.h"
@@ -152,8 +151,8 @@ class DumpTaskPipelineQueue {
     GlobalTensor<uint8_t> gm_tensor;
     LocalTensor<uint8_t> src(AscendC::TPosition::VECCALC,
                              DATA_BUFFER_START_ADDR, DATA_BUFFER_SZ);
-    DataCopyParams data_copy_params(1, move_len, 0, 0);
-    DataCopyPadParams data_copy_pad_params(false, 0, 0, 0);
+    DataCopyExtParams data_copy_params(1, move_len, 0, 0, 0);
+    DataCopyPadExtParams<uint8_t> data_copy_pad_params(false, 0, 0, 0);
     while (true) {
       block_finish_flag = *block_finish_flag_addr;
       if (block_finish_flag == FINISH_FLAG) {
@@ -185,8 +184,8 @@ class DumpTaskPipelineQueue {
 
         gm_tensor.SetGlobalBuffer(d_val_gm +
                                   (block_task_global_offset + i) * move_len);
-        DataCopyParams params{static_cast<uint16_t>(cur_batch),
-                              static_cast<uint16_t>(move_len), 0, 0};
+        DataCopyExtParams params{static_cast<uint16_t>(cur_batch), move_len, 0,
+                                 0, 0};
         DataCopyPad<uint8_t>(gm_tensor, src, params);
 
         set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
@@ -198,7 +197,7 @@ class DumpTaskPipelineQueue {
                                             static_cast<uint32_t>(0));
       gm_tensor.SetGlobalBuffer(reinterpret_cast<__gm__ uint8_t*>(
           d_key_gm + block_task_global_offset));
-      DataCopyParams key_params(1, block_task_num * sizeof(K), 0, 0);
+      DataCopyExtParams key_params(1, block_task_num * sizeof(K), 0, 0, 0);
       DataCopyPad(gm_tensor, key_local_tensor, key_params);
 
       if constexpr (DUMP_SCORE) {
@@ -207,7 +206,7 @@ class DumpTaskPipelineQueue {
                                                 static_cast<uint32_t>(0));
         gm_tensor.SetGlobalBuffer(reinterpret_cast<__gm__ uint8_t*>(
             d_score_gm + block_task_global_offset));
-        DataCopyParams score_params(1, block_task_num * sizeof(S), 0, 0);
+        DataCopyExtParams score_params(1, block_task_num * sizeof(S), 0, 0, 0);
         DataCopyPad(gm_tensor, score_local_tensor, score_params);
       }
 
