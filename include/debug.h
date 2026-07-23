@@ -17,11 +17,15 @@
 
 #pragma once
 
+#include <cstdio>
+#include <cstdlib>
+#include <iostream>
 #include <queue>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include "acl/acl.h"
 
 namespace npu {
@@ -32,10 +36,36 @@ class NpuException : public std::runtime_error {
   NpuException(const std::string& what) : runtime_error(what) {}
 };
 
+enum class HkvLogLevel { HKV_INFO = 0, HKV_WARNING = 1, HKV_ERROR = 2 };
+
+inline HkvLogLevel get_log_level() {
+  static const HkvLogLevel level = []() {
+    const char* env = std::getenv("HKV_LOG_LEVEL");
+    if (env == nullptr) {
+      return HkvLogLevel::HKV_ERROR;
+    }
+    char c = env[0];
+    if (env[1] != '\0' || c < '0' || c > '2') {
+      return HkvLogLevel::HKV_ERROR;
+    }
+    return static_cast<HkvLogLevel>(c - '0');
+  }();
+  return level;
+}
+
+template <typename Msg>
+inline void log_print(const char* level_str, const char* file, int line,
+                      Msg&& msg) {
+  std::ostringstream os;
+  os << "[" << level_str << "] " << file << ":" << line << " "
+     << std::forward<Msg>(msg) << "\n";
+  std::cerr << os.str();
+}
+
 inline void npu_check_(aclError val, const char* file, int line) {
   if (val != ACL_SUCCESS) {
     std::ostringstream os;
-    os << file << ':' << line << ": aclError " << (val)
+    os << "[ERROR] " << file << ":" << line << ": aclError " << (val)
        << " aclGetRecentErrMsg: " << aclGetRecentErrMsg() << std::endl;
     throw NpuException(os.str());
   }
@@ -59,7 +89,8 @@ template <class Msg>
 inline void hkv_check_(bool cond, const Msg& msg, const char* file, int line) {
   if (!cond) {
     std::ostringstream os;
-    os << file << ':' << line << ": HierarchicalKV error. " << msg;
+    os << "[ERROR] " << file << ":" << line << ": HierarchicalKV error. "
+       << msg;
     throw HkvException(os.str());
   }
 }
@@ -73,13 +104,39 @@ inline void hkv_check_(bool cond, const Msg& msg, const char* file, int line) {
     npu::hkv::hkv_check_((cond), (msg), __FILE__, __LINE__); \
   } while (0)
 
-inline void log_unpack(std::queue<std::string>& fmt, std::stringstream& ss) {
-  while (!fmt.empty()) {
-    ss << fmt.front();
-    fmt.pop();
-  }
-  return;
-}
+#ifdef HKV_LOG_ERROR
+#error Unexpected redfinition of HKV_LOG_ERROR! Something is wrong.
+#endif
+#ifdef HKV_LOG_WARNING
+#error Unexpected redfinition of HKV_LOG_WARNING! Something is wrong.
+#endif
+#ifdef HKV_LOG_INFO
+#error Unexpected redfinition of HKV_LOG_INFO! Something is wrong.
+#endif
+
+#define HKV_LOG_ERROR(fmt, ...)                                          \
+  do {                                                                   \
+    if (npu::hkv::HkvLogLevel::HKV_ERROR >= npu::hkv::get_log_level()) { \
+      npu::hkv::log_print("ERROR", __FILE__, __LINE__,                   \
+                          npu::hkv::log_format(fmt, ##__VA_ARGS__));     \
+    }                                                                    \
+  } while (0)
+
+#define HKV_LOG_WARNING(fmt, ...)                                          \
+  do {                                                                     \
+    if (npu::hkv::HkvLogLevel::HKV_WARNING >= npu::hkv::get_log_level()) { \
+      npu::hkv::log_print("WARNING", __FILE__, __LINE__,                   \
+                          npu::hkv::log_format(fmt, ##__VA_ARGS__));       \
+    }                                                                      \
+  } while (0)
+
+#define HKV_LOG_INFO(fmt, ...)                                          \
+  do {                                                                  \
+    if (npu::hkv::HkvLogLevel::HKV_INFO >= npu::hkv::get_log_level()) { \
+      npu::hkv::log_print("INFO", __FILE__, __LINE__,                   \
+                          npu::hkv::log_format(fmt, ##__VA_ARGS__));    \
+    }                                                                   \
+  } while (0)
 
 inline void __npuCheckError(const char* file, const int line) {
 #ifdef NPU_ERROR_CHECK
@@ -102,6 +159,14 @@ inline void __npuCheckError(const char* file, const int line) {
   return;
 }
 #define NpuCheckError() npu::hkv::__npuCheckError(__FILE__, __LINE__)
+
+inline void log_unpack(std::queue<std::string>& fmt, std::stringstream& ss) {
+  while (!fmt.empty()) {
+    ss << fmt.front();
+    fmt.pop();
+  }
+  return;
+}
 
 template <typename head, typename... tail>
 inline void log_unpack(std::queue<std::string>& fmt, std::stringstream& ss,
