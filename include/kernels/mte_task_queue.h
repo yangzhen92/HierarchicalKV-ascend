@@ -281,6 +281,150 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
       DATA_BUFFER_START_ADDR + DATA_BUFFER_SZ;
 };
 
+/*
+ * AssignTaskQueue
+ * 在GM2GMTaskPipelineQueueBase基础上扩展了key搬运能力，用于
+ * insert_or_assign_kernel_with_mte 和 assign_kernel_with_mte 的
+ * 生产者-消费者流水线。除 value 的 GM->GM 搬运由 MTE 异步执行外，
+ * 还需要在 MTE 搬运完成后将 key 原子写回 bucket。
+ */
+template <class K, uint32_t RING_BUFFER_SZ = 512>
+class AssignTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
+ public:
+  __callee__ AssignTaskQueue() {}
+
+  __aicore__ inline void init() override {
+    GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::init();
+    *reinterpret_cast<__ubuf__ volatile uint32_t*>(ASSIGN_ID_ADDR) = 0;
+    *reinterpret_cast<__ubuf__ volatile uint32_t*>(FINISH_ID_ADDR) = 0;
+    BOUNDS_ASSERT(FINISH_ID_END_ADDR <= GetRuntimeUBSize());
+  }
+
+  __simt_callee__ inline void consumer_wait_all() {
+    uint32_t last_task_id = *reinterpret_cast<__ubuf__ volatile uint32_t*>(
+        GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::SIMT_ASSIGN_ID_ADDR);
+    consumer_wait_key<true>(last_task_id);
+  }
+
+  __simt_callee__ inline void producer_acquire(
+      const uint32_t& warp_acquire_mask, uint32_t& curr_simt_alloc_pos,
+      uint32_t& new_simt_alloc_pos, uint32_t& assign_task_id) override {
+    // 1. 统计warp内有多少调用本接口的线程
+    uint32_t warp_acquire_count = __popc(warp_acquire_mask);
+
+    // 2. 申请任务ID
+    if (laneid() == 0) {
+      curr_simt_alloc_pos = asc_atomic_add(
+          reinterpret_cast<__ubuf__ uint32_t*>(
+              GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::GLOBAL_ID_ADDR),
+          warp_acquire_count);
+    }
+    curr_simt_alloc_pos = __shfl(curr_simt_alloc_pos, 0);
+
+    assign_task_id =
+        curr_simt_alloc_pos + __popc(warp_acquire_mask & lanemask_lt());
+    assign_task_id &=
+        GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::RING_BUFFER_MASK;
+
+    // 3. 等待任务队列空间足够
+    new_simt_alloc_pos = curr_simt_alloc_pos + warp_acquire_count;
+    consumer_wait_key<false>(new_simt_alloc_pos);
+  }
+
+  __simt_callee__ inline void set_key_async(const bool& need_assign,
+                                            const uint32_t& assign_task_id,
+                                            void* dst, const void* src,
+                                            const K& key,
+                                            __gm__ uint64_t* key_out_addr) {
+    if (!need_assign) {
+      return;
+    }
+
+    GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::memcpy_async(
+        need_assign, assign_task_id, dst, src, 0);
+
+    reinterpret_cast<__ubuf__ volatile K*>(
+        RING_BUFFER_KEY_ADDR)[assign_task_id] = key;
+    reinterpret_cast<__ubuf__ volatile uint64_t*>(
+        RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR)[assign_task_id] =
+        reinterpret_cast<uint64_t>(key_out_addr);
+  }
+
+ private:
+  template <bool all>
+  __simt_callee__ inline void consumer_wait_key(
+      const uint32_t& new_task_end_id) {
+    while (true) {
+      uint32_t finish_id =
+          *reinterpret_cast<__ubuf__ volatile uint32_t*>(FINISH_ID_ADDR);
+      if constexpr (all) {
+        if (new_task_end_id == finish_id) {
+          break;
+        }
+      } else {
+        if (new_task_end_id - finish_id <= RING_BUFFER_SZ) {
+          break;
+        }
+      }
+
+      uint32_t mte_finish_id = *reinterpret_cast<__ubuf__ volatile uint32_t*>(
+          GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::MTE_FINISH_ID_ADDR);
+      uint32_t assign_id =
+          *reinterpret_cast<__ubuf__ volatile uint32_t*>(ASSIGN_ID_ADDR);
+      if (assign_id < mte_finish_id) {
+        uint32_t cur_batch =
+            min(GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::QUEUE_LIMITED,
+                mte_finish_id - assign_id);
+        uint32_t my_lane_id = laneid();
+        uint32_t cur_assign_id = 0;
+        if (my_lane_id == 0) {
+          cur_assign_id =
+              atomicCAS(reinterpret_cast<__ubuf__ uint32_t*>(ASSIGN_ID_ADDR),
+                        assign_id, assign_id + cur_batch);
+        }
+        cur_assign_id = __shfl(cur_assign_id, 0);
+        if (cur_assign_id == assign_id) {
+          if (my_lane_id < cur_batch) {
+            uint32_t slot_pos =
+                (assign_id + my_lane_id) &
+                GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::RING_BUFFER_MASK;
+            *reinterpret_cast<__gm__ volatile K*>(
+                reinterpret_cast<__ubuf__ uint64_t*>(
+                    RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR)[slot_pos]) =
+                reinterpret_cast<__ubuf__ K*>(RING_BUFFER_KEY_ADDR)[slot_pos];
+          }
+          __threadfence();
+          if (my_lane_id == 0) {
+            while (true) {
+              if (atomicCAS(
+                      reinterpret_cast<__ubuf__ uint32_t*>(FINISH_ID_ADDR),
+                      cur_assign_id, assign_id + cur_batch) == cur_assign_id) {
+                break;
+              }
+            }
+          }
+        }
+      }
+    }  // while(true)
+  }
+
+ private:
+  // 队列数据
+  // 各任务key以及key的输出地址
+  const uint32_t RING_BUFFER_KEY_ADDR =
+      GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::DATA_BUFFER_END_ADDR;
+  const uint32_t RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR =
+      RING_BUFFER_KEY_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
+
+  // 控制数据
+  // 写key任务ID
+  const uint32_t ASSIGN_ID_ADDR =
+      RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
+  // 写key任务完成ID
+  const uint32_t FINISH_ID_ADDR = ASSIGN_ID_ADDR + UB_ALIGN_SIZE;
+  const uint32_t FINISH_ID_END_ADDR = FINISH_ID_ADDR + UB_ALIGN_SIZE;
+};
+
 }  // namespace hkv
 }  // namespace npu
 
