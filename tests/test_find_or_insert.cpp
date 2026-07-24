@@ -306,6 +306,7 @@ TEST(test_find_or_insert_ptr, empty_table_for_sim) {
   ASSERT_EQ(aclrtFree(device_keys), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_values_ptr), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_found), ACL_ERROR_NONE);
+  ASSERT_EQ(aclrtDestroyStream(stream), ACL_ERROR_NONE);
 }
 
 TEST(test_find_or_insert_ptr, basic_function_with_locked_key_ptrs) {

@@ -334,16 +334,71 @@ void read_from_ptr(V** __restrict src, V* __restrict dst, const size_t dim,
       <<<grid_size, 0, stream>>>(reinterpret_cast<void*>(src), dst, dim, N);
 }
 
+struct TestEnvState {
+  bool acl_initialized = false;
+  bool device_set = false;
+  int32_t device_id = 0;
+};
+
+inline TestEnvState& test_env_state() {
+  static TestEnvState state;
+  return state;
+}
+
 inline void init_env() {
-  static bool init_flag = false;
-  if (!init_flag) {
-    HKV_EXPECT_TRUE((aclInit(nullptr) == ACL_ERROR_NONE), "aclInit failed!");
-    auto device_id_env = std::getenv("HKV_TEST_DEVICE");
-    int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
-    HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
-                    "aclrtSetDevice failed");
-    init_flag = true;
+  auto& state = test_env_state();
+  if (state.device_set) {
+    return;
   }
+
+  if (!state.acl_initialized) {
+    HKV_EXPECT_TRUE((aclInit(nullptr) == ACL_ERROR_NONE), "aclInit failed!");
+    state.acl_initialized = true;
+  }
+
+  auto device_id_env = std::getenv("HKV_TEST_DEVICE");
+  int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
+  if (aclrtSetDevice(device_id) != ACL_ERROR_NONE) {
+    (void)aclFinalize();
+    state.acl_initialized = false;
+    HKV_EXPECT_TRUE(false, "aclrtSetDevice failed");
+  }
+  state.device_id = device_id;
+  state.device_set = true;
+}
+
+inline int shutdown_env() noexcept {
+  auto& state = test_env_state();
+  int result = 0;
+
+  if (state.device_set) {
+    std::fprintf(stderr, "[ACL] Resetting device %d\n", state.device_id);
+    auto reset_result = aclrtResetDevice(state.device_id);
+    if (reset_result != ACL_ERROR_NONE) {
+      std::fprintf(stderr, "[ERROR] aclrtResetDevice failed: %d\n",
+                   static_cast<int>(reset_result));
+      result = 1;
+    }
+    state.device_set = false;
+  }
+
+  if (state.acl_initialized) {
+    std::fprintf(stderr, "[ACL] Finalizing runtime\n");
+    auto finalize_result = aclFinalize();
+    if (finalize_result != ACL_ERROR_NONE) {
+      std::fprintf(stderr, "[ERROR] aclFinalize failed: %d\n",
+                   static_cast<int>(finalize_result));
+      result = 1;
+    }
+    state.acl_initialized = false;
+  }
+
+  if (result == 0) {
+    std::fprintf(stderr, "[ACL] Runtime shutdown complete\n");
+  } else {
+    std::fprintf(stderr, "[ACL] Runtime shutdown failed\n");
+  }
+  return result;
 }
 
 inline uint32_t round_up8(const uint32_t x) {

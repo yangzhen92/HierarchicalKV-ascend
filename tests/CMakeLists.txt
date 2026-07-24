@@ -9,10 +9,13 @@ target_link_libraries(test_depends INTERFACE gtest gmock gtest_main)
 target_include_directories(test_depends INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/common)
 
 file(GLOB TEST_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+set(CANNSIM_MAIN_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/cannsim_main.cpp")
+list(REMOVE_ITEM TEST_SRC_FILES ${CANNSIM_MAIN_SOURCE})
 
 set_source_files_properties(
     ${TEST_SRC_FILES}
     ${CMAKE_CURRENT_SOURCE_DIR}/test_score_functor/test_score_functor.cpp
+    ${CANNSIM_MAIN_SOURCE}
     PROPERTIES LANGUAGE ASC
 )
 
@@ -21,6 +24,24 @@ list(REMOVE_ITEM TEST_SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/test_log.cpp)
 add_executable(test_main ${TEST_SRC_FILES})
 target_link_libraries(test_main PRIVATE hkv_depends test_depends)
 add_test(NAME test_main COMMAND test_main)
+
+add_library(cannsim_test_depends INTERFACE)
+target_link_libraries(cannsim_test_depends INTERFACE gtest gmock)
+target_include_directories(
+    cannsim_test_depends
+    INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/common
+)
+
+add_executable(
+    test_cannsim_smoke
+    EXCLUDE_FROM_ALL
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_find_or_insert.cpp
+    ${CANNSIM_MAIN_SOURCE}
+)
+target_link_libraries(
+    test_cannsim_smoke
+    PRIVATE hkv_depends cannsim_test_depends
+)
 
 # 纯单元测试，不依赖 NPU 硬件，可独立编译运行
 # 注意：test_log.cpp 自定义了 main（需要在 gtest 初始化前设置 HKV_LOG_LEVEL 环境变量），

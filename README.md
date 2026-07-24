@@ -265,7 +265,8 @@ bash run.sh -r sim -v Ascend950PR_9589
 如需使用 CANN Simulator 在无 NPU 的服务器上运行用例并输出仿真分析报告，
 请使用 `script/run_cannsim.sh`。脚本会完成以下操作：
 
-1. 使用与主机架构匹配的 CANN `devlib` 编译 `build-cannsim/tests/test_main`；
+1. 使用与主机架构匹配的 CANN `devlib` 编译专用的
+   `build-cannsim/tests/test_cannsim_smoke`；
 2. 运行指定 GTest 并记录 `instr.bin`；
 3. 独立执行 `cannsim report`，生成并校验 `trace_core*.json`；
 4. 输出包含测试状态、退出码、提交号和 SHA-256 的 `validation-summary.txt`。
@@ -279,6 +280,8 @@ bash script/run_cannsim.sh \
 
 默认产物保存在 `cannsim_output/<时间戳>/`。`devlib` 只用于编译链接，
 运行时会从 `LD_LIBRARY_PATH` 中移除 stub 库，避免其覆盖 Simulator 的运行时库。
+专用测试入口会在 GTest 结束后依次释放 device 和 ACL Runtime，避免 Simulator
+在进程退出阶段仍持有运行时资源。
 `cannsim record`、GTest、`cannsim report` 或报告校验任一步失败，脚本都会返回非零。
 如需在 `record` 已失败但 GTest 日志完整时继续生成诊断报告，可添加
 `--report-on-record-failure`；该选项不会把最终退出码改为成功。

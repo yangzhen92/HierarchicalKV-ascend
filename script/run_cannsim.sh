@@ -60,8 +60,8 @@ Options:
   -j, --jobs N                Parallel build jobs (default: 16).
       --record-timeout TIME    record timeout (default: 30m).
       --report-timeout TIME    report timeout (default: 10m).
-  -c, --build-only            Build test_main without running cannsim.
-      --skip-build             Reuse an existing, unverified test binary.
+  -c, --build-only            Build the cannsim smoke binary only.
+      --skip-build             Reuse an existing, unverified smoke binary.
       --allow-unsupported-arm Allow aarch64 although public CANN Simulator
                               documentation currently marks ARM unsupported.
       --report-on-record-failure
@@ -285,14 +285,14 @@ if ((SKIP_BUILD == 0)); then
         -DBUILD_SHARED_LIBS=ON \
         -DENABLE_TEST=1
 
-    echo "[INFO] Building test_main with ${BUILD_JOBS} jobs"
+    echo "[INFO] Building test_cannsim_smoke with ${BUILD_JOBS} jobs"
     env \
         LD_LIBRARY_PATH="$BUILD_LD_LIBRARY_PATH" \
         LIBRARY_PATH="$BUILD_LIBRARY_PATH" \
-        cmake --build "$BUILD_DIR" --target test_main -j "$BUILD_JOBS"
+        cmake --build "$BUILD_DIR" --target test_cannsim_smoke -j "$BUILD_JOBS"
 fi
 
-TEST_BINARY="${BUILD_DIR}/tests/test_main"
+TEST_BINARY="${BUILD_DIR}/tests/test_cannsim_smoke"
 [[ -x "$TEST_BINARY" ]] || fail "test binary was not found: ${TEST_BINARY}"
 if ((SKIP_BUILD == 1)); then
     CMAKE_CACHE="${BUILD_DIR}/CMakeCache.txt"
@@ -364,6 +364,23 @@ if ! grep -Eq '\[ +RUN +\]' "$CANNSIM_LOG"; then
 fi
 if ! grep -Eq '\[ +PASSED +\] +[1-9][0-9]* tests?' "$CANNSIM_LOG"; then
     fail "GTest success marker was not found; see ${CANNSIM_LOG}"
+fi
+ACL_SHUTDOWN_STATUS="passed"
+MISSING_SHUTDOWN_MARKERS=""
+for shutdown_marker in \
+    "[ACL] Resetting device" \
+    "[ACL] Finalizing runtime" \
+    "[ACL] Runtime shutdown complete"; do
+    if ! grep -Fq "$shutdown_marker" "$CANNSIM_LOG"; then
+        ACL_SHUTDOWN_STATUS="failed"
+        MISSING_SHUTDOWN_MARKERS+="${shutdown_marker};"
+    fi
+done
+if [[ "$ACL_SHUTDOWN_STATUS" != "passed" ]]; then
+    if ((RECORD_RC == 0)); then
+        fail "ACL shutdown markers were not found: ${MISSING_SHUTDOWN_MARKERS}"
+    fi
+    echo "[WARN] ACL shutdown markers were not found: ${MISSING_SHUTDOWN_MARKERS}"
 fi
 
 if ((RECORD_RC != 0)); then
@@ -481,6 +498,7 @@ fi
     echo "record_timeout=${RECORD_TIMEOUT}"
     echo "report_timeout=${REPORT_TIMEOUT}"
     echo "gtest_status=passed"
+    echo "acl_shutdown_status=${ACL_SHUTDOWN_STATUS}"
     echo "record_exit_code=${RECORD_RC}"
     echo "report_exit_code=${REPORT_RC}"
     echo "test_binary=${TEST_BINARY}"
