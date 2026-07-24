@@ -1,4 +1,5 @@
 #!/bin/bash
+
 CURRENT_DIR=$(
     cd $(dirname ${BASH_SOURCE:-$0})
     pwd
@@ -23,14 +24,14 @@ Usage: ${0##*} [OPTIONS] [ARGUMENTS]
 
 OPTIONS（可选参数）：
     -h, --help                打印帮助信息并退出
-    -r, --run-mode MODE       指定编译方式MODE，可选择CPU仿真、NPU上板。支持参数为[sim / npu]，默认值为npu。
+    -r, --run-mode MODE       指定编译方式MODE，当前仅支持npu（NPU上板），默认值为npu。
     -i, --install-path PATH   指定cann的安装路径PATH，默认值为环境变量ASCEND_INSTALL_PATH。
-    -b, --build-type TYPE     指定构建类型TYPE，默认值为"Release"。
+    -b, --build-type TYPE     指定构建类型TYPE，可选Release / Debug，默认值为Release。
     -p, --install-prefix PATH 指定安装路径PATH，默认为当前路径下的out目录。
-    -d, --device DEVICE_ID    指定芯片卡号DEVICE_ID，设置环境变量HKV_TEST_DEVICE，默认值为0。testcase、benchmark以及demo将指定芯片上执行。
+    -d, --device DEVICE_ID    指定NPU卡号DEVICE_ID，默认值为0，testcase、benchmark以及demo将在该卡上执行。
     -c, --compile-only        仅编译安装HKV工程，不执行用例。
-    -t, --enable-test SHIFT   指定测试开关SHIFT，支持参数为[0 / 1]，0表示不执行testcase，1表示执行testcase。
-    -g, --skip-disabled-test  不执行gtest中DISABLED_用例。
+    -t, --enable-test SHIFT   指定测试开关SHIFT，支持参数为[0 / 1]，0表示不执行testcase，1表示执行testcase，默认为1。
+    -g, --skip-disabled-test  跳过gtest中DISABLED_用例。
 EOF
     exit 0
 }
