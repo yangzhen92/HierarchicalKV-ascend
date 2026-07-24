@@ -259,7 +259,7 @@ bash run.sh -g
 示例2：
 ```bash
 # 编译安装HKV工程，不执行用例
-bash run.sh -r sim -v Ascend950PR_9589 -d 3 -i /usr/local/Ascend/ascend-toolkit/latest
+bash run.sh -r sim -v Ascend950PR_9589 -i /usr/local/Ascend/ascend-toolkit/latest
 
 # 执行用例
 mkdir cannsim
