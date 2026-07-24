@@ -1,1 +1,3 @@
 .vscode/
+/build-cannsim/
+cannsim_output/
