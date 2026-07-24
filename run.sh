@@ -33,7 +33,7 @@ OPTIONS（可选参数）：
     -c, --compile-only        仅编译安装HKV工程，不执行用例。
     -t, --enable-test SHIFT   指定测试开关SHIFT，支持参数为[0 / 1]，0表示不执行testcase，1表示执行testcase，默认为1。
     -g, --skip-disabled-test  跳过gtest中DISABLED_用例。
-    -v, --soc-version SOC     指定SOC版本，默认值为Ascend950PR_9589。
+    -v, --soc-version SOC     指定SOC版本，默认值为Ascend950PR_9589，该选项仅在sim仿真模式下生效。
 EOF
     exit 0
 }
@@ -123,15 +123,15 @@ else
 fi
 
 if [ "$RUN_MODE" = "sim" ]; then
-    _CAMODEL_PATH=${_ASCEND_INSTALL_PATH}/tools/simulator/${SOC_VERSION}/camodel
-    if [ ! -d "${_CAMODEL_PATH}" ]; then
-        echo "[ERROR]: CAMODEL_PATH [${_CAMODEL_PATH}] not found!"
+    CAMODEL_PATH=${_ASCEND_INSTALL_PATH}/tools/simulator/${SOC_VERSION}/camodel
+    if [ ! -d "${CAMODEL_PATH}" ]; then
+        echo "[ERROR]: CAMODEL_PATH [${CAMODEL_PATH}] not found!"
         echo "        Please check if SOC_VERSION [${SOC_VERSION}] is correct, or install the simulator package."
         exit 1
     fi
     COMPILE_ONLY=1
 else
-    _CAMODEL_PATH=""
+    CAMODEL_PATH=""
 fi
 
 echo "ASCEND_HOME_PATH [$ASCEND_HOME_PATH]"
@@ -163,7 +163,7 @@ rm -rf build ${INSTALL_PREFIX}
 mkdir -p build
 cmake -B build \
     -DRUN_MODE="${RUN_MODE}" \
-    -DCAMODEL_PATH="${_CAMODEL_PATH}" \
+    -DCAMODEL_PATH="${CAMODEL_PATH}" \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
     -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
     -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \

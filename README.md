@@ -222,7 +222,7 @@ cd HierarchicalKV-ascend
 | `-c` | `--compile-only` | 仅编译安装，不执行用例 |
 | `-t` | `--enable-test SHIFT` | 测试开关，`0` 不执行 testcase，`1` 执行 testcase，默认为 `1` |
 | `-g` | `--skip-disabled-test` | 跳过 gtest 中 `DISABLED_` 用例 |
-| `-v` | `--soc-version SOC` | 指定SOC版本，默认值为 `Ascend950PR_9589` |
+| `-v` | `--soc-version SOC` | 指定SOC版本，默认值为 `Ascend950PR_9589`，该选项仅在sim仿真模式下生效 |
 
 示例：
 
