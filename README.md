@@ -197,16 +197,43 @@ cd HierarchicalKV-ascend
 | 参数 | 长参数 | 说明 |
 | ---- | ------ | ---- |
 | `-h` | `--help` | 打印帮助信息并退出 |
-| `-r` | `--run-mode MODE` | 指定编译方式，可选 `sim`（CPU仿真）/ `npu`（NPU上板），默认值为 `npu` |
-| `-i` | `--install-path PATH` | 指定CANN的安装路径，默认值为环境变量 `ASCEND_INSTALL_PATH` |
-| `-b` | `--build-type TYPE` | 指定构建类型，默认值为 `Release` |
+| `-r` | `--run-mode MODE` | 指定编译方式，当前仅支持 `npu`（NPU上板），默认为 `npu` |
+| `-i` | `--install-path PATH` | 指定 CANN 安装路径，作为脚本内 CANN 路径查找的最高优先级 |
+| `-b` | `--build-type TYPE` | 指定构建类型，可选 `Release` / `Debug`，默认为 `Release` |
 | `-p` | `--install-prefix PATH` | 指定安装路径，默认为当前路径下的 `out` 目录 |
-| `-d` | `--device DEVICE_ID` | 指定NPU卡号，默认值为 `0`。testcase、benchmark、demo将在指定芯片上执行 |
-| `-c` | `--compile-only` | 仅编译安装HKV工程，不执行用例 |
-| `-t` | `--enable-test SHIFT` | 指定测试开关，`0` 表示不执行testcase，`1` 表示执行testcase |
-| `-g` | `--skip-disabled-test` | 不执行gtest中 `DISABLED_` 用例 |
+| `-d` | `--device DEVICE_ID` | 指定 NPU 卡号，testcase、benchmark 以及 demo 将在该卡上执行，默认为 `0` |
+| `-c` | `--compile-only` | 仅编译安装，不执行用例 |
+| `-t` | `--enable-test SHIFT` | 测试开关，`0` 不执行 testcase，`1` 执行 testcase，默认为 `1` |
+| `-g` | `--skip-disabled-test` | 跳过 gtest 中 `DISABLED_` 用例 |
 
 示例：
+
 ```bash
+# -h：查看帮助信息
+bash run.sh -h
+
+# -r：指定编译方式（当前仅支持 npu）
+bash run.sh -r npu
+
+# -d：指定 NPU 卡号
 bash run.sh -d 3
+
+# -i：指定 CANN 安装路径
+bash run.sh -i /usr/local/Ascend/ascend-toolkit/latest
+
+# -b：指定构建类型为 Debug
+bash run.sh -b Debug
+
+# -p：指定安装路径
+bash run.sh -p /home/user/hkv_output
+
+# -c：仅编译安装，不执行用例
+bash run.sh -c
+
+# -t：测试开关，0 不执行 testcase，1 执行 testcase
+bash run.sh -t 0
+bash run.sh -t 1
+
+# -g：跳过 gtest 中 DISABLED_ 用例
+bash run.sh -g
 ```
