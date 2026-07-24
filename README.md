@@ -230,7 +230,7 @@ bash run.sh -p /home/user/hkv_output
 # -c：仅编译安装，不执行用例
 bash run.sh -c
 
-# -t：测试开关（仅支持0/1），0 不执行 testcase，1 执行 testcase
+# -t：测试开关，0 不执行 testcase，1 执行 testcase
 bash run.sh -t 0
 bash run.sh -t 1
 
