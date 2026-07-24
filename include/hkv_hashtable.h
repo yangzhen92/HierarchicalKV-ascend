@@ -34,6 +34,7 @@
 #include "aclnn_helper.h"
 #include "aclnnop/aclnn_reduce_sum.h"
 #include "bucket_memory_pool_manager.h"
+#include "debug.h"
 #include "group_lock.h"
 #include "hashtable_options.h"
 #include "kernels/accum_or_assign_kernel/accum_or_assign_kernel.h"
@@ -122,7 +123,7 @@ struct ValueMoveOpt {
   uint32_t dim = 0;
   uint32_t size = 0;
   uint32_t cg_size = 0;
-  bool is_large_size = false;
+  bool use_mte_move = false;
 };
 
 /**
@@ -964,6 +965,16 @@ class HashTable : public HashTableBase<K, V, S> {
     if (initialized_) {
       return;
     }
+    HKV_LOG_INFO(
+        "init begin: dim={}, init_capacity={}, max_capacity={}, "
+        "max_bucket_size={}, num_of_buckets_per_alloc={}, "
+        "max_hbm_for_vectors={}, io_by_cpu={}, block_size={}, "
+        "reserved_key_start_bit={}, device_id={}, api_lock={}",
+        options.dim, options.init_capacity, options.max_capacity,
+        options.max_bucket_size, options.num_of_buckets_per_alloc,
+        options.max_hbm_for_vectors, options.io_by_cpu ? 1 : 0,
+        options.block_size, options.reserved_key_start_bit, options.device_id,
+        options.api_lock ? 1 : 0);
     auto platform = platform_ascendc::PlatformAscendCManager::GetInstance();
     HKV_CHECK(platform != nullptr, "get platform failed.");
     block_dim_ = platform->GetCoreNumAiv();
@@ -1038,6 +1049,15 @@ class HashTable : public HashTableBase<K, V, S> {
     NPU_CHECK(aclrtSynchronizeDevice());
 
     initialized_ = true;
+    HKV_LOG_INFO(
+        "init done: block_dim={}, capacity={}, buckets_num={}, "
+        "bucket_max_size={}, max_bucket_shift={}, dim={}, "
+        "move_byte_per_value={}, use_mte_move={}, reach_max_capacity={}, "
+        "is_fast_mode={}",
+        block_dim_, table_->capacity, table_->buckets_num,
+        table_->bucket_max_size, table_->max_bucket_shift, table_->dim,
+        move_byte_per_value, value_move_opt_.use_mte_move ? 1 : 0,
+        reach_max_capacity_ ? 1 : 0, is_fast_mode() ? 1 : 0);
     NpuCheckError();
   }
 
@@ -1080,6 +1100,11 @@ class HashTable : public HashTableBase<K, V, S> {
                         const score_type* scores = nullptr,  // (n)
                         aclrtStream stream = 0, bool unique_key = true,
                         bool ignore_evict_strategy = false) {
+    HKV_LOG_INFO(
+        "insert_or_assign: n={}, unique_key={}, ignore_evict_strategy={}, "
+        "has_scores={}",
+        n, unique_key ? 1 : 0, ignore_evict_strategy ? 1 : 0,
+        scores != nullptr ? 1 : 0);
     if (ignore_evict_strategy) {
       insert_or_assign_impl<EvictStrategy::kCustomized>(
           n, keys, values, scores, stream, unique_key, ignore_evict_strategy);
@@ -1117,18 +1142,15 @@ class HashTable : public HashTableBase<K, V, S> {
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     if (is_fast_mode()) {
       if (unique_key) {
-        if (value_move_opt_.is_large_size) {
-          insert_or_assign_kernel_with_thread_1024<K, V, S, evict_strategy_>
-              <<<block_dim_, 0, stream>>>(
+        if (value_move_opt_.use_mte_move) {
+          insert_or_assign_kernel_with_mte<K, V, S, evict_strategy_>
+              <<<block_dim_, GetMixedOpUbSize(), stream>>>(
                   static_cast<void*>(table_->buckets), table_->buckets_size,
-                  table_->capacity, table_->bucket_max_size,
-                  value_move_opt_.dim, const_cast<key_type*>(keys),
-                  const_cast<value_type*>(values),
+                  table_->capacity, table_->bucket_max_size, table_->dim,
+                  const_cast<key_type*>(keys), const_cast<value_type*>(values),
                   const_cast<score_type*>(scores), n, global_epoch_,
-                  value_move_opt_.size, table_->max_bucket_shift,
-                  table_->capacity_divisor_magic,
-                  table_->capacity_divisor_shift, n_align_warp,
-                  value_move_opt_.cg_size);
+                  table_->max_bucket_shift, table_->capacity_divisor_magic,
+                  table_->capacity_divisor_shift, n_align_warp);
         } else {
           insert_or_assign_kernel<K, V, S, evict_strategy_>
               <<<block_dim_, 0, stream>>>(
@@ -1274,6 +1296,9 @@ class HashTable : public HashTableBase<K, V, S> {
         evicted_values == nullptr || d_evicted_counter == nullptr) {
       return;
     }
+    HKV_LOG_INFO(
+        "insert_and_evict: n={}, unique_key={}, ignore_evict_strategy={}", n,
+        unique_key ? 1 : 0, ignore_evict_strategy ? 1 : 0);
 
     while (!reach_max_capacity_ &&
            fast_load_factor(n, stream) > options_.max_load_factor) {
@@ -1449,6 +1474,9 @@ class HashTable : public HashTableBase<K, V, S> {
       if (n == 0) {
         return;
       }
+      HKV_LOG_INFO(
+          "accum_or_assign: n={}, ignore_evict_strategy={}, is_fast_mode={}", n,
+          ignore_evict_strategy ? 1 : 0, is_fast_mode() ? 1 : 0);
 
       while (!reach_max_capacity_ &&
              fast_load_factor(n, stream) > options_.max_load_factor) {
@@ -1528,6 +1556,10 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    HKV_LOG_INFO(
+        "find_or_insert: n={}, unique_key={}, has_scores={}, is_fast_mode={}",
+        n, unique_key ? 1 : 0, scores != nullptr ? 1 : 0,
+        is_fast_mode() ? 1 : 0);
 
     while (!reach_max_capacity_ &&
            fast_load_factor(n, stream) > options_.max_load_factor) {
@@ -1662,6 +1694,11 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    HKV_LOG_INFO(
+        "find_or_insert(ptr): n={}, unique_key={}, has_scores={}, "
+        "has_locked_ptrs={}",
+        n, unique_key ? 1 : 0, scores != nullptr ? 1 : 0,
+        locked_key_ptrs != nullptr ? 1 : 0);
 
     while (!reach_max_capacity_ &&
            fast_load_factor(n, stream) > options_.max_load_factor) {
@@ -1746,6 +1783,8 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    HKV_LOG_INFO("lock_keys: n={}, has_scores={}", n,
+                 scores != nullptr ? 1 : 0);
 
     std::unique_ptr<insert_unique_lock> lock_ptr;
     if (options_.api_lock) {
@@ -1789,6 +1828,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    HKV_LOG_INFO("unlock_keys: n={}", n);
 
     std::unique_ptr<insert_unique_lock> lock_ptr;
     if (options_.api_lock) {
@@ -1832,6 +1872,9 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    HKV_LOG_INFO("assign: n={}, unique_key={}, has_scores={}, is_fast_mode={}",
+                 n, unique_key ? 1 : 0, scores != nullptr ? 1 : 0,
+                 is_fast_mode() ? 1 : 0);
     check_evict_strategy(scores);
     std::unique_ptr<update_shared_lock> lock_ptr;
     if (options_.api_lock) {
@@ -1843,12 +1886,23 @@ class HashTable : public HashTableBase<K, V, S> {
           sizeof(VecD_Load) / sizeof(D);
       if (unique_key && options_.max_bucket_size >= MinBucketCapacityFilter) {
         uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
-        assign_kernel<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
-            table_->buckets, table_->capacity, table_->bucket_max_size,
-            value_move_opt_.dim, keys, static_cast<const void*>(values), scores,
-            n, global_epoch_, value_move_opt_.size, table_->max_bucket_shift,
-            table_->capacity_divisor_magic, table_->capacity_divisor_shift,
-            n_align_warp, value_move_opt_.cg_size);
+        if (value_move_opt_.use_mte_move) {
+          assign_kernel_with_mte<K, V, S, evict_strategy>
+              <<<block_dim_, GetMixedOpUbSize(), stream>>>(
+                  table_->buckets, table_->capacity, table_->bucket_max_size,
+                  table_->dim, keys, static_cast<const void*>(values), scores,
+                  n, global_epoch_, table_->max_bucket_shift,
+                  table_->capacity_divisor_magic,
+                  table_->capacity_divisor_shift, n_align_warp);
+        } else {
+          assign_kernel<K, V, S, evict_strategy><<<block_dim_, 0, stream>>>(
+              table_->buckets, table_->capacity, table_->bucket_max_size,
+              value_move_opt_.dim, keys, static_cast<const void*>(values),
+              scores, n, global_epoch_, value_move_opt_.size,
+              table_->max_bucket_shift, table_->capacity_divisor_magic,
+              table_->capacity_divisor_shift, n_align_warp,
+              value_move_opt_.cg_size);
+        }
       } else {
         assign_kernel_with_io<K, V, S, evict_strategy, true>
             <<<block_dim_, 0, stream>>>(
@@ -1944,7 +1998,8 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
-
+    HKV_LOG_INFO("assign_scores: n={}, unique_key={}, has_scores={}", n,
+                 unique_key ? 1 : 0, scores != nullptr ? 1 : 0);
     check_evict_strategy(scores);
 
     std::unique_ptr<update_shared_lock> lock_ptr;
@@ -2004,6 +2059,8 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    HKV_LOG_INFO("assign_values: n={}, unique_key={}, is_fast_mode={}", n,
+                 unique_key ? 1 : 0, is_fast_mode() ? 1 : 0);
 
     std::unique_ptr<update_shared_lock> lock_ptr;
     if (options_.api_lock) {
@@ -2015,13 +2072,23 @@ class HashTable : public HashTableBase<K, V, S> {
           sizeof(VecD_Load) / sizeof(D);
       if (unique_key && options_.max_bucket_size >= MinBucketCapacityFilter) {
         uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
-        assign_values_kernel<K, V, S><<<block_dim_, 0, stream>>>(
-            table_->buckets, table_->capacity, table_->bucket_max_size,
-            value_move_opt_.dim, const_cast<key_type*>(keys),
-            static_cast<void*>(const_cast<value_type*>(values)), n,
-            value_move_opt_.size, table_->max_bucket_shift,
-            table_->capacity_divisor_magic, table_->capacity_divisor_shift,
-            n_align_warp, value_move_opt_.cg_size);
+        if (value_move_opt_.use_mte_move) {
+          assign_values_kernel_with_mte<K, V, S>
+              <<<block_dim_, GetMixedOpUbSize(), stream>>>(
+                  table_->buckets, table_->capacity, table_->bucket_max_size,
+                  table_->dim, const_cast<key_type*>(keys),
+                  static_cast<void*>(const_cast<value_type*>(values)), n,
+                  table_->max_bucket_shift, table_->capacity_divisor_magic,
+                  table_->capacity_divisor_shift, n_align_warp);
+        } else {
+          assign_values_kernel<K, V, S><<<block_dim_, 0, stream>>>(
+              table_->buckets, table_->capacity, table_->bucket_max_size,
+              value_move_opt_.dim, const_cast<key_type*>(keys),
+              static_cast<void*>(const_cast<value_type*>(values)), n,
+              value_move_opt_.size, table_->max_bucket_shift,
+              table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+              n_align_warp, value_move_opt_.cg_size);
+        }
       } else {
         assign_values_kernel_with_io<K, V, S, true><<<block_dim_, 0, stream>>>(
             table_->buckets, table_->capacity, table_->bucket_max_size,
@@ -2115,6 +2182,8 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    HKV_LOG_INFO("find(values): n={}, has_scores={}, is_fast_mode={}", n,
+                 scores != nullptr ? 1 : 0, is_fast_mode() ? 1 : 0);
 
     std::unique_ptr<read_shared_lock> lock_ptr;
     if (options_.api_lock) {
@@ -2179,6 +2248,8 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    HKV_LOG_INFO("find(missed): n={}, has_scores={}, is_fast_mode={}", n,
+                 scores != nullptr ? 1 : 0, is_fast_mode() ? 1 : 0);
     npu_memset(missed_size, 0, sizeof(int), stream);
 
     std::unique_ptr<read_shared_lock> lock_ptr;
@@ -2245,6 +2316,8 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    HKV_LOG_INFO("find(ptr): n={}, unique_key={}, has_scores={}", n,
+                 unique_key ? 1 : 0, scores != nullptr ? 1 : 0);
 
     std::unique_ptr<read_shared_lock> lock_ptr;
     if (options_.api_lock) {
@@ -2289,6 +2362,8 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    HKV_LOG_INFO("find_and_update: n={}, unique_key={}, has_scores={}", n,
+                 unique_key ? 1 : 0, scores != nullptr ? 1 : 0);
 
     std::unique_ptr<read_shared_lock> lock_ptr;
     if (options_.api_lock) {
@@ -2329,6 +2404,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    HKV_LOG_INFO("contains: n={}", n);
 
     std::unique_ptr<read_shared_lock> lock_ptr;
     if (options_.api_lock) {
@@ -2355,6 +2431,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    HKV_LOG_INFO("erase: n={}", n);
 
     std::unique_ptr<update_read_lock> lock_ptr;
     if (options_.api_lock) {
@@ -2405,6 +2482,7 @@ class HashTable : public HashTableBase<K, V, S> {
   template <template <typename, typename> class PredFunctor>
   size_type erase_if(const key_type& pattern, const score_type& threshold,
                      aclrtStream stream = 0) {
+    HKV_LOG_INFO("erase_if: pattern={}, threshold={}", pattern, threshold);
     std::unique_ptr<update_read_lock> lock_ptr;
     if (options_.api_lock) {
       lock_ptr = std::make_unique<update_read_lock>(mutex_, stream);
@@ -2437,6 +2515,7 @@ class HashTable : public HashTableBase<K, V, S> {
 
   template <typename PredFunctor>
   size_type erase_if_v2(PredFunctor& pred, aclrtStream stream = 0) {
+    HKV_LOG_INFO("erase_if_v2");
     std::unique_ptr<update_read_lock> lock_ptr;
     if (options_.api_lock) {
       lock_ptr = std::make_unique<update_read_lock>(mutex_, stream);
@@ -2468,6 +2547,7 @@ class HashTable : public HashTableBase<K, V, S> {
    * object.
    */
   void clear(aclrtStream stream = 0) {
+    HKV_LOG_INFO("clear: capacity={}", table_->capacity);
     std::unique_ptr<update_read_lock> lock_ptr;
     if (options_.api_lock) {
       lock_ptr = std::make_unique<update_read_lock>(mutex_, stream);
@@ -2510,6 +2590,9 @@ class HashTable : public HashTableBase<K, V, S> {
                     value_type* values,            // (n, DIM)
                     score_type* scores = nullptr,  // (n)
                     aclrtStream stream = 0) const {
+    HKV_LOG_INFO(
+        "export_batch: n={}, offset={}, has_scores={}, is_fast_mode={}", n,
+        offset, scores != nullptr ? 1 : 0, is_fast_mode() ? 1 : 0);
     std::unique_ptr<read_shared_lock> lock_ptr;
     if (options_.api_lock) {
       lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
@@ -2522,10 +2605,17 @@ class HashTable : public HashTableBase<K, V, S> {
     n = std::min(table_->capacity - offset, n);
     size_type n_align = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     if (is_fast_mode()) {
-      dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
-          d_table_, table_->buckets, keys, values, scores, offset, n, n_align,
-          d_counter, value_move_opt_.size, value_move_opt_.cg_size,
-          value_move_opt_.dim);
+      if (value_move_opt_.use_mte_move) {
+        dump_by_mte_kernel<K, V, S><<<block_dim_, GetMixedOpUbSize(), stream>>>(
+            d_table_, table_->buckets, keys, values, scores, offset, n, n_align,
+            d_counter, table_->dim);
+      } else {
+        // 该算子共使用64KB的UB
+        dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
+            d_table_, table_->buckets, keys, values, scores, offset, n, n_align,
+            d_counter, value_move_opt_.size, value_move_opt_.cg_size,
+            value_move_opt_.dim);
+      }
     } else {
       size_t size_all = n * sizeof(value_type*);
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
@@ -2613,6 +2703,10 @@ class HashTable : public HashTableBase<K, V, S> {
                        value_type* values,            // (n, DIM)
                        score_type* scores = nullptr,  // (n)
                        aclrtStream stream = 0) const {
+    HKV_LOG_INFO(
+        "export_batch_if: n={}, offset={}, pattern={}, threshold={}, "
+        "is_fast_mode={}",
+        n, offset, pattern, threshold, is_fast_mode() ? 1 : 0);
     std::unique_ptr<read_shared_lock> lock_ptr;
     if (options_.api_lock) {
       lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
@@ -2625,6 +2719,7 @@ class HashTable : public HashTableBase<K, V, S> {
 
     if (is_fast_mode()) {
       DISPATCH_GROUP_SIZE(value_move_opt_.cg_size,
+                          // 该算子共使用64KB的UB
                           (dump_kernel_if<K, V, S, PredFunctor, GROUP_SIZE>
                            <<<block_dim_, 64 * 1024, stream>>>(
                                d_table_, table_->buckets, pattern, threshold,
@@ -2680,6 +2775,8 @@ class HashTable : public HashTableBase<K, V, S> {
                           value_type* values,            // (n, DIM)
                           score_type* scores = nullptr,  // (n)
                           aclrtStream stream = 0) const {
+    HKV_LOG_INFO("export_batch_if_v2: n={}, offset={}, is_fast_mode={}", n,
+                 offset, is_fast_mode() ? 1 : 0);
     std::unique_ptr<read_shared_lock> lock_ptr;
     if (options_.api_lock) {
       lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
@@ -2693,6 +2790,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if (is_fast_mode()) {
       DISPATCH_GROUP_SIZE(
           value_move_opt_.cg_size,
+          // 该算子共使用64KB的UB
           (dump_kernel_if_v2<K, V, S, PredFunctor, GROUP_SIZE>
            <<<block_dim_, 64 * 1024, stream>>>(
                pred, d_table_, table_->buckets, keys, values, scores, offset, n,
@@ -2737,6 +2835,7 @@ class HashTable : public HashTableBase<K, V, S> {
   template <typename ExecutionFunc>
   void for_each(const size_type first, const size_type last, ExecutionFunc& f,
                 aclrtStream stream = 0) {
+    HKV_LOG_INFO("for_each: first={}, last={}", first, last);
     std::unique_ptr<update_read_lock> lock_ptr;
     if (options_.api_lock) {
       lock_ptr = std::make_unique<update_read_lock>(mutex_, stream);
@@ -2809,6 +2908,7 @@ class HashTable : public HashTableBase<K, V, S> {
   template <template <typename, typename> class PredFunctor>
   void size_if(const key_type& pattern, const score_type& threshold,
                size_type* d_counter, aclrtStream stream = 0) const {
+    HKV_LOG_INFO("size_if: pattern={}, threshold={}", pattern, threshold);
     std::unique_ptr<read_shared_lock> lock_ptr;
     if (options_.api_lock) {
       lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
@@ -2850,8 +2950,15 @@ class HashTable : public HashTableBase<K, V, S> {
    * @param stream The CANN stream that is used to execute the operation.
    */
   void reserve(const size_type new_capacity, aclrtStream stream = 0) {
+    HKV_LOG_INFO(
+        "reserve begin: new_capacity={}, current_capacity={}, "
+        "max_capacity={}, reach_max_capacity={}",
+        new_capacity, capacity(), options_.max_capacity,
+        reach_max_capacity_ ? 1 : 0);
     if (reach_max_capacity_ || new_capacity > options_.max_capacity) {
       reach_max_capacity_ = (capacity() * 2 > options_.max_capacity);
+      HKV_LOG_INFO("reserve skipped: reach_max_capacity={}",
+                   reach_max_capacity_ ? 1 : 0);
       return;
     }
 
@@ -2869,6 +2976,12 @@ class HashTable : public HashTableBase<K, V, S> {
                           ? bucket_memory_pool_manager_.get()
                           : nullptr);
       sync_table_configuration();
+
+      HKV_LOG_INFO(
+          "reserve doubled: old_capacity={}, new_capacity={}, "
+          "buckets_num={}, is_fast_mode={}",
+          capacity() / 2, capacity(), table_->buckets_num,
+          is_fast_mode() ? 1 : 0);
 
       if (is_fast_mode()) {
         rehash_kernel<K, V, S, true><<<block_dim_, 0, stream>>>(
@@ -2910,6 +3023,9 @@ class HashTable : public HashTableBase<K, V, S> {
     NPU_CHECK(aclrtSynchronizeDevice());
     reach_max_capacity_ = (capacity() * 2 > options_.max_capacity);
 
+    HKV_LOG_INFO(
+        "reserve done: capacity={}, buckets_num={}, reach_max_capacity={}",
+        capacity(), table_->buckets_num, reach_max_capacity_ ? 1 : 0);
     NpuCheckError();
   }
 
@@ -2932,6 +3048,8 @@ class HashTable : public HashTableBase<K, V, S> {
    * of 2. Otherwise it will raise an error.
    */
   void set_max_capacity(size_type new_max_capacity) {
+    HKV_LOG_INFO("set_max_capacity: new_max_capacity={}, old_max_capacity={}",
+                 new_max_capacity, options_.max_capacity);
     if (!is_power(2, new_max_capacity)) {
       throw std::invalid_argument(
           "None power-of-2 new_max_capacity is not supported.");
@@ -3006,6 +3124,9 @@ class HashTable : public HashTableBase<K, V, S> {
     HKV_CHECK(max_workspace_size >= tuple_size,
               "[HierarchicalKV] max_workspace_size is smaller than a single "
               "`key + score + value` tuple! Please set a larger value!");
+    HKV_LOG_INFO(
+        "save: capacity={}, dim={}, max_workspace_size={}, is_fast_mode={}",
+        capacity(), dim(), max_workspace_size, is_fast_mode() ? 1 : 0);
 
     std::unique_ptr<update_read_lock> lock_ptr;
     if (options_.api_lock) {
@@ -3043,10 +3164,18 @@ class HashTable : public HashTableBase<K, V, S> {
           ((batch_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
 
       if (is_fast_mode()) {
-        dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
-            d_table_, table_->buckets, d_keys, d_values, d_scores, i,
-            batch_size, batch_size_align, d_count, value_move_opt_.size,
-            value_move_opt_.cg_size, value_move_opt_.dim);
+        if (value_move_opt_.use_mte_move) {
+          dump_by_mte_kernel<K, V, S>
+              <<<block_dim_, GetMixedOpUbSize(), stream>>>(
+                  d_table_, table_->buckets, d_keys, d_values, d_scores, i,
+                  batch_size, batch_size_align, d_count, table_->dim);
+        } else {
+          // 该算子共使用64KB的UB
+          dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
+              d_table_, table_->buckets, d_keys, d_values, d_scores, i,
+              batch_size, batch_size_align, d_count, value_move_opt_.size,
+              value_move_opt_.cg_size, value_move_opt_.dim);
+        }
       } else {
         size_t size_all = n * sizeof(value_type*);
         auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
@@ -3109,6 +3238,9 @@ class HashTable : public HashTableBase<K, V, S> {
     HKV_CHECK(max_workspace_size >= tuple_size,
               "[HierarchicalKV] max_workspace_size is smaller than a single "
               "`key + score + value` tuple! Please set a larger value!");
+    HKV_LOG_INFO(
+        "load: capacity={}, dim={}, max_workspace_size={}, is_fast_mode={}",
+        capacity(), dim(), max_workspace_size, is_fast_mode() ? 1 : 0);
 
     // Calculate how many tuples can fit in the workspace
     const size_type n{max_workspace_size / tuple_size};
@@ -3160,7 +3292,10 @@ class HashTable : public HashTableBase<K, V, S> {
     return total_count;
   }
 
-  void set_global_epoch(const uint64_t epoch) { global_epoch_ = epoch; }
+  void set_global_epoch(const uint64_t epoch) {
+    HKV_LOG_INFO("set_global_epoch: epoch={}", epoch);
+    global_epoch_ = epoch;
+  }
 
  private:
   // SIM_MODE 封装：统一一个 #ifdef 判断
@@ -3354,9 +3489,10 @@ class HashTable : public HashTableBase<K, V, S> {
     uint32_t value_move_group_size_best = opt.size == 8 ? 32 : 16;
     opt.cg_size = std::min(value_move_group_size_best, opt.cg_size);
     opt.cg_size = std::max(2u, opt.cg_size);
-    // based on real data, when size is large enough, we can get better
-    // performance by increasing threads num of cores.
-    opt.is_large_size = move_byte_per_value >= 4096;
+    // mte算子搬运数据buffer设置为128K，且simt按128B为cacheline，因此在value大小为(128,
+    // 128K]时为优势区间
+    opt.use_mte_move = (MTE_UB_BUFFER_SZ >= move_byte_per_value) &&
+                       (move_byte_per_value > SIMT_RW_PKG_SZ);
 
     return opt;
   }
@@ -3395,7 +3531,7 @@ class HashTable : public HashTableBase<K, V, S> {
       uint32_t max_tile_size =
           valid_ub_size / (DOUBLE_BUFFER * sizeof(value_type));
       HKV_CHECK(max_tile_size != 0,
-                log_format("UB size %lu is too small.", valid_ub_size));
+                log_format("UB size {} is too small.", valid_ub_size));
       export_batch_value_kernel<V><<<block_dim_, valid_ub_size, stream>>>(
           block_dim_, table_->dim, max_tile_size, values, count, d_src_values);
     }
