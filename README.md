@@ -214,7 +214,7 @@ cd HierarchicalKV-ascend
 | 参数 | 长参数 | 说明 |
 | ---- | ------ | ---- |
 | `-h` | `--help` | 打印帮助信息并退出 |
-| `-r` | `--run-mode MODE` | 指定编译方式，支持 `npu`（NPU上板）和 `sim`（CAModel），默认为 `npu` |
+| `-r` | `--run-mode MODE` | 指定编译方式MODE，可选择SIM仿真、NPU上板。支持参数为[sim / npu]，默认值为npu。 |
 | `-i` | `--install-path PATH` | 指定 CANN 安装路径，作为脚本内 CANN 路径查找的最高优先级 |
 | `-b` | `--build-type TYPE` | 指定构建类型，可选 `Release` / `Debug`，默认为 `Release` |
 | `-p` | `--install-prefix PATH` | 指定安装路径，默认为当前路径下的 `out` 目录 |
@@ -256,43 +256,16 @@ bash run.sh -t 1
 bash run.sh -g
 ```
 
-CAModel 模式仅编译安装工程，不执行测试用例：
-
+示例2：
 ```bash
+# 编译安装HKV工程，不执行用例
 bash run.sh -r sim -v Ascend950PR_9589
+
+# 执行用例
+mkdir cannsim
+cd cannsim
+cannsim record "../build/test/test_main --test_filter='*test_find_or_insert_ptr.hash_collisions*'" -s Ascend950 -g -o ./
 ```
-
-如需使用 CANN Simulator 在无 NPU 的服务器上运行用例并输出仿真分析报告，
-请使用 `script/run_cannsim.sh`。脚本会完成以下操作：
-
-1. 使用与主机架构匹配的 CANN `devlib` 编译专用的
-   `build-cannsim/tests/test_cannsim_smoke`；
-2. 运行指定 GTest 并记录 `instr.bin`；
-3. 独立执行 `cannsim report`，生成并校验 `trace_core*.json`；
-4. 输出包含测试状态、退出码、提交号和 SHA-256 的 `validation-summary.txt`。
-
-```bash
-bash script/run_cannsim.sh \
-    --install-path /usr/local/Ascend/cann \
-    --soc-version Ascend950 \
-    --gtest-filter test_find_or_insert_ptr.empty_table_for_sim
-```
-
-默认产物保存在 `cannsim_output/<时间戳>/`。`devlib` 只用于编译链接，
-运行时会从 `LD_LIBRARY_PATH` 中移除 stub 库，避免其覆盖 Simulator 的运行时库。
-专用测试入口会在 GTest 结束后依次释放 device 和 ACL Runtime，避免 Simulator
-在进程退出阶段仍持有运行时资源。
-`cannsim record`、GTest、`cannsim report` 或报告校验任一步失败，脚本都会返回非零。
-如需在 `record` 已失败但 GTest 日志完整时继续生成诊断报告，可添加
-`--report-on-record-failure`；该选项不会把最终退出码改为成功。
-
-CANN Simulator 公开文档当前将 ARM 标记为不支持平台，默认仅应在 x86_64 环境使用。
-对于已经过验证且包含 ARM Simulator 资源的专用镜像，可显式添加
-`--allow-unsupported-arm`，但这不代表官方平台支持。
-
-更多参数请执行 `bash script/run_cannsim.sh --help`。CANN Simulator 使用说明参见
-[CANN Simulator 文档](https://gitcode.com/cann/ops-math/blob/master/docs/zh/debug/cann_sim.md)。
-
 ## License
 
 Apache License Version 2.0，详见[LICENSE文件](LICENSE)。
