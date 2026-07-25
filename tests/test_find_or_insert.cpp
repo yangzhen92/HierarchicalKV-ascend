@@ -378,7 +378,7 @@ TEST(test_find_or_insert_ptr, basic_function_with_locked_key_ptrs) {
   // 4.1 生产连续值
   create_continuous_keys<K, S, V, dim>(host_keys.data(), nullptr, nullptr,
                                        key_num);
-  
+
   ASSERT_EQ(aclrtMemcpy(device_keys, key_num * each_key_size, host_keys.data(),
                         key_num * each_key_size, ACL_MEMCPY_HOST_TO_DEVICE),
             ACL_ERROR_NONE);
@@ -488,7 +488,6 @@ TEST(test_find_or_insert_ptr, basic_function_with_locked_key_ptrs) {
   ASSERT_EQ(aclrtFree(device_values_ptr), ACL_ERROR_NONE);
   ASSERT_EQ(aclrtFree(device_found), ACL_ERROR_NONE);
 }
-
 
 TEST(test_find_or_insert_ptr, basic_function_without_unique_keys) {
   // 1. 初始化
