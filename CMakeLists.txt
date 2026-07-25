@@ -42,17 +42,15 @@ if(RUN_MODE STREQUAL "sim")
     npu_drv
   )
   target_compile_definitions(hkv_depends INTERFACE SIM_MODE=1)
-  set(OPT_FLAG "-O0")
   set(JUMP_TABLE "-fno-jump-tables")
 else()
-  set(OPT_FLAG "-O2")
   set(JUMP_TABLE "")
 endif()
 
 target_compile_options(hkv_depends INTERFACE
   # 该NPU架构版本号暂未正式发布，后续可能会有变更，请关注正式版本发布信息
   $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>
-  -g ${OPT_FLAG}
+  -g -O2
   ${JUMP_TABLE}
   # 优化SIMT算子寄存器数
   -mllvm -disable-machine-licm
