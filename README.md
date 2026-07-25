@@ -214,7 +214,7 @@ cd HierarchicalKV-ascend
 | 参数 | 长参数 | 说明 |
 | ---- | ------ | ---- |
 | `-h` | `--help` | 打印帮助信息并退出 |
-| `-r` | `--run-mode MODE` | 指定编译方式，当前仅支持 `npu`（NPU上板），默认为 `npu` |
+| `-r` | `--run-mode MODE` | 指定编译方式MODE，可选择SIM仿真、NPU上板。支持参数为[sim / npu]，默认值为npu。 |
 | `-i` | `--install-path PATH` | 指定 CANN 安装路径，作为脚本内 CANN 路径查找的最高优先级 |
 | `-b` | `--build-type TYPE` | 指定构建类型，可选 `Release` / `Debug`，默认为 `Release` |
 | `-p` | `--install-prefix PATH` | 指定安装路径，默认为当前路径下的 `out` 目录 |
@@ -222,6 +222,7 @@ cd HierarchicalKV-ascend
 | `-c` | `--compile-only` | 仅编译安装，不执行用例 |
 | `-t` | `--enable-test SHIFT` | 测试开关，`0` 不执行 testcase，`1` 执行 testcase，默认为 `1` |
 | `-g` | `--skip-disabled-test` | 跳过 gtest 中 `DISABLED_` 用例 |
+| `-v` | `--soc-version SOC` | 指定SOC版本，默认值为 `Ascend950PR_9589`，该选项仅在sim仿真模式下生效 |
 
 示例：
 
@@ -255,6 +256,16 @@ bash run.sh -t 1
 bash run.sh -g
 ```
 
+示例2：
+```bash
+# 编译安装HKV工程，不执行用例
+bash run.sh -r sim -v Ascend950PR_9589
+
+# 执行用例
+mkdir cannsim
+cd cannsim
+cannsim record "../build/test/test_main --test_filter='*test_find_or_insert_ptr.hash_collisions*'" -s Ascend950 -g -o ./
+```
 ## License
 
 Apache License Version 2.0，详见[LICENSE文件](LICENSE)。

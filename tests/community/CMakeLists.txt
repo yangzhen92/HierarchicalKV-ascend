@@ -2,10 +2,6 @@ cmake_minimum_required(VERSION 3.16)
 
 project(HKV-ascend_CommunityTests)
 
-if ("${RUN_MODE}" STREQUAL "sim")
-  add_definitions(-DSIM_MODE=1)
-endif()
-
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -ggdb")
 
 add_library(community_test_depends INTERFACE)

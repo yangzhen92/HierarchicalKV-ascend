@@ -1411,13 +1411,10 @@ class HashTable : public HashTableBase<K, V, S> {
                      evicted_scores, d_evicted_counter, stream, unique_key,
                      ignore_evict_strategy);
 
-    size_type h_evicted_counter = 0;
-    NPU_CHECK(aclrtMemcpyAsync(&h_evicted_counter, sizeof(size_type),
-                               d_evicted_counter, sizeof(size_type),
-                               ACL_MEMCPY_DEVICE_TO_HOST, stream));
-    NPU_CHECK(aclrtSynchronizeStream(stream));
+    size_type counter = npu_memcpy_d2h_scalar<size_type>(
+        d_evicted_counter, sizeof(size_type), stream);
     NpuCheckError();
-    return h_evicted_counter;
+    return counter;
   }
 
   /**
@@ -2253,8 +2250,7 @@ class HashTable : public HashTableBase<K, V, S> {
     }
     HKV_LOG_INFO("find(missed): n={}, has_scores={}, is_fast_mode={}", n,
                  scores != nullptr ? 1 : 0, is_fast_mode() ? 1 : 0);
-    NPU_CHECK(
-        aclrtMemsetAsync(missed_size, sizeof(int), 0, sizeof(int), stream));
+    npu_memset(missed_size, 0, sizeof(int), stream);
 
     std::unique_ptr<read_shared_lock> lock_ptr;
     if (options_.api_lock) {
@@ -2495,18 +2491,14 @@ class HashTable : public HashTableBase<K, V, S> {
     auto dev_ws{dev_mem_pool_->get_workspace<1>(sizeof(size_type), stream)};
     auto d_counter{dev_ws.get<size_type*>(0)};
 
-    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0,
-                               sizeof(size_type), stream));
+    npu_memset(d_counter, 0, sizeof(size_type), stream);
 
     remove_if_kernel<K, V, S, PredFunctor><<<block_dim_, 0, stream>>>(
         table_->buckets, table_->buckets_size, table_->buckets_num,
         options_.max_bucket_size, pattern, threshold, d_counter);
 
-    size_type count = 0;
-    NPU_CHECK(aclrtMemcpyAsync(&count, sizeof(size_type), d_counter,
-                               sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST,
-                               stream));
-    NPU_CHECK(aclrtSynchronizeStream(stream));
+    size_type count =
+        npu_memcpy_d2h_scalar<size_type>(d_counter, sizeof(size_type), stream);
 
     NpuCheckError();
     return count;
@@ -2532,8 +2524,7 @@ class HashTable : public HashTableBase<K, V, S> {
     auto dev_ws{dev_mem_pool_->get_workspace<1>(sizeof(size_type), stream)};
     auto d_counter{dev_ws.get<size_type*>(0)};
 
-    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0,
-                               sizeof(size_type), stream));
+    npu_memset(d_counter, 0, sizeof(size_type), stream);
 
     int32_t cg_size = GetCGSize(options_.dim, table_->capacity);
     DISPATCH_GROUP_SIZE(
@@ -2544,11 +2535,8 @@ class HashTable : public HashTableBase<K, V, S> {
                       table_->max_bucket_shift, table_->capacity_divisor_magic,
                       table_->capacity_divisor_shift, pred, d_counter)));
 
-    size_type count = 0;
-    NPU_CHECK(aclrtMemcpyAsync(&count, sizeof(size_type), d_counter,
-                               sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST,
-                               stream));
-    NPU_CHECK(aclrtSynchronizeStream(stream));
+    size_type count =
+        npu_memcpy_d2h_scalar<size_type>(d_counter, sizeof(size_type), stream);
 
     NpuCheckError();
     return count;
@@ -2610,8 +2598,7 @@ class HashTable : public HashTableBase<K, V, S> {
       lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
     }
 
-    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0,
-                               sizeof(size_type), stream));
+    npu_memset(d_counter, 0, sizeof(size_type), stream);
     if (offset >= table_->capacity) {
       return;
     }
@@ -2652,17 +2639,15 @@ class HashTable : public HashTableBase<K, V, S> {
     auto dev_ws{dev_mem_pool_->get_workspace<1>(sizeof(size_type), stream)};
     auto d_counter{dev_ws.get<size_type*>(0)};
 
-    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0,
-                               sizeof(size_type), stream));
+    npu_memset(d_counter, 0, sizeof(size_type), stream);
     export_batch(n, offset, d_counter, keys, values, scores, stream);
 
     // 同步stream以确保内核函数执行完成
     NPU_CHECK(aclrtSynchronizeStream(stream));
 
-    size_type counter = 0;
-    NPU_CHECK(aclrtMemcpyAsync(&counter, sizeof(size_type), d_counter,
-                               sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST,
-                               stream));
+    size_type counter =
+        npu_memcpy_d2h_scalar<size_type>(d_counter, sizeof(size_type), stream);
+
     return counter;
   }
 
@@ -2726,8 +2711,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if (options_.api_lock) {
       lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
     }
-    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0,
-                               sizeof(size_type), stream));
+    npu_memset(d_counter, 0, sizeof(size_type), stream);
     n = std::min(table_->capacity - offset, n);
     if ((offset >= table_->capacity) || (n == 0)) {
       return;
@@ -2798,8 +2782,7 @@ class HashTable : public HashTableBase<K, V, S> {
       lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
     }
 
-    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0,
-                               sizeof(size_type), stream));
+    npu_memset(d_counter, 0, sizeof(size_type), stream);
     n = std::min(table_->capacity - offset, n);
     if ((offset >= table_->capacity) || (n == 0)) {
       return;
@@ -2909,11 +2892,8 @@ class HashTable : public HashTableBase<K, V, S> {
     EXEC_ACLNN_OP(workspace_deleter, stream, aclnnReduceSum, input, dims,
                   keep_dims, out_data_type, out);
 
-    int64_t h_total_size = 0;
-    NPU_CHECK(aclrtMemcpyAsync(&h_total_size, sizeof(h_total_size),
-                               out.get_data(), out.get_data_size(),
-                               ACL_MEMCPY_DEVICE_TO_HOST, stream));
-    NPU_CHECK(aclrtSynchronizeStream(stream));
+    int64_t h_total_size = npu_memcpy_d2h_scalar<int64_t>(
+        out.get_data(), out.get_data_size(), stream);
     return h_total_size;
   }
 
@@ -2934,8 +2914,7 @@ class HashTable : public HashTableBase<K, V, S> {
       lock_ptr = std::make_unique<read_shared_lock>(mutex_, stream);
     }
 
-    NPU_CHECK(aclrtMemsetAsync(d_counter, sizeof(size_type), 0,
-                               sizeof(size_type), stream));
+    npu_memset(d_counter, 0, sizeof(size_type), stream);
 
     size_if_kernel<K, V, S, PredFunctor><<<block_dim_, 0, stream>>>(
         table_->buckets, table_->capacity, table_->bucket_max_size,
@@ -3177,8 +3156,7 @@ class HashTable : public HashTableBase<K, V, S> {
     size_type total_count{0};
     for (size_type i{0}; i < total_size; i += n) {
       // Reset the counter
-      NPU_CHECK(aclrtMemsetAsync(d_count, sizeof(size_type), 0,
-                                 sizeof(size_type), stream));
+      npu_memset(d_count, 0, sizeof(size_type), stream);
 
       // Calculate the batch size for this iteration
       const size_type batch_size = std::min(total_size - i, n);
@@ -3212,30 +3190,22 @@ class HashTable : public HashTableBase<K, V, S> {
       }
       NpuCheckError();
       // Copy counter from device to host
-      size_type count;
-      NPU_CHECK(aclrtMemcpyAsync(&count, sizeof(size_type), d_count,
-                                 sizeof(size_type), ACL_MEMCPY_DEVICE_TO_HOST,
-                                 stream));
-      NPU_CHECK(aclrtSynchronizeStream(stream));
+      size_type count =
+          npu_memcpy_d2h_scalar<size_type>(d_count, sizeof(size_type), stream);
 
       if (count > 0) {
         // Copy data from device to host
         if (count == n) {
           // Full batch: can copy all at once since memory layout matches
-          NPU_CHECK(aclrtMemcpyAsync(h_keys, host_ws_size, d_keys, host_ws_size,
-                                     ACL_MEMCPY_DEVICE_TO_HOST, stream));
+          npu_memcpy_d2h(h_keys, host_ws_size, d_keys, host_ws_size, stream);
         } else {
           // Partial batch: copy each array separately
-          NPU_CHECK(aclrtMemcpyAsync(h_keys, sizeof(key_type) * count, d_keys,
-                                     sizeof(key_type) * count,
-                                     ACL_MEMCPY_DEVICE_TO_HOST, stream));
-          NPU_CHECK(aclrtMemcpyAsync(h_scores, sizeof(score_type) * count,
-                                     d_scores, sizeof(score_type) * count,
-                                     ACL_MEMCPY_DEVICE_TO_HOST, stream));
-          NPU_CHECK(
-              aclrtMemcpyAsync(h_values, sizeof(value_type) * dim() * count,
-                               d_values, sizeof(value_type) * dim() * count,
-                               ACL_MEMCPY_DEVICE_TO_HOST, stream));
+          npu_memcpy_d2h(h_keys, sizeof(key_type) * count, d_keys,
+                         sizeof(key_type) * count, stream);
+          npu_memcpy_d2h(h_scores, sizeof(score_type) * count, d_scores,
+                         sizeof(score_type) * count, stream);
+          npu_memcpy_d2h(h_values, sizeof(value_type) * dim() * count, d_values,
+                         sizeof(value_type) * dim() * count, stream);
         }
         NPU_CHECK(aclrtSynchronizeStream(stream));
 
@@ -3298,19 +3268,15 @@ class HashTable : public HashTableBase<K, V, S> {
     do {
       if (count == n) {
         // Full batch: can copy all at once since memory layout matches
-        NPU_CHECK(aclrtMemcpyAsync(d_keys, ws_size, h_keys, ws_size,
-                                   ACL_MEMCPY_HOST_TO_DEVICE, stream));
+        npu_memcpy_h2d(d_keys, ws_size, h_keys, ws_size, stream);
       } else {
         // Partial batch: copy each array separately
-        NPU_CHECK(aclrtMemcpyAsync(d_keys, sizeof(key_type) * count, h_keys,
-                                   sizeof(key_type) * count,
-                                   ACL_MEMCPY_HOST_TO_DEVICE, stream));
-        NPU_CHECK(aclrtMemcpyAsync(d_scores, sizeof(score_type) * count,
-                                   h_scores, sizeof(score_type) * count,
-                                   ACL_MEMCPY_HOST_TO_DEVICE, stream));
-        NPU_CHECK(aclrtMemcpyAsync(d_values, sizeof(value_type) * dim() * count,
-                                   h_values, sizeof(value_type) * dim() * count,
-                                   ACL_MEMCPY_HOST_TO_DEVICE, stream));
+        npu_memcpy_h2d(d_keys, sizeof(key_type) * count, h_keys,
+                       sizeof(key_type) * count, stream);
+        npu_memcpy_h2d(d_scores, sizeof(score_type) * count, h_scores,
+                       sizeof(score_type) * count, stream);
+        size_t values_size = sizeof(value_type) * dim() * count;
+        npu_memcpy_h2d(d_values, values_size, h_values, values_size, stream);
       }
 
       // Insert data into hash table with ignored global epoch
@@ -3332,6 +3298,58 @@ class HashTable : public HashTableBase<K, V, S> {
   }
 
  private:
+  // SIM_MODE 封装：统一一个 #ifdef 判断
+  inline void npu_memset(void* devPtr, int value, size_t count,
+                         aclrtStream stream) const {
+#ifdef SIM_MODE
+    NPU_CHECK(aclrtMemset(devPtr, count, value, count));
+#else
+    NPU_CHECK(aclrtMemsetAsync(devPtr, count, value, count, stream));
+#endif
+  }
+
+  // 从设备读取标量值
+  template <typename T>
+  T npu_memcpy_d2h_scalar(const void* devPtr, size_t count,
+                          aclrtStream stream) const {
+    T hostVal = 0;
+#ifdef SIM_MODE
+    NPU_CHECK(aclrtSynchronizeStream(stream));
+    NPU_CHECK(aclrtMemcpy(&hostVal, sizeof(hostVal), devPtr, count,
+                          ACL_MEMCPY_DEVICE_TO_HOST));
+#else
+    NPU_CHECK(aclrtMemcpyAsync(&hostVal, sizeof(hostVal), devPtr, count,
+                               ACL_MEMCPY_DEVICE_TO_HOST, stream));
+    NPU_CHECK(aclrtSynchronizeStream(stream));
+#endif
+    return hostVal;
+  }
+
+  // D→H 批量内存复制
+  inline void npu_memcpy_d2h(void* hostPtr, size_t hostCount,
+                             const void* devPtr, size_t devCount,
+                             aclrtStream stream) const {
+#ifdef SIM_MODE
+    NPU_CHECK(aclrtMemcpy(hostPtr, hostCount, devPtr, devCount,
+                          ACL_MEMCPY_DEVICE_TO_HOST));
+#else
+    NPU_CHECK(aclrtMemcpyAsync(hostPtr, hostCount, devPtr, devCount,
+                               ACL_MEMCPY_DEVICE_TO_HOST, stream));
+#endif
+  }
+
+  // H→D 批量内存复制
+  inline void npu_memcpy_h2d(void* devPtr, size_t devCount, const void* hostPtr,
+                             size_t hostCount, aclrtStream stream) const {
+#ifdef SIM_MODE
+    NPU_CHECK(aclrtMemcpy(devPtr, devCount, hostPtr, hostCount,
+                          ACL_MEMCPY_HOST_TO_DEVICE));
+#else
+    NPU_CHECK(aclrtMemcpyAsync(devPtr, devCount, hostPtr, hostCount,
+                               ACL_MEMCPY_HOST_TO_DEVICE, stream));
+#endif
+  }
+
   bool is_power(size_t base, size_t n) {
     if (base < 2) {
       throw std::invalid_argument("is_power with zero base.");
@@ -3391,11 +3409,8 @@ class HashTable : public HashTableBase<K, V, S> {
     EXEC_ACLNN_OP(workspace_deleter, stream, aclnnReduceSum, input, dims,
                   keep_dims, out_data_type, out);
 
-    int64_t h_total_size = 0;
-    NPU_CHECK(aclrtMemcpyAsync(&h_total_size, sizeof(h_total_size),
-                               out.get_data(), out.get_data_size(),
-                               ACL_MEMCPY_DEVICE_TO_HOST, stream));
-    NPU_CHECK(aclrtSynchronizeStream(stream));
+    int64_t h_total_size = npu_memcpy_d2h_scalar<int64_t>(
+        out.get_data(), out.get_data_size(), stream);
     NpuCheckError();
     return static_cast<float>((delta * 1.0) / (capacity() * 1.0) +
                               (h_total_size * 1.0) /

@@ -7,8 +7,8 @@ CURRENT_DIR=$(
 
 INSTALL_PREFIX="${CURRENT_DIR}/out"
 
-SHORT=h,r:,i:,b:,p:,d:,c,t:,g
-LONG=help,run-mode:,install-path:,build-type:,install-prefix:,device:,compile-only,enable-test:,skip-disabled-test
+SHORT=h,r:,i:,b:,p:,d:,c,t:,g,v:
+LONG=help,run-mode:,install-path:,build-type:,install-prefix:,device:,compile-only,enable-test:,skip-disabled-test,soc-version:
 OPTS=$(getopt -a --options $SHORT --longoptions $LONG -- "$@")
 eval set -- "$OPTS"
 COMPILE_ONLY=0
@@ -16,6 +16,7 @@ ENABLE_TEST=1
 RUN_MODE="npu"
 BUILD_TYPE="Release"
 RUN_DISABLED=1
+SOC_VERSION="Ascend950PR_9589"
 
 show_help() {
     cat << EOF
@@ -24,7 +25,7 @@ Usage: ${0##*} [OPTIONS] [ARGUMENTS]
 
 OPTIONS（可选参数）：
     -h, --help                打印帮助信息并退出
-    -r, --run-mode MODE       指定编译方式MODE，当前仅支持npu（NPU上板），默认值为npu。
+    -r, --run-mode MODE       指定编译方式MODE，可选择SIM仿真、NPU上板。支持参数为[sim / npu]，默认值为npu。
     -i, --install-path PATH   指定cann的安装路径PATH，默认值为环境变量ASCEND_INSTALL_PATH。
     -b, --build-type TYPE     指定构建类型TYPE，可选Release / Debug，默认值为Release。
     -p, --install-prefix PATH 指定安装路径PATH，默认为当前路径下的out目录。
@@ -32,6 +33,7 @@ OPTIONS（可选参数）：
     -c, --compile-only        仅编译安装HKV工程，不执行用例。
     -t, --enable-test SHIFT   指定测试开关SHIFT，支持参数为[0 / 1]，0表示不执行testcase，1表示执行testcase，默认为1。
     -g, --skip-disabled-test  跳过gtest中DISABLED_用例。
+    -v, --soc-version SOC     指定SOC版本，默认值为Ascend950PR_9589，该选项仅在sim仿真模式下生效。
 EOF
     exit 0
 }
@@ -77,6 +79,10 @@ while :; do
         RUN_DISABLED=0
         shift
         ;;
+    -v | --soc-version)
+        SOC_VERSION="$2"
+        shift 2
+        ;;
     --)
         shift
         break
@@ -88,10 +94,20 @@ while :; do
     esac
 done
 
-RUN_MODE_LIST="npu"
+RUN_MODE_LIST="npu sim"
 if [[ " $RUN_MODE_LIST " != *" $RUN_MODE "* ]]; then
-    echo "[ERROR]: RUN_MODE error, This sample only support specify npu!"
+    echo "[ERROR]: RUN_MODE [$RUN_MODE] error, This sample only support specify [$RUN_MODE_LIST]!"
     exit -1
+fi
+
+# 校验 SOC_VERSION 格式，仅允许字母、数字、下划线、连字符，防止路径穿越
+if [[ -n "$SOC_VERSION" ]]; then
+    if [[ "$SOC_VERSION" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        echo "[INFO] : SOC_VERSION [$SOC_VERSION] format check passed"
+    else
+        echo "[ERROR]: SOC_VERSION [$SOC_VERSION] contains invalid characters, only letters, digits, '-', '_' are allowed (to prevent path traversal)!"
+        exit 1
+    fi
 fi
 
 if [ -n "$ASCEND_INSTALL_PATH" ]; then
@@ -104,6 +120,18 @@ else
     else
         _ASCEND_INSTALL_PATH=/usr/local/Ascend/ascend-toolkit/latest
     fi
+fi
+
+if [ "$RUN_MODE" = "sim" ]; then
+    CAMODEL_PATH=${_ASCEND_INSTALL_PATH}/tools/simulator/${SOC_VERSION}/camodel
+    if [ ! -d "${CAMODEL_PATH}" ]; then
+        echo "[ERROR]: CAMODEL_PATH [${CAMODEL_PATH}] not found!"
+        echo "        Please check if SOC_VERSION [${SOC_VERSION}] is correct, or install the simulator package."
+        exit 1
+    fi
+    COMPILE_ONLY=1
+else
+    CAMODEL_PATH=""
 fi
 
 echo "ASCEND_HOME_PATH [$ASCEND_HOME_PATH]"
@@ -134,11 +162,13 @@ set -e
 rm -rf build ${INSTALL_PREFIX}
 mkdir -p build
 cmake -B build \
+    -DRUN_MODE="${RUN_MODE}" \
+    -DCAMODEL_PATH="${CAMODEL_PATH}" \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
-    -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-    -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+    -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+    -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
     -DBUILD_SHARED_LIBS=ON \
-    -DENABLE_TEST=${ENABLE_TEST}
+    -DENABLE_TEST="${ENABLE_TEST}"
 cmake --build build -j 16 --verbose
 cmake --install build
 
