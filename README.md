@@ -214,7 +214,7 @@ cd HierarchicalKV-ascend
 | 参数 | 长参数 | 说明 |
 | ---- | ------ | ---- |
 | `-h` | `--help` | 打印帮助信息并退出 |
-| `-r` | `--run-mode MODE` | 指定编译方式，当前仅支持 `npu`（NPU上板），默认为 `npu` |
+| `-r` | `--run-mode MODE` | 指定编译方式，当前支持 `npu`（NPU上板）和 `sim`（sim仿真），默认为 `npu` |
 | `-i` | `--install-path PATH` | 指定 CANN 安装路径，作为脚本内 CANN 路径查找的最高优先级 |
 | `-b` | `--build-type TYPE` | 指定构建类型，可选 `Release` / `Debug`，默认为 `Release` |
 | `-p` | `--install-prefix PATH` | 指定安装路径，默认为当前路径下的 `out` 目录 |
