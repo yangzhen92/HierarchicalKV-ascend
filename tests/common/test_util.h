@@ -31,8 +31,8 @@
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
-#include "kernels/utils_kernel/utils_kernel.h"
 #include "hkv_hashtable.h"
+#include "kernels/utils_kernel/utils_kernel.h"
 
 #define UNEQUAL_EXPR(expr1, expr2)                             \
   {                                                            \
@@ -406,20 +406,20 @@ void init_value_using_key(K* h_keys, V* h_vectors, const size_t key_num,
 }
 
 // 辅助函数：验证两个 bool 数组是否完全相等
-inline bool allEqualGpu(const bool* d_array1, const bool* d_array2,
-                        size_t size, aclrtStream stream) {
+inline bool allEqualGpu(const bool* d_array1, const bool* d_array2, size_t size,
+                        aclrtStream stream) {
   std::vector<char> h_array1(size);
   std::vector<char> h_array2(size);
 
-  HKV_EXPECT_TRUE(
-      (aclrtMemcpy(h_array1.data(), size * sizeof(char), const_cast<bool*>(d_array1),
-                   size * sizeof(char), ACL_MEMCPY_DEVICE_TO_HOST) == ACL_ERROR_NONE),
-      "aclrtMemcpy device to host failed");
+  HKV_EXPECT_TRUE((aclrtMemcpy(h_array1.data(), size * sizeof(char),
+                               const_cast<bool*>(d_array1), size * sizeof(char),
+                               ACL_MEMCPY_DEVICE_TO_HOST) == ACL_ERROR_NONE),
+                  "aclrtMemcpy device to host failed");
 
-  HKV_EXPECT_TRUE(
-      (aclrtMemcpy(h_array2.data(), size * sizeof(char), const_cast<bool*>(d_array2),
-                   size * sizeof(char), ACL_MEMCPY_DEVICE_TO_HOST) == ACL_ERROR_NONE),
-      "aclrtMemcpy device to host failed");
+  HKV_EXPECT_TRUE((aclrtMemcpy(h_array2.data(), size * sizeof(char),
+                               const_cast<bool*>(d_array2), size * sizeof(char),
+                               ACL_MEMCPY_DEVICE_TO_HOST) == ACL_ERROR_NONE),
+                  "aclrtMemcpy device to host failed");
 
   HKV_EXPECT_TRUE((aclrtSynchronizeStream(stream) == ACL_ERROR_NONE),
                   "aclrtSynchronizeStream failed");
@@ -438,10 +438,10 @@ inline bool allEqualGpu(const bool* d_array1, const bool* d_array2,
 inline bool allTrueGpu(const bool* d_array, size_t size, aclrtStream stream) {
   std::vector<char> h_array(size);
 
-  HKV_EXPECT_TRUE(
-      (aclrtMemcpy(h_array.data(), size * sizeof(char), const_cast<bool*>(d_array),
-                   size * sizeof(char), ACL_MEMCPY_DEVICE_TO_HOST) == ACL_ERROR_NONE),
-      "aclrtMemcpy device to host failed");
+  HKV_EXPECT_TRUE((aclrtMemcpy(h_array.data(), size * sizeof(char),
+                               const_cast<bool*>(d_array), size * sizeof(char),
+                               ACL_MEMCPY_DEVICE_TO_HOST) == ACL_ERROR_NONE),
+                  "aclrtMemcpy device to host failed");
 
   HKV_EXPECT_TRUE((aclrtSynchronizeStream(stream) == ACL_ERROR_NONE),
                   "aclrtSynchronizeStream failed");
