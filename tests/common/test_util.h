@@ -345,7 +345,7 @@ inline void init_env() {
                     "aclrtSetDevice failed");
     init_flag = true;
     std::atexit([]() {
-      aclrtSetDevice(device_id);
+      aclrtResetDevice(device_id);
       aclFinalize();
     });
   }
