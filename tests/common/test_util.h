@@ -336,13 +336,18 @@ void read_from_ptr(V** __restrict src, V* __restrict dst, const size_t dim,
 
 inline void init_env() {
   static bool init_flag = false;
+  static int32_t device_id = 0;
   if (!init_flag) {
     HKV_EXPECT_TRUE((aclInit(nullptr) == ACL_ERROR_NONE), "aclInit failed!");
     auto device_id_env = std::getenv("HKV_TEST_DEVICE");
-    int32_t device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
+    device_id = device_id_env != nullptr ? std::stoi(device_id_env) : 0;
     HKV_EXPECT_TRUE((aclrtSetDevice(device_id) == ACL_ERROR_NONE),
                     "aclrtSetDevice failed");
     init_flag = true;
+    std::atexit([]() {
+      aclrtSetDevice(device_id);
+      aclFinalize();
+    });
   }
 }
 
