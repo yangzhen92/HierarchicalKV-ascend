@@ -262,15 +262,15 @@ bash run.sh -g
 bash run.sh -r sim -v Ascend950PR_9589
 
 # 执行用例
-mkdir simtest
+ulimit -n 65535 # 提升当前shell打开文件数量，仿真时会读写大量文件
+
+# 使用可执行文件方式执行用例，默认当前在主目录下
+mkdir simtest # 可执行文件会产生输出文件，直接在主目录下运行会导致文件污染
 cd simtest
-ulimit -n 65535
+LD_LIBRARY_PATH=/path/to/toolkit/latest/tools/simulator/Ascend950PR_9589/camodel:$LD_LIBRARY_PATH ../build/tests/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
 
-# 使用可执行文件方式执行用例
-LD_LIBRARY_PATH=/path/to/toolkit/latest/tools/simulator/Ascend950PR_9589/camodel:$LD_LIBRARY_PATH ../build/test/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
-
-# 使用msprof方式执行用例
-msprof op simulator --soc-version=Ascend950PR_9589 --output=./prof/simulator --kernel-name="*dump_kernel*" ../build/test/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
+# 使用msprof方式执行用例，默认当前在主目录下
+msprof op simulator --soc-version=Ascend950PR_9589 --output=./prof/simulator --kernel-name="*dump_kernel*" ./build/tests/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
 ```
 ## License
 
