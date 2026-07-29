@@ -258,7 +258,7 @@ bash run.sh -g
 
 示例2：
 ```bash
-# 编译安装HKV工程，不执行用例
+# 编译安装HKV工程，不执行用例，指定SOC版本为Ascend950PR_9579，其中Ascend950PR_9579为SOC版本，需要根据实际情况修改。下面所有的Ascend950PR_9579均为此含义。具体请参考：[msprof快速入门](https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/latest/devaids/optool/docs/zh/quick_start/msopprof_quick_start.md)
 bash run.sh -r sim -v Ascend950PR_9579
 
 # 使用可执行文件方式执行用例，默认当前在主目录下
