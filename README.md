@@ -222,7 +222,7 @@ cd HierarchicalKV-ascend
 | `-c` | `--compile-only` | 仅编译安装，不执行用例 |
 | `-t` | `--enable-test SHIFT` | 测试开关，`0` 不执行 testcase，`1` 执行 testcase，默认为 `1` |
 | `-g` | `--skip-disabled-test` | 跳过 gtest 中 `DISABLED_` 用例 |
-| `-v` | `--soc-version SOC` | 指定SOC版本，默认值为 `Ascend950PR_9589`，该选项仅在sim仿真模式下生效 |
+| `-v` | `--soc-version SOC` | 指定SOC版本，默认值为 `Ascend950PR_9579`，该选项仅在sim仿真模式下生效，参数的值获取可以参考以下文档：[msprof快速入门](https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/latest/devaids/optool/docs/zh/quick_start/msopprof_quick_start.md) |
 
 示例：
 
@@ -259,18 +259,15 @@ bash run.sh -g
 示例2：
 ```bash
 # 编译安装HKV工程，不执行用例
-bash run.sh -r sim -v Ascend950PR_9589
-
-# 执行用例
-ulimit -n 65535 # 提升当前shell打开文件数量，仿真时会读写大量文件
+bash run.sh -r sim -v Ascend950PR_9579
 
 # 使用可执行文件方式执行用例，默认当前在主目录下
 mkdir simtest # 可执行文件会产生输出文件，直接在主目录下运行会导致文件污染
 cd simtest
-LD_LIBRARY_PATH=/path/to/toolkit/latest/tools/simulator/Ascend950PR_9589/camodel:$LD_LIBRARY_PATH ../build/tests/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
+LD_LIBRARY_PATH=$ASCEND_HOME_PATH/tools/simulator/Ascend950PR_9579/camodel:$LD_LIBRARY_PATH ../build/tests/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
 
 # 使用msprof方式执行用例，默认当前在主目录下
-msprof op simulator --soc-version=Ascend950PR_9589 --output=./prof/simulator --kernel-name="*dump_kernel*" ./build/tests/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
+msprof op simulator --soc-version=Ascend950PR_9579 --output=./prof/simulator --kernel-name="*dump_kernel*" ./build/tests/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
 ```
 ## License
 
