@@ -123,15 +123,15 @@ else
 fi
 
 if [ "$RUN_MODE" = "sim" ]; then
-    CAMODEL_PATH=${_ASCEND_INSTALL_PATH}/tools/simulator/${SOC_VERSION}/camodel
-    if [ ! -d "${CAMODEL_PATH}" ]; then
-        echo "[ERROR]: CAMODEL_PATH [${CAMODEL_PATH}] not found!"
+    SIM_PATH=${_ASCEND_INSTALL_PATH}/tools/simulator/${SOC_VERSION}/lib
+    if [ ! -d "${SIM_PATH}" ]; then
+        echo "[ERROR]: SIM_PATH [${SIM_PATH}] not found!"
         echo "        Please check if SOC_VERSION [${SOC_VERSION}] is correct, or install the simulator package."
         exit 1
     fi
     COMPILE_ONLY=1
 else
-    CAMODEL_PATH=""
+    SIM_PATH=""
 fi
 
 echo "ASCEND_HOME_PATH [$ASCEND_HOME_PATH]"
@@ -163,7 +163,7 @@ rm -rf build ${INSTALL_PREFIX}
 mkdir -p build
 cmake -B build \
     -DRUN_MODE="${RUN_MODE}" \
-    -DCAMODEL_PATH="${CAMODEL_PATH}" \
+    -DSIM_PATH="${SIM_PATH}" \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
     -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
     -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \

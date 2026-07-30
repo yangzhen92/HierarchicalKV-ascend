@@ -264,10 +264,11 @@ bash run.sh -r sim -v Ascend950PR_9589
 # 使用可执行文件方式执行用例，默认当前在主目录下
 mkdir simtest # 可执行文件会产生输出文件，直接在主目录下运行会导致文件污染
 cd simtest
-LD_LIBRARY_PATH=$ASCEND_HOME_PATH/tools/simulator/Ascend950PR_9589/camodel:$LD_LIBRARY_PATH ../build/tests/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
+LD_LIBRARY_PATH=$ASCEND_HOME_PATH/tools/simulator/Ascend950PR_9589/lib:$LD_LIBRARY_PATH ../build/tests/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
 
 # 使用msprof方式执行用例，默认当前在主目录下
-msprof op simulator --soc-version=Ascend950PR_9589 --output=./prof/simulator --kernel-name="*dump_kernel*" ./build/tests/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
+mkdir simtest # 可执行文件会产生输出文件，直接在主目录下运行会导致文件污染
+msprof op simulator --soc-version=Ascend950PR_9589 --output=./simtest --kernel-name="*dump_kernel*" ./build/tests/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
 ```
 ## License
 
