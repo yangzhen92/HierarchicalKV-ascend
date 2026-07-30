@@ -20,6 +20,7 @@
 #include <cstdint>
 #include "find_utils.h"
 #include "kernel_operator.h"
+#include "kernels/mte_task_queue.h"
 #include "score_functor.h"
 #include "types.h"
 #include "utils.h"
@@ -27,6 +28,160 @@
 namespace npu {
 namespace hkv {
 using namespace AscendC;
+
+template <typename K, uint32_t RING_BUFFER_SZ = THREAD_NUM_512>
+class InsertAndEvictTaskQueue
+    : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
+ public:
+  __callee__ InsertAndEvictTaskQueue() {}
+
+  __aicore__ inline void init() override {
+    GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::init();
+    *reinterpret_cast<__ubuf__ volatile uint32_t*>(PUBLISH_ASSIGN_ID_ADDR) = 0;
+    *reinterpret_cast<__ubuf__ volatile uint32_t*>(PUBLISH_FINISH_ID_ADDR) = 0;
+    BOUNDS_ASSERT(GLOBAL_ACC_END_ADDR <= GetRuntimeUBSize());
+  }
+
+  __aicore__ inline __ubuf__ uint32_t* block_acc() const {
+    return reinterpret_cast<__ubuf__ uint32_t*>(BLOCK_ACC_ADDR);
+  }
+
+  __aicore__ inline __ubuf__ uint64_t* global_acc() const {
+    return reinterpret_cast<__ubuf__ uint64_t*>(GLOBAL_ACC_ADDR);
+  }
+
+  __simt_callee__ inline void producer_acquire(
+      const uint32_t& warp_acquire_mask, uint32_t& curr_simt_alloc_pos,
+      uint32_t& new_simt_alloc_pos, uint32_t& assign_task_id) override {
+    const uint32_t warp_acquire_count = __popc(warp_acquire_mask);
+    if (laneid() == 0) {
+      curr_simt_alloc_pos = asc_atomic_add(
+          reinterpret_cast<__ubuf__ uint32_t*>(
+              GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::GLOBAL_ID_ADDR),
+          warp_acquire_count);
+    }
+    curr_simt_alloc_pos = __shfl(curr_simt_alloc_pos, 0);
+    assign_task_id =
+        (curr_simt_alloc_pos + __popc(warp_acquire_mask & lanemask_lt())) &
+        GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::RING_BUFFER_MASK;
+    new_simt_alloc_pos = curr_simt_alloc_pos + warp_acquire_count;
+    consumer_wait_key<false>(new_simt_alloc_pos);
+  }
+
+  __simt_callee__ inline void set_key_async(const bool& need_assign,
+                                            const uint32_t& assign_task_id,
+                                            void* dst, const void* src,
+                                            const K& key,
+                                            __gm__ uint64_t* key_out_addr) {
+    if (!need_assign) {
+      return;
+    }
+    GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::memcpy_async(
+        need_assign, assign_task_id, dst, src, 0);
+    reinterpret_cast<__ubuf__ volatile K*>(
+        RING_BUFFER_KEY_ADDR)[assign_task_id] = key;
+    reinterpret_cast<__ubuf__ volatile uint64_t*>(
+        RING_BUFFER_KEY_OUT_ADDR)[assign_task_id] =
+        reinterpret_cast<uint64_t>(key_out_addr);
+    reinterpret_cast<__ubuf__ volatile uint32_t*>(
+        RING_BUFFER_PUBLISH_KEY_ADDR)[assign_task_id] =
+        key_out_addr == nullptr ? 0 : 1;
+  }
+
+  __simt_callee__ inline void consumer_wait_all() {
+    const uint32_t last_task_id =
+        *reinterpret_cast<__ubuf__ volatile uint32_t*>(
+            GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::SIMT_ASSIGN_ID_ADDR);
+    consumer_wait_key<true>(last_task_id);
+  }
+
+ private:
+  template <bool all>
+  __simt_callee__ inline void consumer_wait_key(
+      const uint32_t& new_task_end_id) {
+    while (true) {
+      const uint32_t publish_finish_id =
+          *reinterpret_cast<__ubuf__ volatile uint32_t*>(
+              PUBLISH_FINISH_ID_ADDR);
+      if constexpr (all) {
+        if (new_task_end_id == publish_finish_id) {
+          break;
+        }
+      } else {
+        if (new_task_end_id - publish_finish_id <= RING_BUFFER_SZ) {
+          break;
+        }
+      }
+
+      const uint32_t mte_finish_id =
+          *reinterpret_cast<__ubuf__ volatile uint32_t*>(
+              GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::MTE_FINISH_ID_ADDR);
+      const uint32_t publish_assign_id =
+          *reinterpret_cast<__ubuf__ volatile uint32_t*>(
+              PUBLISH_ASSIGN_ID_ADDR);
+      if (publish_assign_id >= mte_finish_id) {
+        continue;
+      }
+
+      const uint32_t current_batch =
+          min(GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::QUEUE_LIMITED,
+              mte_finish_id - publish_assign_id);
+      const uint32_t lane_id = laneid();
+      uint32_t claimed_assign_id = 0;
+      if (lane_id == 0) {
+        claimed_assign_id = atomicCAS(
+            reinterpret_cast<__ubuf__ uint32_t*>(PUBLISH_ASSIGN_ID_ADDR),
+            publish_assign_id, publish_assign_id + current_batch);
+      }
+      claimed_assign_id = __shfl(claimed_assign_id, 0);
+      if (claimed_assign_id != publish_assign_id) {
+        continue;
+      }
+
+      if (lane_id < current_batch) {
+        const uint32_t task_id =
+            (publish_assign_id + lane_id) &
+            GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::RING_BUFFER_MASK;
+        const bool publish_key =
+            reinterpret_cast<__ubuf__ volatile uint32_t*>(
+                RING_BUFFER_PUBLISH_KEY_ADDR)[task_id] != 0;
+        if (publish_key) {
+          *reinterpret_cast<__gm__ volatile K*>(
+              reinterpret_cast<__ubuf__ uint64_t*>(
+                  RING_BUFFER_KEY_OUT_ADDR)[task_id]) =
+              reinterpret_cast<__ubuf__ K*>(RING_BUFFER_KEY_ADDR)[task_id];
+        }
+      }
+      __threadfence();
+      if (lane_id == 0) {
+        while (true) {
+          if (atomicCAS(
+                  reinterpret_cast<__ubuf__ uint32_t*>(PUBLISH_FINISH_ID_ADDR),
+                  publish_assign_id,
+                  publish_assign_id + current_batch) == publish_assign_id) {
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  static constexpr uint32_t RING_BUFFER_KEY_ADDR =
+      GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::DATA_BUFFER_END_ADDR;
+  static constexpr uint32_t RING_BUFFER_KEY_OUT_ADDR =
+      RING_BUFFER_KEY_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
+  static constexpr uint32_t RING_BUFFER_PUBLISH_KEY_ADDR =
+      RING_BUFFER_KEY_OUT_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
+  static constexpr uint32_t PUBLISH_ASSIGN_ID_ADDR =
+      RING_BUFFER_PUBLISH_KEY_ADDR + RING_BUFFER_SZ * sizeof(uint32_t);
+  static constexpr uint32_t PUBLISH_FINISH_ID_ADDR =
+      PUBLISH_ASSIGN_ID_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t BLOCK_ACC_ADDR =
+      PUBLISH_FINISH_ID_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t GLOBAL_ACC_ADDR = BLOCK_ACC_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t GLOBAL_ACC_END_ADDR =
+      GLOBAL_ACC_ADDR + UB_ALIGN_SIZE;
+};
 template <typename VecV, int32_t TILE_SIZE>
 __forceinline__ __simt_callee__ void copy_value(__gm__ const VecV* src,
                                                 __gm__ VecV* dst,
@@ -694,6 +849,368 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void insert_and_evict_kernel_with_digest_vf(
   }
 }
 
+template <typename TaskQueue, typename K = uint64_t, typename V = float,
+          typename S = uint64_t, typename VecV = int32_t, int32_t Strategy = -1,
+          int32_t EVICT_GROUP_SIZE = 16, int32_t COUNT_GROUP_SIZE = 32>
+__simt_vf__ __aicore__
+LAUNCH_BOUND(THREAD_NUM_512) inline void insert_and_evict_kernel_with_mte_vf(
+    __gm__ Bucket<K, V, S>* buckets_addr_gm,
+    __gm__ int32_t* buckets_size_addr_gm, uint64_t capacity,
+    uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys_addr_gm,
+    __gm__ void* values_addr_gm, __gm__ S* scores_gm, S cur_score,
+    __gm__ K* evicted_keys_addr_gm, __gm__ void* evicted_values_addr_gm,
+    __gm__ S* evicted_scores_addr_gm, __gm__ size_t* d_evicted_counter_addr_gm,
+    uint64_t n, uint32_t thread_all, uint64_t global_epoch,
+    uint32_t block_index, uint32_t max_bucket_shift,
+    uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
+    uint64_t n_align_block, __ubuf__ uint32_t* block_acc,
+    __ubuf__ uint64_t* global_acc) {
+  if (buckets_addr_gm == nullptr || buckets_size_addr_gm == nullptr) {
+    return;
+  }
+  TaskQueue evict_task_queue;
+  using BUCKET = Bucket<K, V, S>;
+  using ScoreFunctor = ScoreFunctor<K, V, S, Strategy>;
+
+  __gm__ Bucket<K, V, S>* __restrict__ buckets =
+      reinterpret_cast<__gm__ Bucket<K, V, S>*>(buckets_addr_gm);
+  __gm__ int32_t* __restrict__ buckets_size =
+      reinterpret_cast<__gm__ int32_t*>(buckets_size_addr_gm);
+  __gm__ K* __restrict__ keys = reinterpret_cast<__gm__ K*>(keys_addr_gm);
+  __gm__ VecV* __restrict__ values =
+      reinterpret_cast<__gm__ VecV*>(values_addr_gm);
+  __gm__ S* __restrict__ scores = reinterpret_cast<__gm__ S*>(scores_gm);
+  __gm__ K* __restrict__ evicted_keys =
+      reinterpret_cast<__gm__ K*>(evicted_keys_addr_gm);
+  __gm__ VecV* __restrict__ evicted_values =
+      reinterpret_cast<__gm__ VecV*>(evicted_values_addr_gm);
+  __gm__ S* __restrict__ evicted_scores =
+      reinterpret_cast<__gm__ S*>(evicted_scores_addr_gm);
+  __gm__ uint64_t* __restrict__ d_evicted_counter =
+      reinterpret_cast<__gm__ uint64_t*>(d_evicted_counter_addr_gm);
+
+  S score = static_cast<S>(EMPTY_SCORE);
+  constexpr uint32_t STRIDE = sizeof(VecD_Comp) / sizeof(D);
+
+  uint32_t key_pos = 0;
+  K key = 0;
+  K evict_key = 0;
+  S evict_score = 0;
+  __gm__ K* bucket_keys = nullptr;
+  uint64_t bucket_values_uintptr = 0;
+  __gm__ S* bucket_scores = nullptr;
+  __gm__ int32_t* bucket_size = nullptr;
+
+  for (uint64_t kv_idx = block_index * blockDim.x + threadIdx.x;
+       kv_idx < n_align_block; kv_idx += thread_all) {
+    VecD_Comp target_digests{0};
+    OccupyResult occupy_result{OccupyResult::INITIAL};
+
+    // 1. 每个线程处理一个 key
+    if (kv_idx < n) {
+      key = keys[kv_idx];
+      if (IS_RESERVED_KEY<K>(key)) {
+        occupy_result = OccupyResult::ILLEGAL;
+      }
+      score = ScoreFunctor::desired_when_missed(scores, kv_idx, global_epoch,
+                                                cur_score);
+
+      // 2. 计算 key 的 hash 值 && 定位 key
+      const K hashed_key = Murmur3HashDevice(key);
+      target_digests = digests_from_hashed<K>(hashed_key);
+      uint64_t global_idx = get_global_idx(hashed_key, capacity_divisor_magic,
+                                           capacity_divisor_shift, capacity);
+      key_pos = global_idx & (bucket_max_size - 1);
+      uint64_t bkt_idx = global_idx >> max_bucket_shift;
+
+      bucket_size = buckets_size + bkt_idx;
+      int32_t cur_bucket_size = *bucket_size;
+      __gm__ Bucket<K, V, S>* bucket = buckets + bkt_idx;
+      bucket_keys = bucket->keys_;
+      bucket_values_uintptr = reinterpret_cast<uint64_t>(bucket->vectors);
+      bucket_scores = bucket->scores_;
+
+      // 3. 使用 digest 遍历桶，找 key/空位
+      for (uint32_t offset = 0; offset < bucket_max_size + STRIDE;
+           offset += STRIDE) {
+        if (occupy_result != OccupyResult::INITIAL) {
+          break;
+        }
+        uint32_t pos_cur = align_to<STRIDE>(key_pos);
+        pos_cur = (pos_cur + offset) & (bucket_max_size - 1);
+
+        __gm__ D* digests_ptr =
+            BUCKET::digests(bucket_keys, bucket_max_size, pos_cur);
+        VecD_Comp probe_digests =
+            *reinterpret_cast<__gm__ VecD_Comp*>(digests_ptr);
+
+        // 3.1 遍历 digest，4 个比较
+        uint32_t possible_pos = 0;
+        uint32_t cmp_result = vcmpeq4(probe_digests, target_digests);
+        cmp_result &= 0x01010101;
+        do {
+          if (cmp_result == 0) {
+            break;
+          }
+          uint32_t index =
+              (Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+          cmp_result &= (cmp_result - 1);
+          possible_pos = pos_cur + index;
+
+          __gm__ K* current_key_ptr = BUCKET::keys(bucket_keys, possible_pos);
+          K try_key =
+              Simt::AtomicCas(current_key_ptr, key, static_cast<K>(LOCKED_KEY));
+          // 3.2 找到 key，尝试抢占
+          if (try_key == key) {
+            occupy_result = OccupyResult::DUPLICATE;
+            key_pos = possible_pos;
+            ScoreFunctor::update_score_only(bucket_keys, key_pos, scores,
+                                            kv_idx, score, bucket_max_size,
+                                            false);
+            break;
+          }
+        } while (true);
+        // 3.3 找到了，跳出循环
+        if (occupy_result == OccupyResult::DUPLICATE) {
+          break;
+        } else if (cur_bucket_size == bucket_max_size) {
+          // 3.4 未找到，且桶已满，进行下一波对比
+          continue;
+        }
+        // 3.5 未找到，桶未满，找空桶
+        VecD_Comp empty_digests_ = empty_digests<K>();
+        cmp_result = vcmpeq4(probe_digests, empty_digests_);
+        cmp_result &= 0x01010101;
+        do {
+          if (cmp_result == 0) {
+            break;
+          }
+          uint32_t index =
+              (Simt::Ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+          cmp_result &= (cmp_result - 1);
+          possible_pos = pos_cur + index;
+          if (offset == 0 && possible_pos < key_pos) {
+            continue;
+          }
+
+          __gm__ K* current_key_ptr = BUCKET::keys(bucket_keys, possible_pos);
+          K try_key =
+              Simt::AtomicCas(current_key_ptr, static_cast<K>(EMPTY_KEY),
+                              static_cast<K>(LOCKED_KEY));
+          // 3.6 找到空位，尝试抢占
+          if (try_key == static_cast<K>(EMPTY_KEY)) {
+            occupy_result = OccupyResult::OCCUPIED_EMPTY;
+            key_pos = possible_pos;
+            ScoreFunctor::update_with_digest(bucket_keys, key_pos, scores,
+                                             kv_idx, score, bucket_max_size,
+                                             get_digest<K>(key), true);
+            atomicAdd(bucket_size, 1);
+            break;
+          }
+        } while (true);
+        // 3.7 抢占到空位，跳出循环，否则进行下一波对比
+        if (occupy_result == OccupyResult::OCCUPIED_EMPTY) {
+          break;
+        }
+      }
+    } else {
+      occupy_result = OccupyResult::ILLEGAL;
+    }
+
+    // 4. 协程组优化：准入淘汰
+    // 前面查找会有 3 种结果:
+    // * OccupyResult::DUPLICATE 抢占 key
+    // * OccupyResult::OCCUPIED_EMPTY 抢占空位
+    // * OccupyResult::INITIAL 均抢占失败，需要尝试淘汰
+    int32_t cg_rank_id = threadIdx.x % EVICT_GROUP_SIZE;
+    // 遍历组内线程，每个线程都要有可能淘汰
+    for (int32_t i = 0; i < EVICT_GROUP_SIZE; i++) {
+      int32_t res_sync = __shfl(occupy_result, i, EVICT_GROUP_SIZE);
+      while (res_sync == OccupyResult::INITIAL) {
+        S min_score = MAX_SCORE;
+        uint32_t min_pos = key_pos;
+        // 4.1 协程组并行遍历桶，找最小值
+        uint64_t bucket_scores_sync = __shfl(
+            reinterpret_cast<uint64_t>(bucket_scores), i, EVICT_GROUP_SIZE);
+        uint64_t bucket_keys_sync = __shfl(
+            reinterpret_cast<uint64_t>(bucket_keys), i, EVICT_GROUP_SIZE);
+        for (uint32_t current_pos = cg_rank_id; current_pos < bucket_max_size;
+             current_pos += EVICT_GROUP_SIZE) {
+          S current_score = __ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+                                  L1CacheType::NON_CACHEABLE>(
+              reinterpret_cast<__gm__ S*>(bucket_scores_sync) + current_pos);
+          K current_key = __ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+                                L1CacheType::NON_CACHEABLE>(
+              reinterpret_cast<__gm__ K*>(bucket_keys_sync) + current_pos);
+          if (current_score < min_score &&
+              current_key != static_cast<K>(LOCKED_KEY) &&
+              current_key != static_cast<K>(EMPTY_KEY)) {
+            min_score = current_score;
+            min_pos = current_pos;
+          }
+        }
+        // 分治法求最小值，最终所有线程获得相同的 min_score 和 min_pos
+        for (int32_t offset = EVICT_GROUP_SIZE / 2; offset > 0; offset /= 2) {
+          S other_score = __shfl_xor(min_score, offset, EVICT_GROUP_SIZE);
+          uint32_t other_pos = __shfl_xor(min_pos, offset, EVICT_GROUP_SIZE);
+          if (other_score < min_score) {
+            min_score = other_score;
+            min_pos = other_pos;
+          }
+        }
+        // 拿到了最小值和位置，后续要进行 value 搬运
+        if (cg_rank_id == i) {
+          // 4.2 分数不足，无法准入，淘汰设置为待插入的 key
+          if (score < min_score) {
+            occupy_result = OccupyResult::REFUSED;
+            evict_key = key;
+            evict_score = score;
+          } else {
+            // 4.3 分数满足，尝试准入
+            __gm__ K* current_key_ptr = bucket_keys + min_pos;
+            K current_key = __ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+                                  L1CacheType::NON_CACHEABLE>(current_key_ptr);
+            if (current_key != static_cast<K>(LOCKED_KEY) &&
+                current_key != static_cast<K>(EMPTY_KEY)) {
+              K try_key = Simt::AtomicCas(current_key_ptr, current_key,
+                                          static_cast<K>(LOCKED_KEY));
+              // 4.4 抢占成功
+              if (try_key == current_key) {
+                // 4.4.1 确认分数是不是变更小
+                if (__ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
+                          L1CacheType::NON_CACHEABLE>(bucket_scores +
+                                                      min_pos) <= min_score) {
+                  key_pos = min_pos;
+                  ScoreFunctor::update_with_digest(
+                      bucket_keys, key_pos, scores, kv_idx, score,
+                      bucket_max_size, get_digest<K>(key), true);
+                  if (try_key == static_cast<K>(RECLAIM_KEY)) {
+                    occupy_result = OccupyResult::OCCUPIED_RECLAIMED;
+                    atomicAdd(bucket_size, 1);
+                  } else {
+                    occupy_result = OccupyResult::EVICT;
+                    evict_key = current_key;
+                    evict_score = min_score;
+                  }
+                } else {
+                  // 4.4.2 分数变大，淘汰失败，把 key 还原回去，重新遍历
+                  (void)Simt::AtomicExch(current_key_ptr, current_key);
+                }
+              }
+              // 4.5 抢占失败，重新遍历
+            }
+          }
+        }
+        res_sync = __shfl(occupy_result, i, EVICT_GROUP_SIZE);
+      }
+    }
+    if (threadIdx.x == 0) {
+      *block_acc = 0;
+    }
+    AscendC::Simt::ThreadBarrier();
+    // 5. 前缀和计算偏移：每个 GROUP 只做一次 atomicAdd
+    int32_t rank = threadIdx.x % COUNT_GROUP_SIZE;
+
+    // 5.1 判断是否需要 evict
+    bool need_evict = (occupy_result == OccupyResult::REFUSED ||
+                       occupy_result == OccupyResult::EVICT);
+    uint32_t my_count = need_evict ? 1 : 0;
+
+    // 5.2 计算 exclusive 前缀和
+    uint32_t prefix_sum = my_count;
+    for (int32_t offset = 1; offset < COUNT_GROUP_SIZE; offset *= 2) {
+      uint32_t other = __shfl_up(prefix_sum, offset, COUNT_GROUP_SIZE);
+      if (rank >= offset) {
+        prefix_sum += other;
+      }
+    }
+    uint32_t local_offset = prefix_sum - my_count;
+
+    // 5.3 获取组内总数（最后一个线程的 prefix_sum）
+    uint32_t group_evict_count =
+        __shfl(prefix_sum, COUNT_GROUP_SIZE - 1, COUNT_GROUP_SIZE);
+
+    // 5.4 组内第一个线程做 atomicAdd 获取基地址
+    uint32_t group_base = 0;
+    if (rank == 0 && group_evict_count > 0) {
+      group_base = atomicAdd(block_acc, group_evict_count);
+    }
+    group_base = __shfl(group_base, 0, COUNT_GROUP_SIZE);
+
+    AscendC::Simt::ThreadBarrier();
+    if (threadIdx.x == 0) {
+      *global_acc = atomicAdd(d_evicted_counter, *block_acc);
+    }
+    AscendC::Simt::ThreadBarrier();
+
+    // 5.5 计算最终的 evicted_idx
+    uint64_t evicted_idx = *global_acc + group_base + local_offset;
+
+    // 5.6 写入 evicted_keys 和 evicted_scores
+    if (need_evict) {
+      evicted_keys[evicted_idx] = evict_key;
+      if (evicted_scores != nullptr) {
+        evicted_scores[evicted_idx] = evict_score;
+      }
+    }
+    const uint64_t input_value_base_addr = reinterpret_cast<uint64_t>(
+        values + static_cast<uint64_t>(kv_idx) * dim);
+    const uint64_t evicted_value_base_addr = reinterpret_cast<uint64_t>(
+        evicted_values + static_cast<uint64_t>(evicted_idx) * dim);
+    const uint64_t bucket_value_base_addr =
+        bucket_values_uintptr +
+        static_cast<uint64_t>(key_pos) * dim * sizeof(VecV);
+
+    const bool need_export_evicted = occupy_result == OccupyResult::EVICT;
+    uint32_t warp_acquire_mask =
+        evict_task_queue.get_acquire_mask(need_export_evicted);
+    if (warp_acquire_mask != 0) {
+      uint32_t curr_simt_alloc_pos = 0;
+      uint32_t new_simt_alloc_pos = 0;
+      uint32_t assign_task_id = 0;
+      evict_task_queue.producer_acquire(warp_acquire_mask, curr_simt_alloc_pos,
+                                        new_simt_alloc_pos, assign_task_id);
+      evict_task_queue.set_key_async(
+          need_export_evicted, assign_task_id,
+          reinterpret_cast<void*>(evicted_value_base_addr),
+          reinterpret_cast<const void*>(bucket_value_base_addr), key, nullptr);
+      evict_task_queue.producer_commit(curr_simt_alloc_pos, new_simt_alloc_pos);
+    }
+
+    const bool need_move = occupy_result == OccupyResult::EVICT ||
+                           occupy_result == OccupyResult::REFUSED ||
+                           occupy_result == OccupyResult::DUPLICATE ||
+                           occupy_result == OccupyResult::OCCUPIED_EMPTY ||
+                           occupy_result == OccupyResult::OCCUPIED_RECLAIMED;
+    warp_acquire_mask = evict_task_queue.get_acquire_mask(need_move);
+    if (warp_acquire_mask != 0) {
+      uint32_t curr_simt_alloc_pos = 0;
+      uint32_t new_simt_alloc_pos = 0;
+      uint32_t assign_task_id = 0;
+      const uint64_t dst_addr = occupy_result == OccupyResult::REFUSED
+                                    ? evicted_value_base_addr
+                                    : bucket_value_base_addr;
+      __gm__ uint64_t* key_out_addr =
+          occupy_result == OccupyResult::REFUSED
+              ? nullptr
+              : reinterpret_cast<__gm__ uint64_t*>(bucket_keys + key_pos);
+      evict_task_queue.producer_acquire(warp_acquire_mask, curr_simt_alloc_pos,
+                                        new_simt_alloc_pos, assign_task_id);
+      evict_task_queue.set_key_async(
+          need_move, assign_task_id, reinterpret_cast<void*>(dst_addr),
+          reinterpret_cast<const void*>(input_value_base_addr), key,
+          key_out_addr);
+      evict_task_queue.producer_commit(curr_simt_alloc_pos, new_simt_alloc_pos);
+    }
+  }
+
+  __syncthreads();
+  if (threadIdx.x == 0) {
+    evict_task_queue.producer_finish();
+  }
+  evict_task_queue.consumer_wait_all();
+}
+
 template <class K, class V, class S, int Strategy = -1>
 __global__ __vector__ void insert_and_evict_non_unique_kernel(
     __gm__ Bucket<K, V, S>* buckets, __gm__ int* buckets_size,
@@ -763,6 +1280,42 @@ __global__ __vector__ void insert_and_evict_kernel(
           max_bucket_shift, capacity_divisor_magic, capacity_divisor_shift,
           n_align_warp, ub_shared_block_acc_mem, ub_shared_global_acc_mem,
           group_size)));
+}
+
+template <class K, class V, class S, int Strategy = -1>
+__global__ __vector__ void insert_and_evict_kernel_with_mte(
+    __gm__ Bucket<K, V, S>* buckets, __gm__ int* buckets_size,
+    uint64_t capacity, uint32_t bucket_max_size, uint32_t dim, __gm__ K* keys,
+    __gm__ void* values, __gm__ S* scores, __gm__ K* evicted_keys,
+    __gm__ void* evicted_values, __gm__ S* evicted_scores,
+    __gm__ size_t* d_evicted_counter, uint64_t n, uint64_t global_epoch,
+    uint32_t max_bucket_shift, uint64_t capacity_divisor_magic,
+    uint64_t capacity_divisor_shift, uint64_t n_align_block) {
+  KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIV_ONLY);
+
+  using TaskQueue = InsertAndEvictTaskQueue<K, THREAD_NUM_512>;
+  if ASCEND_IS_AIV {
+    TaskQueue evict_task_queue;
+    evict_task_queue.init();
+    pipe_barrier(PIPE_ALL);
+
+    const uint32_t thread_all = THREAD_NUM_512 * GetBlockNum();
+    uint64_t cur_score =
+        (Strategy == npu::hkv::EvictStrategyInternal::kLru ||
+         Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
+            ? static_cast<uint64_t>(GetSystemCycle())
+            : 0;
+    asc_vf_call<
+        insert_and_evict_kernel_with_mte_vf<TaskQueue, K, V, S, V, Strategy>>(
+        dim3{THREAD_NUM_512}, buckets, buckets_size, capacity, bucket_max_size,
+        dim, keys, values, scores, cur_score, evicted_keys, evicted_values,
+        evicted_scores, d_evicted_counter, n, thread_all, global_epoch,
+        GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
+        capacity_divisor_shift, n_align_block, evict_task_queue.block_acc(),
+        evict_task_queue.global_acc());
+
+    evict_task_queue.run_task(dim * sizeof(V));
+  }
 }
 }  // namespace hkv
 }  // namespace npu
