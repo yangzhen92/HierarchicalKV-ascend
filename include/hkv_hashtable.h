@@ -2218,13 +2218,25 @@ class HashTable : public HashTableBase<K, V, S> {
 
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     if (is_fast_mode()) {
-      find_with_digest_kernel<K, V, S><<<block_dim_, 0, stream>>>(
-          table_->buckets, table_->capacity, table_->buckets_num,
-          static_cast<uint32_t>(table_->bucket_max_size), value_move_opt_.dim,
-          const_cast<key_type*>(keys), values, scores, founds, n, global_epoch_,
-          value_move_opt_.size, table_->max_bucket_shift,
-          table_->capacity_divisor_magic, table_->capacity_divisor_shift,
-          n_align_warp, value_move_opt_.cg_size);
+      if (value_move_opt_.use_mte_move) {
+        find_with_digest_kernel_with_mte<K, V, S>
+            <<<block_dim_,
+               GM2GMTaskPipelineQueueBase<THREAD_NUM_512>::GetRequiredUbSize(),
+               stream>>>(table_->buckets, table_->capacity,
+                         static_cast<uint32_t>(table_->bucket_max_size),
+                         table_->dim, const_cast<key_type*>(keys), values,
+                         scores, founds, n, table_->max_bucket_shift,
+                         table_->capacity_divisor_magic,
+                         table_->capacity_divisor_shift, n_align_warp);
+      } else {
+        find_with_digest_kernel<K, V, S><<<block_dim_, 0, stream>>>(
+            table_->buckets, table_->capacity, table_->buckets_num,
+            static_cast<uint32_t>(table_->bucket_max_size), value_move_opt_.dim,
+            const_cast<key_type*>(keys), values, scores, founds, n,
+            global_epoch_, value_move_opt_.size, table_->max_bucket_shift,
+            table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+            n_align_warp, value_move_opt_.cg_size);
+      }
     } else {
       size_t size_all = n * sizeof(value_type*);
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
@@ -2284,15 +2296,30 @@ class HashTable : public HashTableBase<K, V, S> {
     }
 
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+    uint64_t n_align_block =
+        ((n + THREAD_NUM_512 - 1) / THREAD_NUM_512) * THREAD_NUM_512;
     if (is_fast_mode()) {
-      find_miss_with_digest_kernel<K, V, S><<<block_dim_, 0, stream>>>(
-          table_->buckets, table_->capacity,
-          static_cast<uint32_t>(options_.max_bucket_size), value_move_opt_.dim,
-          const_cast<key_type*>(keys), values, scores, missed_keys,
-          missed_indices, missed_size, n, value_move_opt_.size,
-          table_->max_bucket_shift, table_->capacity_divisor_magic,
-          table_->capacity_divisor_shift, n_align_warp,
-          static_cast<int32_t>(value_move_opt_.cg_size));
+      if (value_move_opt_.use_mte_move) {
+        find_miss_with_digest_kernel_with_mte<K, V, S>
+            <<<block_dim_,
+               FindMissTaskQueue<THREAD_NUM_512>::GetRequiredUbSize(),
+               stream>>>(table_->buckets, table_->capacity,
+                         static_cast<uint32_t>(options_.max_bucket_size),
+                         table_->dim, const_cast<key_type*>(keys), values,
+                         scores, missed_keys, missed_indices, missed_size, n,
+                         table_->max_bucket_shift,
+                         table_->capacity_divisor_magic,
+                         table_->capacity_divisor_shift, n_align_block);
+      } else {
+        find_miss_with_digest_kernel<K, V, S><<<block_dim_, 0, stream>>>(
+            table_->buckets, table_->capacity,
+            static_cast<uint32_t>(options_.max_bucket_size),
+            value_move_opt_.dim, const_cast<key_type*>(keys), values, scores,
+            missed_keys, missed_indices, missed_size, n, value_move_opt_.size,
+            table_->max_bucket_shift, table_->capacity_divisor_magic,
+            table_->capacity_divisor_shift, n_align_warp,
+            static_cast<int32_t>(value_move_opt_.cg_size));
+      }
     } else {
       size_t size_all = n * sizeof(value_type*);
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
