@@ -205,9 +205,10 @@ class HashTableBase {
    * @param scores The scores to insert on NPU-accessible memory with shape
    * (n).
    * @parblock
-   * The scores should be a `uint64_t` value. You can specify a value that
-   * such as the timestamp of the key insertion, number of the key
-   * occurrences, or another value to perform a custom eviction strategy.
+   * The scores should be a `uint64_t` value for built-in strategies. For
+   * `EvictStrategy::kCustomized`, `uint32_t` scores are also supported.
+   * You can specify a value such as the timestamp of the key insertion or
+   * number of key occurrences to perform a customized eviction strategy.
    *
    * The @p scores should be `nullptr`, when the LRU eviction strategy is
    * applied.
@@ -254,9 +255,10 @@ class HashTableBase {
    * @params evicted_scores The output of scores replaced with minimum score on
    * keys.
    * @parblock
-   * The scores should be a `uint64_t` value. You can specify a value that
-   * such as the timestamp of the key insertion, number of the key
-   * occurrences, or another value to perform a custom eviction strategy.
+   * The scores should be a `uint64_t` value for built-in strategies. For
+   * `EvictStrategy::kCustomized`, `uint32_t` scores are also supported.
+   * You can specify a value such as the timestamp of the key insertion or
+   * number of key occurrences to perform a customized eviction strategy.
    *
    * The @p scores should be `nullptr`, when the LRU eviction strategy is
    * applied.
@@ -310,9 +312,10 @@ class HashTableBase {
    * @params evicted_scores The output of scores replaced with minimum score on
    * keys.
    * @parblock
-   * The scores should be a `uint64_t` value. You can specify a value that
-   * such as the timestamp of the key insertion, number of the key
-   * occurrences, or another value to perform a custom eviction strategy.
+   * The scores should be a `uint64_t` value for built-in strategies. For
+   * `EvictStrategy::kCustomized`, `uint32_t` scores are also supported.
+   * You can specify a value such as the timestamp of the key insertion or
+   * number of key occurrences to perform a customized eviction strategy.
    *
    * The @p scores should be `nullptr`, when the LRU eviction strategy is
    * applied.
@@ -364,9 +367,10 @@ class HashTableBase {
    * `true` indicates to accum and `false` indicates to assign.
    * @param scores The scores to insert on NPU-accessible memory with shape (n).
    * @parblock
-   * The scores should be a `uint64_t` value. You can specify a value that
-   * such as the timestamp of the key insertion, number of the key
-   * occurrences, or another value to perform a custom eviction strategy.
+   * The scores should be a `uint64_t` value for built-in strategies. For
+   * `EvictStrategy::kCustomized`, `uint32_t` scores are also supported.
+   * You can specify a value such as the timestamp of the key insertion or
+   * number of key occurrences to perform a customized eviction strategy.
    *
    * The @p scores should be `nullptr`, when the LRU eviction strategy is
    * applied.
@@ -498,9 +502,10 @@ class HashTableBase {
    * @param scores The scores to insert on NPU-accessible memory with shape
    * (n).
    * @parblock
-   * The scores should be a `uint64_t` value. You can specify a value that
-   * such as the timestamp of the key insertion, number of the key
-   * occurrences, or another value to perform a custom eviction strategy.
+   * The scores should be a `uint64_t` value for built-in strategies. For
+   * `EvictStrategy::kCustomized`, `uint32_t` scores are also supported.
+   * You can specify a value such as the timestamp of the key insertion or
+   * number of key occurrences to perform a customized eviction strategy.
    *
    * The @p scores should be `nullptr`, when the LRU eviction strategy is
    * applied.
@@ -524,9 +529,10 @@ class HashTableBase {
    * @param keys The keys to insert on NPU-accessible memory with shape
    * (n).
    * @parblock
-   * The scores should be a `uint64_t` value. You can specify a value that
-   * such as the timestamp of the key insertion, number of the key
-   * occurrences, or another value to perform a custom eviction strategy.
+   * The scores should be a `uint64_t` value for built-in strategies. For
+   * `EvictStrategy::kCustomized`, `uint32_t` scores are also supported.
+   * You can specify a value such as the timestamp of the key insertion or
+   * number of key occurrences to perform a customized eviction strategy.
    *
    * The @p scores should be `nullptr`, when the LRU eviction strategy is
    * applied.
@@ -890,7 +896,8 @@ class HashTableBase {
  * @tparam V The data type of the vector's item type.
  *         The item data type should be a basic data type of C++/CANN.
  * @tparam S The data type for `score`.
- *           The currently supported data type is only `uint64_t`.
+ *           Supported types: `uint64_t` and `uint32_t` (only for
+ *           `EvictStrategy::kCustomized`).
  *
  */
 template <typename K, typename V, typename S = uint64_t,
@@ -924,6 +931,16 @@ class HashTable : public HashTableBase<K, V, S> {
 
     static_assert(std::is_same<score_type, uint64_t>::value,
                   "The key_type must be uint64_t.");
+    static_assert((std::is_same<score_type, uint64_t>::value ||
+                   std::is_same<score_type, uint32_t>::value),
+                  "The score_type must be uint64_t or uint32_t.");
+
+    // Incompatible: Epoch-based strategies encode epoch(hi32)|score(lo32),
+    // require 64-bit score
+    static_assert(!(std::is_same<score_type, uint32_t>::value &&
+                    (evict_strategy != EvictStrategy::kCustomized)),
+                  "score_type uint32_t is only compatible with Customized; "
+                  "use uint64_t.");
   };
 
   /**
@@ -1077,9 +1094,10 @@ class HashTable : public HashTableBase<K, V, S> {
    * @param scores The scores to insert on NPU-accessible memory with shape
    * (n).
    * @parblock
-   * The scores should be a `uint64_t` value. You can specify a value that
-   * such as the timestamp of the key insertion, number of the key
-   * occurrences, or another value to perform a custom eviction strategy.
+   * The scores should be a `uint64_t` value for built-in strategies. For
+   * `EvictStrategy::kCustomized`, `uint32_t` scores are also supported.
+   * You can specify a value such as the timestamp of the key insertion or
+   * number of key occurrences to perform a customized eviction strategy.
    *
    * The @p scores should be `nullptr`, when the LRU eviction strategy is
    * applied.
@@ -1259,9 +1277,10 @@ class HashTable : public HashTableBase<K, V, S> {
    * @params evicted_scores The output of scores replaced with minimum score on
    * keys.
    * @parblock
-   * The scores should be a `uint64_t` value. You can specify a value that
-   * such as the timestamp of the key insertion, number of the key
-   * occurrences, or another value to perform a custom eviction strategy.
+   * The scores should be a `uint64_t` value for built-in strategies. For
+   * `EvictStrategy::kCustomized`, `uint32_t` scores are also supported.
+   * You can specify a value such as the timestamp of the key insertion or
+   * number of key occurrences to perform a customized eviction strategy.
    *
    * The @p scores should be `nullptr`, when the LRU eviction strategy is
    * applied.
@@ -1371,9 +1390,10 @@ class HashTable : public HashTableBase<K, V, S> {
    * @params evicted_scores The output of scores replaced with minimum score on
    * keys.
    * @parblock
-   * The scores should be a `uint64_t` value. You can specify a value that
-   * such as the timestamp of the key insertion, number of the key
-   * occurrences, or another value to perform a custom eviction strategy.
+   * The scores should be a `uint64_t` value for built-in strategies. For
+   * `EvictStrategy::kCustomized`, `uint32_t` scores are also supported.
+   * You can specify a value such as the timestamp of the key insertion or
+   * number of key occurrences to perform a customized eviction strategy.
    *
    * The @p scores should be `nullptr`, when the LRU eviction strategy is
    * applied.
@@ -1441,9 +1461,10 @@ class HashTable : public HashTableBase<K, V, S> {
    * `true` indicates to accum and `false` indicates to assign.
    * @param scores The scores to insert on NPU-accessible memory with shape (n).
    * @parblock
-   * The scores should be a `uint64_t` value. You can specify a value that
-   * such as the timestamp of the key insertion, number of the key
-   * occurrences, or another value to perform a custom eviction strategy.
+   * The scores should be a `uint64_t` value for built-in strategies. For
+   * `EvictStrategy::kCustomized`, `uint32_t` scores are also supported.
+   * You can specify a value such as the timestamp of the key insertion or
+   * number of key occurrences to perform a customized eviction strategy.
    *
    * The @p scores should be `nullptr`, when the LRU eviction strategy is
    * applied.
@@ -1852,9 +1873,10 @@ class HashTable : public HashTableBase<K, V, S> {
    * @param scores The scores to insert on NPU-accessible memory with shape
    * (n).
    * @parblock
-   * The scores should be a `uint64_t` value. You can specify a value that
-   * such as the timestamp of the key insertion, number of the key
-   * occurrences, or another value to perform a custom eviction strategy.
+   * The scores should be a `uint64_t` value for built-in strategies. For
+   * `EvictStrategy::kCustomized`, `uint32_t` scores are also supported.
+   * You can specify a value such as the timestamp of the key insertion or
+   * number of key occurrences to perform a customized eviction strategy.
    *
    * The @p scores should be `nullptr`, when the LRU eviction strategy is
    * applied.
@@ -1979,9 +2001,10 @@ class HashTable : public HashTableBase<K, V, S> {
    * @param keys The keys to insert on NPU-accessible memory with shape
    * (n).
    * @parblock
-   * The scores should be a `uint64_t` value. You can specify a value that
-   * such as the timestamp of the key insertion, number of the key
-   * occurrences, or another value to perform a custom eviction strategy.
+   * The scores should be a `uint64_t` value for built-in strategies. For
+   * `EvictStrategy::kCustomized`, `uint32_t` scores are also supported.
+   * You can specify a value such as the timestamp of the key insertion or
+   * number of key occurrences to perform a customized eviction strategy.
    *
    * The @p scores should be `nullptr`, when the LRU eviction strategy is
    * applied.
