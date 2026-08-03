@@ -33,10 +33,10 @@ target_link_libraries(hkv_depends INTERFACE
 )
 
 if(RUN_MODE STREQUAL "sim")
-  if(NOT CAMODEL_PATH)
-    message(FATAL_ERROR "CAMODEL_PATH is not set")
+  if(NOT SIM_PATH)
+    message(FATAL_ERROR "SIM_PATH is not set")
   endif()
-  target_link_directories(hkv_depends INTERFACE "${CAMODEL_PATH}")
+  target_link_directories(hkv_depends INTERFACE "${SIM_PATH}")
   target_link_libraries(hkv_depends INTERFACE
     runtime_camodel
     npu_drv
