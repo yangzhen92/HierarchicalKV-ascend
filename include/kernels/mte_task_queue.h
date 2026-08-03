@@ -293,6 +293,8 @@ class AssignTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
  public:
   __callee__ AssignTaskQueue() {}
 
+  static constexpr uint32_t GetRequiredUBSize() { return FINISH_ID_END_ADDR; }
+
   __aicore__ inline void init() override {
     GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::init();
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(ASSIGN_ID_ADDR) = 0;
@@ -411,18 +413,18 @@ class AssignTaskQueue : public GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ> {
  private:
   // 队列数据
   // 各任务key以及key的输出地址
-  const uint32_t RING_BUFFER_KEY_ADDR =
+  static constexpr uint32_t RING_BUFFER_KEY_ADDR =
       GM2GMTaskPipelineQueueBase<RING_BUFFER_SZ>::DATA_BUFFER_END_ADDR;
-  const uint32_t RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR =
+  static constexpr uint32_t RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR =
       RING_BUFFER_KEY_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
 
   // 控制数据
   // 写key任务ID
-  const uint32_t ASSIGN_ID_ADDR =
+  static constexpr uint32_t ASSIGN_ID_ADDR =
       RING_BUFFER_KEY_OUT_ADDR_QUEUE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
   // 写key任务完成ID
-  const uint32_t FINISH_ID_ADDR = ASSIGN_ID_ADDR + UB_ALIGN_SIZE;
-  const uint32_t FINISH_ID_END_ADDR = FINISH_ID_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t FINISH_ID_ADDR = ASSIGN_ID_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t FINISH_ID_END_ADDR = FINISH_ID_ADDR + UB_ALIGN_SIZE;
 };
 
 }  // namespace hkv

@@ -123,7 +123,7 @@ export HKV_NPU_ALLOC_CONF="buckets_mem_pool=enable;page_table=2m"
 export HKV_NPU_ALLOC_CONF="buckets_mem_pool=enable;page_table=1g"
 ```
 
-`HKV_TEST_DEVICE`环境变量指定运行所使用的NPU卡号，不设置时默认为0。
+`HKV_TEST_DEVICE`环境变量指定运行所使用的NPU卡号，不设置时默认为0。sim仿真不支持设置此环境变量。
 
 **配置示例：**
 ```bash
@@ -256,9 +256,8 @@ bash run.sh -t 1
 bash run.sh -g
 ```
 
-示例2：
+仿真示例：
 ```bash
-# 编译安装HKV工程，不执行用例，指定SOC版本为Ascend950PR_9589，其中Ascend950PR_9589为SOC版本，需要根据实际情况修改。下面所有的Ascend950PR_9589均为此含义。具体请参考：[msprof快速入门](https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/latest/devaids/optool/docs/zh/quick_start/msopprof_quick_start.md)
 bash run.sh -r sim -v Ascend950PR_9589
 
 # 使用可执行文件方式执行用例，默认当前在主目录下
@@ -267,8 +266,7 @@ cd simtest
 LD_LIBRARY_PATH=$ASCEND_HOME_PATH/tools/simulator/Ascend950PR_9589/lib:$LD_LIBRARY_PATH ../build/tests/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
 
 # 使用msprof方式执行用例，默认当前在主目录下
-mkdir simtest # 可执行文件会产生输出文件，直接在主目录下运行会导致文件污染
-msprof op simulator --soc-version=Ascend950PR_9589 --output=./simtest --kernel-name="*dump_kernel*" ./build/tests/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
+msprof op simulator --soc-version=Ascend950PR_9589 --output=./simtest --kernel-name="*dump_kernel*" ../build/tests/test_main --gtest_filter="TestAllInterfaces.test_export_batch_with_counter"
 ```
 ## License
 
