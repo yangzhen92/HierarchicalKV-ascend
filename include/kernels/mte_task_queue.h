@@ -88,6 +88,8 @@ class GM2GMTaskPipelineQueueBase : public MteTaskPipelineIntf {
  public:
   __callee__ GM2GMTaskPipelineQueueBase() {}
 
+  static constexpr uint32_t GetRequiredUbSize() { return DATA_BUFFER_END_ADDR; }
+
   // 初始化控制量
   __aicore__ inline void init() override {
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(GLOBAL_ID_ADDR) = 0;
