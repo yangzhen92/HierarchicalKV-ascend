@@ -47,6 +47,8 @@ class DumpTaskPipelineQueue {
         d_val_gm(d_val_gm),
         d_score_gm(d_score_gm) {}
 
+  static constexpr uint32_t GetRequiredUbSize() { return DATA_BUFFER_END_ADDR; }
+
   __aicore__ inline void init() {
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(TASK_FINISH_FLAG_ADDR) = 0;
     *reinterpret_cast<__ubuf__ volatile uint32_t*>(BLOCK_COUNT_ADDR) = 0;
@@ -56,10 +58,10 @@ class DumpTaskPipelineQueue {
         BLOCK_TASK_GLOBAL_OFFSET_ADDR) = 0;
   }
 
-  __simt_callee__ inline void assign_warp_task(const bool& need_assign,
-                                               const K& key,
-                                               const uint64_t& in_ddr,
-                                               const S& score) {
+  __simt_callee__ inline void assign_block_task(const bool& need_assign,
+                                                const K& key,
+                                                const uint64_t& in_ddr,
+                                                const S& score) {
     // 1. 统计warp任务数
     uint32_t write_mask = __ballot(need_assign);
     uint32_t warp_write_count = __popc(write_mask);
@@ -226,36 +228,41 @@ class DumpTaskPipelineQueue {
  private:
   const uint32_t FINISH_FLAG = 1;  // 任务完成标志1，未完成0
   const uint32_t RING_BUFFER_MASK = RING_BUFFER_SZ - 1;
-  const uint32_t DATA_BUFFER_SZ = MTE_UB_BUFFER_SZ;
+  static constexpr uint32_t DATA_BUFFER_SZ = MTE_UB_BUFFER_SZ;
 
   // 队列数据
   // 各任务src/dst地址
-  const uint32_t RING_BUFFER_VALUE_ADDR = 0;
-  const uint32_t RING_BUFFER_KEY_ADDR =
+  static constexpr uint32_t RING_BUFFER_VALUE_ADDR = 0;
+  static constexpr uint32_t RING_BUFFER_KEY_ADDR =
       RING_BUFFER_VALUE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
-  const uint32_t RING_BUFFER_SCORE_ADDR =
+  static constexpr uint32_t RING_BUFFER_SCORE_ADDR =
       RING_BUFFER_KEY_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
 
   // 控制数据
   // MTE已完成ID
-  const uint32_t MTE_FINISH_ID_ADDR =
+  static constexpr uint32_t MTE_FINISH_ID_ADDR =
       RING_BUFFER_SCORE_ADDR + RING_BUFFER_SZ * sizeof(uint64_t);
   // 任务完成标记
-  const uint32_t TASK_FINISH_FLAG_ADDR = MTE_FINISH_ID_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t TASK_FINISH_FLAG_ADDR =
+      MTE_FINISH_ID_ADDR + UB_ALIGN_SIZE;
   // 核内累加数
-  const uint32_t BLOCK_COUNT_ADDR = TASK_FINISH_FLAG_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t BLOCK_COUNT_ADDR =
+      TASK_FINISH_FLAG_ADDR + UB_ALIGN_SIZE;
   // block任务完成标记
-  const uint32_t BLOCK_FINISH_FLAG_ADDR = BLOCK_COUNT_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t BLOCK_FINISH_FLAG_ADDR =
+      BLOCK_COUNT_ADDR + UB_ALIGN_SIZE;
   // block任务数
-  const uint32_t BLOCK_TASK_NUM_ADDR = BLOCK_FINISH_FLAG_ADDR + UB_ALIGN_SIZE;
+  static constexpr uint32_t BLOCK_TASK_NUM_ADDR =
+      BLOCK_FINISH_FLAG_ADDR + UB_ALIGN_SIZE;
   // block任务起始偏移
-  const uint32_t BLOCK_TASK_GLOBAL_OFFSET_ADDR =
+  static constexpr uint32_t BLOCK_TASK_GLOBAL_OFFSET_ADDR =
       BLOCK_TASK_NUM_ADDR + UB_ALIGN_SIZE;
 
   // buffer区
-  const uint32_t DATA_BUFFER_START_ADDR =
+  static constexpr uint32_t DATA_BUFFER_START_ADDR =
       BLOCK_TASK_GLOBAL_OFFSET_ADDR + UB_ALIGN_SIZE;
-  const uint32_t DATA_BUFFER_END_ADDR = DATA_BUFFER_START_ADDR + DATA_BUFFER_SZ;
+  static constexpr uint32_t DATA_BUFFER_END_ADDR =
+      DATA_BUFFER_START_ADDR + DATA_BUFFER_SZ;
 
   // 全局任务ID计数
   __gm__ size_t* dump_count_gm = nullptr;
@@ -270,7 +277,7 @@ LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_by_mte_kernel_vf(
     __gm__ K* keys, __gm__ V* vals, __gm__ S* scores,
     __gm__ size_t* dump_counter, __gm__ Table<K, V, S>* table,
     __gm__ Bucket<K, V, S>* buckets, const size_t offset, const uint32_t dim,
-    const size_t search_length, const size_t search_length_align,
+    const size_t search_length, const uint64_t search_length_align_block,
     const uint64_t total_thread_num, uint32_t blockIdx) {
   TaskQueue dump_task_queue(dump_counter, keys,
                             reinterpret_cast<__gm__ uint8_t*>(vals), scores);
@@ -280,7 +287,7 @@ LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_by_mte_kernel_vf(
   K key = 0;
   S score = 0;
   uint64_t value = 0;
-  for (; tid < search_length_align; tid += total_thread_num) {
+  for (; tid < search_length_align_block; tid += total_thread_num) {
     bool dump_flag = false;
     if (tid < search_length) {
       __gm__ Bucket<K, V, S>* bucket =
@@ -298,7 +305,7 @@ LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_by_mte_kernel_vf(
         }
       }
     }
-    dump_task_queue.assign_warp_task(dump_flag, key, value, score);
+    dump_task_queue.assign_block_task(dump_flag, key, value, score);
   }
 
   asc_syncthreads();
@@ -308,18 +315,16 @@ LAUNCH_BOUND(THREAD_NUM_2048) inline void dump_by_mte_kernel_vf(
   }
 }
 
-template <class K, class V, class S>
+template <class K, class V, class S, class TaskQueue>
 __global__ __vector__ void dump_by_mte_kernel(
     __gm__ Table<K, V, S>* table, __gm__ Bucket<K, V, S>* buckets,
     __gm__ K* keys, __gm__ V* vals, __gm__ S* scores, const size_t offset,
-    const size_t search_length, const size_t search_length_align,
+    const size_t search_length, const uint64_t search_length_align_block,
     __gm__ size_t* dump_counter, uint32_t dim) {
   if ASCEND_IS_AIV {
     if ((!table) || (!buckets) || (!keys) || (!vals) || (!dump_counter)) {
       return;
     }
-
-    using TaskQueue = DumpTaskPipelineQueue<K, S, THREAD_NUM_2048>;
 
     const uint64_t total_thread_num = THREAD_NUM_2048 * GetBlockNum();
     TaskQueue dump_task_queue(dump_counter, keys,
@@ -333,14 +338,14 @@ __global__ __vector__ void dump_by_mte_kernel(
       Simt::VF_CALL<dump_by_mte_kernel_vf<true, TaskQueue, K, V, S>>(
           Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, keys, vals,
           scores, dump_counter, table, buckets, offset, dim, search_length,
-          search_length_align, total_thread_num, GetBlockIdx());
+          search_length_align_block, total_thread_num, GetBlockIdx());
 
       dump_task_queue.template run_task<true>(move_len);
     } else {
       Simt::VF_CALL<dump_by_mte_kernel_vf<false, TaskQueue, K, V, S>>(
           Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_2048)}, keys, vals,
           scores, dump_counter, table, buckets, offset, dim, search_length,
-          search_length_align, total_thread_num, GetBlockIdx());
+          search_length_align_block, total_thread_num, GetBlockIdx());
       dump_task_queue.template run_task<false>(move_len);
     }
   }  // ASCEND_IS_AIV
