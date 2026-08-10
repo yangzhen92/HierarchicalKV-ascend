@@ -929,8 +929,6 @@ class HashTable : public HashTableBase<K, V, S> {
                    std::is_same<key_type, uint64_t>::value),
                   "The key_type must be int64_t or uint64_t.");
 
-    static_assert(std::is_same<score_type, uint64_t>::value,
-                  "The key_type must be uint64_t.");
     static_assert((std::is_same<score_type, uint64_t>::value ||
                    std::is_same<score_type, uint32_t>::value),
                   "The score_type must be uint64_t or uint32_t.");
