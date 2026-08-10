@@ -544,7 +544,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void assign_kernel_with_mte_vf(
   upsert_task_queue.consumer_wait_all();
 }
 
-template <class K, class V, class S, int Strategy = -1>
+template <class K, class V, class S, class TaskQueue, int Strategy = -1>
 __global__ __vector__ void assign_kernel_with_mte(
     __gm__ Bucket<K, V, S>* buckets, uint64_t capacity,
     uint32_t bucket_max_size, uint32_t dim, const __gm__ K* keys,
@@ -553,8 +553,6 @@ __global__ __vector__ void assign_kernel_with_mte(
     uint64_t capacity_divisor_magic, uint64_t capacity_divisor_shift,
     uint64_t n_align_warp) {
   KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIV_ONLY);
-
-  using TaskQueue = AssignTaskQueue<K, THREAD_NUM_512>;
 
   if ASCEND_IS_AIV {
     TaskQueue upsert_task_queue;

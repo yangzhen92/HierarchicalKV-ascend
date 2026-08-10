@@ -1159,8 +1159,9 @@ class HashTable : public HashTableBase<K, V, S> {
     if (is_fast_mode()) {
       if (unique_key) {
         if (value_move_opt_.use_mte_move) {
-          insert_or_assign_kernel_with_mte<K, V, S, evict_strategy_>
-              <<<block_dim_, GetMixedOpUbSize(), stream>>>(
+          using TaskQueue = AssignTaskQueue<K, THREAD_NUM_512>;
+          insert_or_assign_kernel_with_mte<K, V, S, TaskQueue, evict_strategy_>
+              <<<block_dim_, TaskQueue::GetRequiredUBSize(), stream>>>(
                   static_cast<void*>(table_->buckets), table_->buckets_size,
                   table_->capacity, table_->bucket_max_size, table_->dim,
                   const_cast<key_type*>(keys), const_cast<value_type*>(values),
@@ -1933,8 +1934,9 @@ class HashTable : public HashTableBase<K, V, S> {
       if (unique_key && options_.max_bucket_size >= MinBucketCapacityFilter) {
         uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
         if (value_move_opt_.use_mte_move) {
-          assign_kernel_with_mte<K, V, S, evict_strategy>
-              <<<block_dim_, GetMixedOpUbSize(), stream>>>(
+          using TaskQueue = AssignTaskQueue<K, THREAD_NUM_512>;
+          assign_kernel_with_mte<K, V, S, TaskQueue, evict_strategy>
+              <<<block_dim_, TaskQueue::GetRequiredUBSize(), stream>>>(
                   table_->buckets, table_->capacity, table_->bucket_max_size,
                   table_->dim, keys, static_cast<const void*>(values), scores,
                   n, global_epoch_, table_->max_bucket_shift,
@@ -2120,8 +2122,9 @@ class HashTable : public HashTableBase<K, V, S> {
       if (unique_key && options_.max_bucket_size >= MinBucketCapacityFilter) {
         uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
         if (value_move_opt_.use_mte_move) {
-          assign_values_kernel_with_mte<K, V, S>
-              <<<block_dim_, GetMixedOpUbSize(), stream>>>(
+          using TaskQueue = AssignTaskQueue<K, THREAD_NUM_512>;
+          assign_values_kernel_with_mte<K, V, S, TaskQueue>
+              <<<block_dim_, TaskQueue::GetRequiredUBSize(), stream>>>(
                   table_->buckets, table_->capacity, table_->bucket_max_size,
                   table_->dim, const_cast<key_type*>(keys),
                   static_cast<void*>(const_cast<value_type*>(values)), n,
@@ -2239,13 +2242,24 @@ class HashTable : public HashTableBase<K, V, S> {
 
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
     if (is_fast_mode()) {
-      find_with_digest_kernel<K, V, S><<<block_dim_, 0, stream>>>(
-          table_->buckets, table_->capacity, table_->buckets_num,
-          static_cast<uint32_t>(table_->bucket_max_size), value_move_opt_.dim,
-          const_cast<key_type*>(keys), values, scores, founds, n, global_epoch_,
-          value_move_opt_.size, table_->max_bucket_shift,
-          table_->capacity_divisor_magic, table_->capacity_divisor_shift,
-          n_align_warp, value_move_opt_.cg_size);
+      if (value_move_opt_.use_mte_move) {
+        using TaskQueue = GM2GMTaskPipelineQueueBase<THREAD_NUM_512>;
+        find_with_digest_kernel_with_mte<TaskQueue, K, V, S>
+            <<<block_dim_, TaskQueue::GetRequiredUbSize(), stream>>>(
+                table_->buckets, table_->capacity,
+                static_cast<uint32_t>(table_->bucket_max_size), table_->dim,
+                const_cast<key_type*>(keys), values, scores, founds, n,
+                table_->max_bucket_shift, table_->capacity_divisor_magic,
+                table_->capacity_divisor_shift, n_align_warp);
+      } else {
+        find_with_digest_kernel<K, V, S><<<block_dim_, 0, stream>>>(
+            table_->buckets, table_->capacity, table_->buckets_num,
+            static_cast<uint32_t>(table_->bucket_max_size), value_move_opt_.dim,
+            const_cast<key_type*>(keys), values, scores, founds, n,
+            global_epoch_, value_move_opt_.size, table_->max_bucket_shift,
+            table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+            n_align_warp, value_move_opt_.cg_size);
+      }
     } else {
       size_t size_all = n * sizeof(value_type*);
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
@@ -2305,15 +2319,29 @@ class HashTable : public HashTableBase<K, V, S> {
     }
 
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+    uint64_t n_align_block =
+        ((n + THREAD_NUM_512 - 1) / THREAD_NUM_512) * THREAD_NUM_512;
     if (is_fast_mode()) {
-      find_miss_with_digest_kernel<K, V, S><<<block_dim_, 0, stream>>>(
-          table_->buckets, table_->capacity,
-          static_cast<uint32_t>(options_.max_bucket_size), value_move_opt_.dim,
-          const_cast<key_type*>(keys), values, scores, missed_keys,
-          missed_indices, missed_size, n, value_move_opt_.size,
-          table_->max_bucket_shift, table_->capacity_divisor_magic,
-          table_->capacity_divisor_shift, n_align_warp,
-          static_cast<int32_t>(value_move_opt_.cg_size));
+      if (value_move_opt_.use_mte_move) {
+        using TaskQueue = FindMissTaskQueue<THREAD_NUM_512>;
+        find_miss_with_digest_kernel_with_mte<TaskQueue, K, V, S>
+            <<<block_dim_, TaskQueue::GetRequiredUbSize(), stream>>>(
+                table_->buckets, table_->capacity,
+                static_cast<uint32_t>(options_.max_bucket_size), table_->dim,
+                const_cast<key_type*>(keys), values, scores, missed_keys,
+                missed_indices, missed_size, n, table_->max_bucket_shift,
+                table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+                n_align_block);
+      } else {
+        find_miss_with_digest_kernel<K, V, S><<<block_dim_, 0, stream>>>(
+            table_->buckets, table_->capacity,
+            static_cast<uint32_t>(options_.max_bucket_size),
+            value_move_opt_.dim, const_cast<key_type*>(keys), values, scores,
+            missed_keys, missed_indices, missed_size, n, value_move_opt_.size,
+            table_->max_bucket_shift, table_->capacity_divisor_magic,
+            table_->capacity_divisor_shift, n_align_warp,
+            static_cast<int32_t>(value_move_opt_.cg_size));
+      }
     } else {
       size_t size_all = n * sizeof(value_type*);
       auto dev_ws{dev_mem_pool_->get_workspace<1>(size_all, stream)};
@@ -2650,18 +2678,22 @@ class HashTable : public HashTableBase<K, V, S> {
       return;
     }
     n = std::min(table_->capacity - offset, n);
-    size_type n_align = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+    size_type n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
+    uint64_t n_align_block =
+        ((n + THREAD_NUM_2048 - 1) / THREAD_NUM_2048) * THREAD_NUM_2048;
     if (is_fast_mode()) {
       if (value_move_opt_.use_mte_move) {
-        dump_by_mte_kernel<K, V, S><<<block_dim_, GetMixedOpUbSize(), stream>>>(
-            d_table_, table_->buckets, keys, values, scores, offset, n, n_align,
-            d_counter, table_->dim);
+        using TaskQueue = DumpTaskPipelineQueue<K, S, THREAD_NUM_2048>;
+        dump_by_mte_kernel<K, V, S, TaskQueue>
+            <<<block_dim_, TaskQueue::GetRequiredUbSize(), stream>>>(
+                d_table_, table_->buckets, keys, values, scores, offset, n,
+                n_align_block, d_counter, table_->dim);
       } else {
         // 该算子共使用64KB的UB
         dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
-            d_table_, table_->buckets, keys, values, scores, offset, n, n_align,
-            d_counter, value_move_opt_.size, value_move_opt_.cg_size,
-            value_move_opt_.dim);
+            d_table_, table_->buckets, keys, values, scores, offset, n,
+            n_align_warp, d_counter, value_move_opt_.size,
+            value_move_opt_.cg_size, value_move_opt_.dim);
       }
     } else {
       size_t size_all = n * sizeof(value_type*);
@@ -3207,20 +3239,22 @@ class HashTable : public HashTableBase<K, V, S> {
 
       // Calculate the batch size for this iteration
       const size_type batch_size = std::min(total_size - i, n);
-      const size_type batch_size_align =
+      const size_type batch_size_align_warp =
           ((batch_size + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
-
+      uint64_t batch_size_align_block =
+          ((n + THREAD_NUM_2048 - 1) / THREAD_NUM_2048) * THREAD_NUM_2048;
       if (is_fast_mode()) {
         if (value_move_opt_.use_mte_move) {
-          dump_by_mte_kernel<K, V, S>
-              <<<block_dim_, GetMixedOpUbSize(), stream>>>(
+          using TaskQueue = DumpTaskPipelineQueue<K, S, THREAD_NUM_2048>;
+          dump_by_mte_kernel<K, V, S, TaskQueue>
+              <<<block_dim_, TaskQueue::GetRequiredUbSize(), stream>>>(
                   d_table_, table_->buckets, d_keys, d_values, d_scores, i,
-                  batch_size, batch_size_align, d_count, table_->dim);
+                  batch_size, batch_size_align_block, d_count, table_->dim);
         } else {
           // 该算子共使用64KB的UB
           dump_kernel<K, V, S><<<block_dim_, 64 * 1024, stream>>>(
               d_table_, table_->buckets, d_keys, d_values, d_scores, i,
-              batch_size, batch_size_align, d_count, value_move_opt_.size,
+              batch_size, batch_size_align_warp, d_count, value_move_opt_.size,
               value_move_opt_.cg_size, value_move_opt_.dim);
         }
       } else {
