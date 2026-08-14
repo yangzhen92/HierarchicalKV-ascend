@@ -70,15 +70,16 @@ TEST(Uint32ScoreTest, FindOrInsertAndFind) {
   aclrtStream stream = nullptr;
   NPU_CHECK(aclrtCreateStream(&stream));
 
-  std::unique_ptr<Uint32ScoreTable> table = std::make_unique<Uint32ScoreTable>();
+  std::unique_ptr<Uint32ScoreTable> table =
+      std::make_unique<Uint32ScoreTable>();
   table->init(default_options());
 
   K* h_keys = nullptr;
   S* h_scores = nullptr;
   V* h_vectors = nullptr;
   bool* h_found = nullptr;
-  NPU_CHECK(aclrtMallocHost(reinterpret_cast<void**>(&h_keys),
-                            KEY_NUM * sizeof(K)));
+  NPU_CHECK(
+      aclrtMallocHost(reinterpret_cast<void**>(&h_keys), KEY_NUM * sizeof(K)));
   NPU_CHECK(aclrtMallocHost(reinterpret_cast<void**>(&h_scores),
                             KEY_NUM * sizeof(S)));
   NPU_CHECK(aclrtMallocHost(reinterpret_cast<void**>(&h_vectors),
@@ -97,8 +98,7 @@ TEST(Uint32ScoreTest, FindOrInsertAndFind) {
   NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_scores),
                         KEY_NUM * sizeof(S), ACL_MEM_MALLOC_HUGE_FIRST));
   NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_vectors),
-                        KEY_NUM * sizeof(V) * DIM,
-                        ACL_MEM_MALLOC_HUGE_FIRST));
+                        KEY_NUM * sizeof(V) * DIM, ACL_MEM_MALLOC_HUGE_FIRST));
   NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_found),
                         KEY_NUM * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST));
 
@@ -107,10 +107,9 @@ TEST(Uint32ScoreTest, FindOrInsertAndFind) {
   NPU_CHECK(aclrtMemcpy(d_scores, KEY_NUM * sizeof(S), h_scores,
                         KEY_NUM * sizeof(S), ACL_MEMCPY_HOST_TO_DEVICE));
   NPU_CHECK(aclrtMemcpy(d_vectors, KEY_NUM * sizeof(V) * DIM, h_vectors,
-                        KEY_NUM * sizeof(V) * DIM,
-                        ACL_MEMCPY_HOST_TO_DEVICE));
-  NPU_CHECK(aclrtMemset(d_found, KEY_NUM * sizeof(bool), 0,
-                        KEY_NUM * sizeof(bool)));
+                        KEY_NUM * sizeof(V) * DIM, ACL_MEMCPY_HOST_TO_DEVICE));
+  NPU_CHECK(
+      aclrtMemset(d_found, KEY_NUM * sizeof(bool), 0, KEY_NUM * sizeof(bool)));
 
   table->find_or_insert(KEY_NUM, d_keys, d_vectors, d_scores, stream);
   NPU_CHECK(aclrtSynchronizeStream(stream));
@@ -119,12 +118,11 @@ TEST(Uint32ScoreTest, FindOrInsertAndFind) {
   NPU_CHECK(aclrtSynchronizeStream(stream));
   ASSERT_EQ(size, KEY_NUM);
 
-  NPU_CHECK(aclrtMemset(d_found, KEY_NUM * sizeof(bool), 0,
-                        KEY_NUM * sizeof(bool)));
+  NPU_CHECK(
+      aclrtMemset(d_found, KEY_NUM * sizeof(bool), 0, KEY_NUM * sizeof(bool)));
   NPU_CHECK(aclrtMemset(d_vectors, KEY_NUM * sizeof(V) * DIM, 0,
                         KEY_NUM * sizeof(V) * DIM));
-  NPU_CHECK(aclrtMemset(d_scores, KEY_NUM * sizeof(S), 0,
-                        KEY_NUM * sizeof(S)));
+  NPU_CHECK(aclrtMemset(d_scores, KEY_NUM * sizeof(S), 0, KEY_NUM * sizeof(S)));
 
   table->find(KEY_NUM, d_keys, d_vectors, d_found, d_scores, stream);
   NPU_CHECK(aclrtSynchronizeStream(stream));
@@ -134,15 +132,13 @@ TEST(Uint32ScoreTest, FindOrInsertAndFind) {
   NPU_CHECK(aclrtMemcpy(h_scores, KEY_NUM * sizeof(S), d_scores,
                         KEY_NUM * sizeof(S), ACL_MEMCPY_DEVICE_TO_HOST));
   NPU_CHECK(aclrtMemcpy(h_vectors, KEY_NUM * sizeof(V) * DIM, d_vectors,
-                        KEY_NUM * sizeof(V) * DIM,
-                        ACL_MEMCPY_DEVICE_TO_HOST));
+                        KEY_NUM * sizeof(V) * DIM, ACL_MEMCPY_DEVICE_TO_HOST));
 
   for (size_t i = 0; i < KEY_NUM; ++i) {
     ASSERT_TRUE(h_found[i]);
     ASSERT_EQ(h_scores[i], static_cast<S>(i + 1));
     for (size_t j = 0; j < DIM; ++j) {
-      ASSERT_EQ(h_vectors[i * DIM + j],
-                static_cast<V>((i + 1) * 0.00001f));
+      ASSERT_EQ(h_vectors[i * DIM + j], static_cast<V>((i + 1) * 0.00001f));
     }
   }
 
@@ -167,14 +163,12 @@ TEST(Uint32ScoreTest, FindOrInsertAndFind) {
                         MISSING_NUM * sizeof(V) * DIM,
                         ACL_MEM_MALLOC_HUGE_FIRST));
   NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_missing_found),
-                        MISSING_NUM * sizeof(bool),
-                        ACL_MEM_MALLOC_HUGE_FIRST));
+                        MISSING_NUM * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST));
   NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_missing_scores),
                         MISSING_NUM * sizeof(S), ACL_MEM_MALLOC_HUGE_FIRST));
 
-  NPU_CHECK(aclrtMemcpy(d_missing_keys, MISSING_NUM * sizeof(K),
-                        h_missing_keys, MISSING_NUM * sizeof(K),
-                        ACL_MEMCPY_HOST_TO_DEVICE));
+  NPU_CHECK(aclrtMemcpy(d_missing_keys, MISSING_NUM * sizeof(K), h_missing_keys,
+                        MISSING_NUM * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE));
   NPU_CHECK(aclrtMemset(d_missing_found, MISSING_NUM * sizeof(bool), 0,
                         MISSING_NUM * sizeof(bool)));
 
@@ -218,15 +212,16 @@ TEST(Uint32ScoreTest, AssignScoresAndExport) {
   aclrtStream stream = nullptr;
   NPU_CHECK(aclrtCreateStream(&stream));
 
-  std::unique_ptr<Uint32ScoreTable> table = std::make_unique<Uint32ScoreTable>();
+  std::unique_ptr<Uint32ScoreTable> table =
+      std::make_unique<Uint32ScoreTable>();
   table->init(default_options());
 
   K* h_keys = nullptr;
   S* h_scores = nullptr;
   V* h_vectors = nullptr;
   bool* h_found = nullptr;
-  NPU_CHECK(aclrtMallocHost(reinterpret_cast<void**>(&h_keys),
-                            KEY_NUM * sizeof(K)));
+  NPU_CHECK(
+      aclrtMallocHost(reinterpret_cast<void**>(&h_keys), KEY_NUM * sizeof(K)));
   NPU_CHECK(aclrtMallocHost(reinterpret_cast<void**>(&h_scores),
                             KEY_NUM * sizeof(S)));
   NPU_CHECK(aclrtMallocHost(reinterpret_cast<void**>(&h_vectors),
@@ -245,8 +240,7 @@ TEST(Uint32ScoreTest, AssignScoresAndExport) {
   NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_scores),
                         KEY_NUM * sizeof(S), ACL_MEM_MALLOC_HUGE_FIRST));
   NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_vectors),
-                        KEY_NUM * sizeof(V) * DIM,
-                        ACL_MEM_MALLOC_HUGE_FIRST));
+                        KEY_NUM * sizeof(V) * DIM, ACL_MEM_MALLOC_HUGE_FIRST));
   NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_found),
                         KEY_NUM * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST));
 
@@ -255,8 +249,7 @@ TEST(Uint32ScoreTest, AssignScoresAndExport) {
   NPU_CHECK(aclrtMemcpy(d_scores, KEY_NUM * sizeof(S), h_scores,
                         KEY_NUM * sizeof(S), ACL_MEMCPY_HOST_TO_DEVICE));
   NPU_CHECK(aclrtMemcpy(d_vectors, KEY_NUM * sizeof(V) * DIM, h_vectors,
-                        KEY_NUM * sizeof(V) * DIM,
-                        ACL_MEMCPY_HOST_TO_DEVICE));
+                        KEY_NUM * sizeof(V) * DIM, ACL_MEMCPY_HOST_TO_DEVICE));
 
   table->find_or_insert(KEY_NUM, d_keys, d_vectors, d_scores, stream);
   NPU_CHECK(aclrtSynchronizeStream(stream));
@@ -279,8 +272,8 @@ TEST(Uint32ScoreTest, AssignScoresAndExport) {
   table->assign_scores(KEY_NUM, d_keys, d_scores, stream);
   NPU_CHECK(aclrtSynchronizeStream(stream));
 
-  NPU_CHECK(aclrtMemset(d_found, KEY_NUM * sizeof(bool), 0,
-                        KEY_NUM * sizeof(bool)));
+  NPU_CHECK(
+      aclrtMemset(d_found, KEY_NUM * sizeof(bool), 0, KEY_NUM * sizeof(bool)));
   table->find(KEY_NUM, d_keys, d_vectors, d_found, d_scores, stream);
   NPU_CHECK(aclrtSynchronizeStream(stream));
 
@@ -313,8 +306,7 @@ TEST(Uint32ScoreTest, AssignScoresAndExport) {
   NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_export_scores),
                         capacity * sizeof(S), ACL_MEM_MALLOC_HUGE_FIRST));
   NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_export_vectors),
-                        capacity * sizeof(V) * DIM,
-                        ACL_MEM_MALLOC_HUGE_FIRST));
+                        capacity * sizeof(V) * DIM, ACL_MEM_MALLOC_HUGE_FIRST));
 
   const size_t dumped = table->export_batch(
       capacity, 0, d_export_keys, d_export_vectors, d_export_scores, stream);
@@ -342,8 +334,7 @@ TEST(Uint32ScoreTest, AssignScoresAndExport) {
     ASSERT_EQ(h_export_scores[i], it->second);
     expected_scores.erase(it);
     for (size_t j = 0; j < DIM; ++j) {
-      ASSERT_EQ(h_export_vectors[i * DIM + j],
-                static_cast<V>(key * 0.00001f));
+      ASSERT_EQ(h_export_vectors[i * DIM + j], static_cast<V>(key * 0.00001f));
     }
   }
   ASSERT_TRUE(expected_scores.empty());
@@ -423,7 +414,8 @@ TEST(Uint32ScoreTest, EvictCustomizedCorrectRateFull) {
   aclrtStream stream = nullptr;
   NPU_CHECK(aclrtCreateStream(&stream));
 
-  std::unique_ptr<Uint32ScoreTable> table = std::make_unique<Uint32ScoreTable>();
+  std::unique_ptr<Uint32ScoreTable> table =
+      std::make_unique<Uint32ScoreTable>();
   table->init(options);
 
   size_t total_size = table->size(stream);
@@ -452,10 +444,9 @@ TEST(Uint32ScoreTest, EvictCustomizedCorrectRateFull) {
       NPU_CHECK(aclrtMemcpy(d_scores_temp, BATCH_SIZE * sizeof(S),
                             h_scores_base, BATCH_SIZE * sizeof(S),
                             ACL_MEMCPY_HOST_TO_DEVICE));
-      NPU_CHECK(aclrtMemcpy(d_vectors_temp,
-                            BATCH_SIZE * sizeof(V) * options.dim, h_vectors_base,
-                            BATCH_SIZE * sizeof(V) * options.dim,
-                            ACL_MEMCPY_HOST_TO_DEVICE));
+      NPU_CHECK(aclrtMemcpy(
+          d_vectors_temp, BATCH_SIZE * sizeof(V) * options.dim, h_vectors_base,
+          BATCH_SIZE * sizeof(V) * options.dim, ACL_MEMCPY_HOST_TO_DEVICE));
       table->insert_or_assign(BATCH_SIZE, d_keys_temp, d_vectors_temp,
                               d_scores_temp, stream);
       NPU_CHECK(aclrtSynchronizeStream(stream));
@@ -475,10 +466,9 @@ TEST(Uint32ScoreTest, EvictCustomizedCorrectRateFull) {
     NPU_CHECK(aclrtMemcpy(h_scores_temp, MAX_CAPACITY * sizeof(S),
                           d_scores_temp, MAX_CAPACITY * sizeof(S),
                           ACL_MEMCPY_DEVICE_TO_HOST));
-    NPU_CHECK(aclrtMemcpy(h_vectors_temp,
-                          MAX_CAPACITY * sizeof(V) * options.dim, d_vectors_temp,
-                          MAX_CAPACITY * sizeof(V) * options.dim,
-                          ACL_MEMCPY_DEVICE_TO_HOST));
+    NPU_CHECK(aclrtMemcpy(
+        h_vectors_temp, MAX_CAPACITY * sizeof(V) * options.dim, d_vectors_temp,
+        MAX_CAPACITY * sizeof(V) * options.dim, ACL_MEMCPY_DEVICE_TO_HOST));
 
     ASSERT_EQ(total_size, dump_counter);
     size_t bigger_score_counter = 0;

@@ -936,7 +936,7 @@ class HashTable : public HashTableBase<K, V, S> {
     // Incompatible: Epoch-based strategies encode epoch(hi32)|score(lo32),
     // require 64-bit score
     static_assert(!(std::is_same<score_type, uint32_t>::value &&
-                  (evict_strategy != EvictStrategy::kCustomized)),
+                    (evict_strategy != EvictStrategy::kCustomized)),
                   "score_type uint32_t is only compatible with Customized; "
                   "use uint64_t.");
   };
