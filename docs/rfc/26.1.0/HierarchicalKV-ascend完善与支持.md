@@ -1,9 +1,9 @@
 # 需求背景
-            
+
 HierarchicalKV为大规模推荐模型提供了高效的Embedding管理解决方案，通过CPU/GPU协同存储架构，在保证高查询性能的同时极大拓展了存储容量。HierarchicalKV-ascend实现了[HierarchicalKV](https://github.com/NVIDIA-Merlin/HierarchicalKV)在昇腾950等AI芯片上的深度移植与优化，既保持了与原生API的兼容性，又充分利用昇腾平台的并行计算特性显著提升了Embedding操作效率。
 
 # 提议方案
-            
+
 当前HierarchicalKV-ascend与社区[HierarchicalKV/master/bbe2ee185](https://github.com/NVIDIA-Merlin/HierarchicalKV)版本的API以及支持特性存在差异，需要完善API、特性支持度。
 
 ## 方案目标
