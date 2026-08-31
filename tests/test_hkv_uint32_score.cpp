@@ -510,3 +510,113 @@ TEST(Uint32ScoreTest, EvictCustomizedCorrectRateFull) {
   NPU_CHECK(aclrtSynchronizeDevice());
   NpuCheckError();
 }
+
+TEST(Uint32ScoreTest, EraseAndFind) {
+  init_env();
+
+  aclrtStream stream = nullptr;
+  NPU_CHECK(aclrtCreateStream(&stream));
+
+  std::unique_ptr<Uint32ScoreTable> table =
+      std::make_unique<Uint32ScoreTable>();
+  table->init(default_options());
+
+  K* h_keys = nullptr;
+  S* h_scores = nullptr;
+  V* h_vectors = nullptr;
+  bool* h_found = nullptr;
+  NPU_CHECK(
+      aclrtMallocHost(reinterpret_cast<void**>(&h_keys), KEY_NUM * sizeof(K)));
+  NPU_CHECK(aclrtMallocHost(reinterpret_cast<void**>(&h_scores),
+                            KEY_NUM * sizeof(S)));
+  NPU_CHECK(aclrtMallocHost(reinterpret_cast<void**>(&h_vectors),
+                            KEY_NUM * sizeof(V) * DIM));
+  NPU_CHECK(aclrtMallocHost(reinterpret_cast<void**>(&h_found),
+                            KEY_NUM * sizeof(bool)));
+
+  fill_sequential(h_keys, h_scores, h_vectors, KEY_NUM);
+
+  K* d_keys = nullptr;
+  S* d_scores = nullptr;
+  V* d_vectors = nullptr;
+  bool* d_found = nullptr;
+  NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_keys), KEY_NUM * sizeof(K),
+                        ACL_MEM_MALLOC_HUGE_FIRST));
+  NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_scores),
+                        KEY_NUM * sizeof(S), ACL_MEM_MALLOC_HUGE_FIRST));
+  NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_vectors),
+                        KEY_NUM * sizeof(V) * DIM, ACL_MEM_MALLOC_HUGE_FIRST));
+  NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_found),
+                        KEY_NUM * sizeof(bool), ACL_MEM_MALLOC_HUGE_FIRST));
+
+  NPU_CHECK(aclrtMemcpy(d_keys, KEY_NUM * sizeof(K), h_keys,
+                        KEY_NUM * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE));
+  NPU_CHECK(aclrtMemcpy(d_scores, KEY_NUM * sizeof(S), h_scores,
+                        KEY_NUM * sizeof(S), ACL_MEMCPY_HOST_TO_DEVICE));
+  NPU_CHECK(aclrtMemcpy(d_vectors, KEY_NUM * sizeof(V) * DIM, h_vectors,
+                        KEY_NUM * sizeof(V) * DIM, ACL_MEMCPY_HOST_TO_DEVICE));
+
+  table->find_or_insert(KEY_NUM, d_keys, d_vectors, d_scores, stream);
+  NPU_CHECK(aclrtSynchronizeStream(stream));
+  ASSERT_EQ(table->size(stream), KEY_NUM);
+
+  // ---- 阶段 1：erase 前 ERASE_NUM 个 key，其余保留 ----
+  constexpr size_t ERASE_NUM = 64;
+  constexpr size_t REMAIN_NUM = KEY_NUM - ERASE_NUM;
+  K* d_erase_keys = nullptr;
+  NPU_CHECK(aclrtMalloc(reinterpret_cast<void**>(&d_erase_keys),
+                        KEY_NUM * sizeof(K), ACL_MEM_MALLOC_HUGE_FIRST));
+  NPU_CHECK(aclrtMemcpy(d_erase_keys, ERASE_NUM * sizeof(K), h_keys,
+                        ERASE_NUM * sizeof(K), ACL_MEMCPY_HOST_TO_DEVICE));
+
+  table->erase(ERASE_NUM, d_erase_keys, stream);
+  NPU_CHECK(aclrtSynchronizeStream(stream));
+  ASSERT_EQ(table->size(stream), REMAIN_NUM);
+
+  // 已删 key find 全部未命中
+  NPU_CHECK(aclrtMemset(d_found, ERASE_NUM * sizeof(bool), 0,
+                        ERASE_NUM * sizeof(bool)));
+  table->find(ERASE_NUM, d_erase_keys, d_vectors, d_found, d_scores, stream);
+  NPU_CHECK(aclrtSynchronizeStream(stream));
+  NPU_CHECK(aclrtMemcpy(h_found, ERASE_NUM * sizeof(bool), d_found,
+                        ERASE_NUM * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST));
+  for (size_t i = 0; i < ERASE_NUM; ++i) {
+    ASSERT_FALSE(h_found[i]);
+  }
+
+  // 未删 key find 全部命中且值正确
+  NPU_CHECK(aclrtMemcpy(d_erase_keys, REMAIN_NUM * sizeof(K),
+                        h_keys + ERASE_NUM, REMAIN_NUM * sizeof(K),
+                        ACL_MEMCPY_HOST_TO_DEVICE));
+  NPU_CHECK(aclrtMemset(d_found, REMAIN_NUM * sizeof(bool), 0,
+                        REMAIN_NUM * sizeof(bool)));
+  table->find(REMAIN_NUM, d_erase_keys, d_vectors, d_found, d_scores, stream);
+  NPU_CHECK(aclrtSynchronizeStream(stream));
+  NPU_CHECK(aclrtMemcpy(h_found, REMAIN_NUM * sizeof(bool), d_found,
+                        REMAIN_NUM * sizeof(bool), ACL_MEMCPY_DEVICE_TO_HOST));
+  for (size_t i = 0; i < REMAIN_NUM; ++i) {
+    ASSERT_TRUE(h_found[i]);
+  }
+
+  // ---- 阶段 2：erase 全部剩余 key，表应为空 ----
+  table->erase(REMAIN_NUM, d_erase_keys, stream);
+  NPU_CHECK(aclrtSynchronizeStream(stream));
+  ASSERT_EQ(table->size(stream), 0);
+
+  NPU_CHECK(aclrtDestroyStream(stream));
+
+  NPU_CHECK(aclrtFreeHost(h_keys));
+  NPU_CHECK(aclrtFreeHost(h_scores));
+  NPU_CHECK(aclrtFreeHost(h_vectors));
+  NPU_CHECK(aclrtFreeHost(h_found));
+
+  NPU_CHECK(aclrtFree(d_keys));
+  NPU_CHECK(aclrtFree(d_scores));
+  NPU_CHECK(aclrtFree(d_vectors));
+  NPU_CHECK(aclrtFree(d_found));
+  NPU_CHECK(aclrtFree(d_erase_keys));
+
+  NPU_CHECK(aclrtSynchronizeDevice());
+  NpuCheckError();
+}
+

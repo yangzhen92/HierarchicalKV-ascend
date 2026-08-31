@@ -3571,9 +3571,11 @@ class HashTable : public HashTableBase<K, V, S> {
     opt.cg_size = std::min(value_move_group_size_best, opt.cg_size);
     opt.cg_size = std::max(2u, opt.cg_size);
     // mte算子搬运数据buffer设置为128K，且simt按128B为cacheline，因此在value大小为(128,
-    // 128K]时为优势区间
+    // 128K]时为优势区间；但根据实测数据，value大小为(128,256]场景下，
+    // 性能提升不稳定，部分场景下出现性能下降且总体整体平均性能提升较小，
+    // 因此修改为使用(256,128K]范围。
     opt.use_mte_move = (MTE_UB_BUFFER_SZ >= move_byte_per_value) &&
-                       (move_byte_per_value > SIMT_RW_PKG_SZ);
+                       (move_byte_per_value > SIMT_RW_PKG_SZ * 2);
 
     return opt;
   }
