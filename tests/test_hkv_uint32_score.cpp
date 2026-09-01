@@ -619,4 +619,3 @@ TEST(Uint32ScoreTest, EraseAndFind) {
   NPU_CHECK(aclrtSynchronizeDevice());
   NpuCheckError();
 }
-
