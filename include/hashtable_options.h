@@ -57,7 +57,9 @@ struct HashTableOptions {
   size_t num_of_buckets_per_alloc = 1;  ///< Number of buckets allocated in each
                                         ///< HBM allocation, must be power of 2.
   bool api_lock = false;  ///<  The flag indicating whether to lock the table
-                         ///<  once enters the API.
+                          ///<  once enters the API.
+  bool enable_async_fast_load_factor =
+      false;  ///< Enables asynchronous sampled load-factor estimation.
   MemoryPoolOptions
       device_memory_pool;  ///< Configuration options for device memory pool.
   MemoryPoolOptions
