@@ -33,6 +33,7 @@
 #include <type_traits>
 #include "aclnn_helper.h"
 #include "aclnnop/aclnn_reduce_sum.h"
+#include "async_fast_load_factor.h"
 #include "bucket_memory_pool_manager.h"
 #include "debug.h"
 #include "group_lock.h"
@@ -931,6 +932,7 @@ class HashTable : public HashTableBase<K, V, S> {
    * table object.
    */
   ~HashTable() {
+    async_fast_load_factor_.release();
     if (initialized_) {
       initialized_ = false;
       destroy_table<key_type, value_type, score_type>(
@@ -969,12 +971,14 @@ class HashTable : public HashTableBase<K, V, S> {
         "init begin: dim={}, init_capacity={}, max_capacity={}, "
         "max_bucket_size={}, num_of_buckets_per_alloc={}, "
         "max_hbm_for_vectors={}, io_by_cpu={}, block_size={}, "
-        "reserved_key_start_bit={}, device_id={}, api_lock={}",
+        "reserved_key_start_bit={}, device_id={}, api_lock={}, "
+        "enable_async_fast_load_factor={}",
         options.dim, options.init_capacity, options.max_capacity,
         options.max_bucket_size, options.num_of_buckets_per_alloc,
         options.max_hbm_for_vectors, options.io_by_cpu ? 1 : 0,
         options.block_size, options.reserved_key_start_bit, options.device_id,
-        options.api_lock ? 1 : 0);
+        options.api_lock ? 1 : 0,
+        options.enable_async_fast_load_factor ? 1 : 0);
     auto platform = platform_ascendc::PlatformAscendCManager::GetInstance();
     HKV_CHECK(platform != nullptr, "get platform failed.");
     block_dim_ = platform->GetCoreNumAiv();
@@ -3439,9 +3443,9 @@ class HashTable : public HashTableBase<K, V, S> {
    *
    * @return The evaluated load factor
    */
-  inline float fast_load_factor(const size_type delta = 0,
-                                aclrtStream input_stream = 0,
-                                const bool need_lock = true) const {
+  inline float fast_load_factor_sync(const size_type delta,
+                                     aclrtStream input_stream,
+                                     const bool need_lock) const {
     std::unique_ptr<read_shared_lock> lock_ptr;
     if (options_.api_lock) {
       lock_ptr = std::make_unique<read_shared_lock>(mutex_, std::defer_lock,
@@ -3475,6 +3479,18 @@ class HashTable : public HashTableBase<K, V, S> {
     return static_cast<float>((delta * 1.0) / (capacity() * 1.0) +
                               (h_total_size * 1.0) /
                                   (options_.max_bucket_size * N * 1.0));
+  }
+
+  inline float fast_load_factor(const size_type delta = 0,
+                                aclrtStream input_stream = 0,
+                                const bool need_lock = true) const {
+    if (!options_.enable_async_fast_load_factor) {
+      return fast_load_factor_sync(delta, input_stream, need_lock);
+    }
+
+    return async_fast_load_factor_.calculate(
+        delta, table_->buckets_size, table_->buckets_num,
+        options_.max_bucket_size, capacity(), input_stream);
   }
 
   inline void check_evict_strategy(const score_type* scores) {
@@ -3695,6 +3711,7 @@ class HashTable : public HashTableBase<K, V, S> {
   ValueMoveOpt value_move_opt_;
   std::unique_ptr<BucketMemoryPoolManager<key_type, value_type, score_type>>
       bucket_memory_pool_manager_;
+  mutable AsyncFastLoadFactor async_fast_load_factor_;
 };
 
 }  // namespace hkv
