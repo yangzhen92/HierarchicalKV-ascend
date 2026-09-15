@@ -2,11 +2,11 @@
 
 ## 1.1 简介
 
-本RFC的核心目标是利用Ascend950系列芯片架构以及带宽优势，实现HierarchicalKV-ascend（下称HKV）的性能优化，解决HKV中的SIMT算子在NPU上带宽利用率低的问题，通过提升数据搬运效率进而提升HKV的整体性能。
+本RFC的核心目标是利用Ascend 950PR&950DT 系列产品架构以及带宽优势，实现HierarchicalKV-ascend（下称HKV）的性能优化，解决HKV中的SIMT算子在NPU上带宽利用率低的问题，通过提升数据搬运效率进而提升HKV的整体性能。
 
 ## 1.2 动机
 
-在推荐系统的动态Embedding场景中，HKV需要高频执行大规模key-value的插入、查找、更新等操作，value的搬运对HBM带宽利用率有极高要求。Ascend950系列芯片支持SIMD和SIMT两种算子模式：SIMD算子通过MTE指令能高效利用带宽，但不支持离散、随机数据处理；SIMT算子弥补了这一缺陷，能够处理离散和随机数据访问，但受限于线程数、寄存器数等架构约束，无法打满带宽，导致HKV核心算子（如insert_or_assign、find等）的带宽利用率偏低，直接影响端到端训练和推理吞吐。
+在推荐系统的动态Embedding场景中，HKV需要高频执行大规模key-value的插入、查找、更新等操作，value的搬运对HBM带宽利用率有极高要求。Ascend 950PR&950DT 系列产品支持SIMD和SIMT两种算子模式：SIMD算子通过MTE指令能高效利用带宽，但不支持离散、随机数据处理；SIMT算子弥补了这一缺陷，能够处理离散和随机数据访问，但受限于线程数、寄存器数等架构约束，无法打满带宽，导致HKV核心算子（如insert_or_assign、find等）的带宽利用率偏低，直接影响端到端训练和推理吞吐。
 
 当前痛点：HKV的SIMT算子在处理大规模Embedding表时，带宽利用率仅为SIMD模式的50%，成为系统性能瓶颈。
 
@@ -66,7 +66,7 @@
 - DFX要求：保证接口兼容，仅做性能优化，无功能变更；全场景模式下，无性能劣化。
 
 **使用限制与约束：**
-- 混合范式仅适用于Ascend950及以上芯片。
+- 混合范式仅适用于Ascend 950PR&950DT 系列产品及以上芯片。
 - 性能指标在纯HBM模式下生效。
 - value>=256B场景下单接口性能提升20%，全部接口平均性能提升30%。
 
@@ -74,13 +74,13 @@
 
 ## 3.1 总体方案
 
-**硬件平台：** Ascend950系列芯片，支持SIMT和SIMD两种算子模式，具备Vector流水线、Scalar流水线和MTE（Memory Transfer Engine）流水线。
+**硬件平台：** Ascend 950PR&950DT 系列产品，支持SIMT和SIMD两种算子模式，具备Vector流水线、Scalar流水线和MTE（Memory Transfer Engine）流水线。
 
 **核心设计思路：**
 
-Ascend950支持SIMD和SIMT两种算子。其中，SIMT算子弥补了SIMD算子不能进行离散、随机数据处理的问题，但该架构下，SIMT受限线程数、寄存器数等约束，无法打满带宽。SIMD模式下的MTE指令能高效利用带宽。因此我们提出了一个在SIMT算子中"下发"MTE指令的范式。
+Ascend 950PR&950DT 系列产品支持SIMD和SIMT两种算子。其中，SIMT算子弥补了SIMD算子不能进行离散、随机数据处理的问题，但该架构下，SIMT受限线程数、寄存器数等约束，无法打满带宽。SIMD模式下的MTE指令能高效利用带宽。因此我们提出了一个在SIMT算子中"下发"MTE指令的范式。
 
-该范式是由SIMT作为生产者，UB（Unified Buffer）作为中间的任务队列，Scalar指令作为消费者的生产-消费模式。SIMT运行在Vector流水线上，与Scalar指令并行执行。同时SIMT和Scalar都可以访问UB，因此就形成了SIMT生产数据搬运任务，将任务数据填充UB，Scalar循环读取UB数据，下发MTE指令的生产消费模式。该模式极大地提升了SIMT算子的带宽利用率，充分利用Ascend950的带宽优势，提升算子性能。
+该范式是由SIMT作为生产者，UB（Unified Buffer）作为中间的任务队列，Scalar指令作为消费者的生产-消费模式。SIMT运行在Vector流水线上，与Scalar指令并行执行。同时SIMT和Scalar都可以访问UB，因此就形成了SIMT生产数据搬运任务，将任务数据填充UB，Scalar循环读取UB数据，下发MTE指令的生产消费模式。该模式极大地提升了SIMT算子的带宽利用率，充分利用Ascend 950PR&950DT 系列产品的带宽优势，提升算子性能。
 
 **架构示意：**
 
