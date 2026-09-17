@@ -1,6 +1,6 @@
 # 需求背景
 
-HierarchicalKV为大规模推荐模型提供了高效的Embedding管理解决方案，通过CPU/GPU协同存储架构，在保证高查询性能的同时极大拓展了存储容量。HierarchicalKV-ascend实现了[HierarchicalKV](https://github.com/NVIDIA-Merlin/HierarchicalKV)在昇腾950等AI芯片上的深度移植与优化，既保持了与原生API的兼容性，又充分利用昇腾平台的并行计算特性显著提升了Embedding操作效率。
+HierarchicalKV为大规模推荐模型提供了高效的Embedding管理解决方案，通过CPU/GPU协同存储架构，在保证高查询性能的同时极大拓展了存储容量。HierarchicalKV-ascend实现了[HierarchicalKV](https://github.com/NVIDIA-Merlin/HierarchicalKV)在Ascend 950PR&950DT系列产品等AI芯片上的深度移植与优化，既保持了与原生API的兼容性，又充分利用昇腾平台的并行计算特性显著提升了Embedding操作效率。
 
 # 提议方案
 
@@ -90,4 +90,4 @@ HierarchicalKV-ascend在26.0.0版本中仅支持在纯HBM内实现增删改查�
 
 本RFC要求以以下结果作为落地验收标准：
 1. 完成全量社区测试用例迁移适配
-2. 全量测试用例可以在A5环境上运行
+2. 全量测试用例可以在Ascend 950PR&950DT系列产品环境上运行
