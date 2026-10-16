@@ -21,8 +21,8 @@
 #define ASCENDC_DUAL_BUCKET_INSERT_KERNEL_H_
 
 #include <cstdint>
-#include "kernel_operator.h"
 #include "dual_bucket_utils.h"
+#include "kernel_operator.h"
 #include "kernels/mte_task_queue.h"
 #include "score_functor.h"
 #include "simt_vf_dispatcher.h"
@@ -38,9 +38,9 @@ using namespace AscendC;
 struct DualBucketDummyTaskQueue {};
 
 template <typename K = uint64_t, typename V = float, typename S = uint64_t,
-          typename VecV = int32_t, typename TaskQueue = DualBucketDummyTaskQueue,
-          int32_t Strategy = -1, int32_t EVICT_GROUP_SIZE = 16,
-          bool USE_MTE = false>
+          typename VecV = int32_t,
+          typename TaskQueue = DualBucketDummyTaskQueue, int32_t Strategy = -1,
+          int32_t EVICT_GROUP_SIZE = 16, bool USE_MTE = false>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void insert_or_assign_dual_bucket_vf(
     __gm__ void* buckets_addr_gm, __gm__ int32_t* buckets_size_addr_gm,
@@ -99,10 +99,10 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void insert_or_assign_dual_bucket_vf(
       uint64_t bkt1 = 0;
       uint32_t start_pos0 = 0;
       uint32_t start_pos1 = 0;
-      get_dual_bucket_indices<K>(
-          hashed_key, capacity, bucket_max_size, max_bucket_shift,
-          capacity_divisor_magic, capacity_divisor_shift, buckets_num,
-          start_pos0, start_pos1, bkt0, bkt1);
+      get_dual_bucket_indices<K>(hashed_key, capacity, bucket_max_size,
+                                 max_bucket_shift, capacity_divisor_magic,
+                                 capacity_divisor_shift, buckets_num,
+                                 start_pos0, start_pos1, bkt0, bkt1);
       __gm__ Bucket<K, V, S>* bucket0 = buckets + bkt0;
       __gm__ Bucket<K, V, S>* bucket1 = buckets + bkt1;
       keys0 = bucket0->keys_;
@@ -153,8 +153,7 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void insert_or_assign_dual_bucket_vf(
           __gm__ int32_t* cand_size = (sel == 0) ? size0 : size1;
           const uint32_t cand_start_pos = (sel == 0) ? start_pos0 : start_pos1;
           if (probe_dual_bucket_empty<K, V, S>(cand_keys, cand_start_pos,
-                                               bucket_max_size,
-                                               out_pos) ==
+                                               bucket_max_size, out_pos) ==
               OccupyResult::OCCUPIED_EMPTY) {
             chosen_sel = sel;
             key_pos = out_pos;
@@ -178,20 +177,20 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void insert_or_assign_dual_bucket_vf(
         S min_score = static_cast<S>(MAX_SCORE);
         uint32_t min_pos = 0;
         uint32_t min_bucket = DUAL_BUCKET_NONE;
-        const uint64_t scores0_sync = asc_shfl(
-            reinterpret_cast<uint64_t>(scores0), i, EVICT_GROUP_SIZE);
-        const uint64_t keys0_sync = asc_shfl(
-            reinterpret_cast<uint64_t>(keys0), i, EVICT_GROUP_SIZE);
-        const uint64_t scores1_sync = asc_shfl(
-            reinterpret_cast<uint64_t>(scores1), i, EVICT_GROUP_SIZE);
-        const uint64_t keys1_sync = asc_shfl(
-            reinterpret_cast<uint64_t>(keys1), i, EVICT_GROUP_SIZE);
+        const uint64_t scores0_sync =
+            asc_shfl(reinterpret_cast<uint64_t>(scores0), i, EVICT_GROUP_SIZE);
+        const uint64_t keys0_sync =
+            asc_shfl(reinterpret_cast<uint64_t>(keys0), i, EVICT_GROUP_SIZE);
+        const uint64_t scores1_sync =
+            asc_shfl(reinterpret_cast<uint64_t>(scores1), i, EVICT_GROUP_SIZE);
+        const uint64_t keys1_sync =
+            asc_shfl(reinterpret_cast<uint64_t>(keys1), i, EVICT_GROUP_SIZE);
         reduce_dual_bucket_min_score<K, S, EVICT_GROUP_SIZE>(
             reinterpret_cast<__gm__ S*>(scores0_sync),
             reinterpret_cast<__gm__ K*>(keys0_sync),
             reinterpret_cast<__gm__ S*>(scores1_sync),
-            reinterpret_cast<__gm__ K*>(keys1_sync), bucket_max_size, cg_rank_id,
-            min_score, min_pos, min_bucket);
+            reinterpret_cast<__gm__ K*>(keys1_sync), bucket_max_size,
+            cg_rank_id, min_score, min_pos, min_bucket);
         if (cg_rank_id == i) {
           __gm__ K* victim_keys = (min_bucket == 1) ? keys1 : keys0;
           __gm__ S* victim_scores = (min_bucket == 1) ? scores1 : scores0;
@@ -211,8 +210,8 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void insert_or_assign_dual_bucket_vf(
               if (try_key == current_key) {
                 // Re-check the score: it may have grown since the scan.
                 if (__ldg<LD_L2CacheType::L2_CACHE_HINT_NORMAL_FV,
-                          L1CacheType::NON_CACHEABLE>(
-                        victim_scores + min_pos) <= min_score) {
+                          L1CacheType::NON_CACHEABLE>(victim_scores +
+                                                      min_pos) <= min_score) {
                   key_pos = min_pos;
                   chosen_sel = min_bucket;
                   ScoreFunctor::update_with_digest(
@@ -235,7 +234,8 @@ LAUNCH_BOUND(THREAD_NUM_512) inline void insert_or_assign_dual_bucket_vf(
         res_sync = asc_shfl(occupy_result, i, EVICT_GROUP_SIZE);
       }
     }
-    // 5. Phase D: move the value, then publish the key, which releases the lock.
+    // 5. Phase D: move the value, then publish the key, which releases the
+    // lock.
     __gm__ K* chosen_keys = (chosen_sel == 0) ? keys0 : keys1;
     const uint64_t chosen_vectors_uintptr =
         (chosen_sel == 0) ? vectors0_uintptr : vectors1_uintptr;
@@ -324,7 +324,7 @@ __global__ __vector__ void insert_or_assign_dual_bucket_kernel(
   DISPATCH_VALUE_SIZE(
       value_size,
       (asc_vf_call<insert_or_assign_dual_bucket_vf<
-          K, V, S, DTYPE, DualBucketDummyTaskQueue, Strategy, 16, false>>(
+           K, V, S, DTYPE, DualBucketDummyTaskQueue, Strategy, 16, false>>(
           dim3{THREAD_NUM_512}, buckets, buckets_size, capacity, buckets_num,
           bucket_max_size, dim, keys, values, scores, cur_score, n,
           global_epoch, GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
@@ -352,8 +352,8 @@ __global__ __vector__ void insert_or_assign_dual_bucket_kernel_with_mte(
          Strategy == npu::hkv::EvictStrategyInternal::kEpochLru)
             ? static_cast<uint64_t>(GetSystemCycle())
             : 0;
-    asc_vf_call<insert_or_assign_dual_bucket_vf<
-        K, V, S, int32_t, TaskQueue, Strategy, 16, true>>(
+    asc_vf_call<insert_or_assign_dual_bucket_vf<K, V, S, int32_t, TaskQueue,
+                                                Strategy, 16, true>>(
         dim3{THREAD_NUM_512}, buckets, buckets_size, capacity, buckets_num,
         bucket_max_size, dim, keys, values, scores, cur_score, n, global_epoch,
         GetBlockIdx(), max_bucket_shift, capacity_divisor_magic,
