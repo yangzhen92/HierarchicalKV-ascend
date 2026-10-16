@@ -45,6 +45,7 @@
 #include "kernels/assign_values_kernel/assign_values_kernel.h"
 #include "kernels/clear_kernel/clear_kernel.h"
 #include "kernels/contains_kernel/contains_kernel.h"
+#include "kernels/dual_bucket_find_kernel/dual_bucket_find_kernel.h"
 #include "kernels/dual_bucket_insert_kernel/dual_bucket_insert_kernel.h"
 #include "kernels/dump_kernel/dump_kernel.h"
 #include "kernels/dump_kernel/dump_kernel_if.h"
@@ -2292,6 +2293,11 @@ class HashTable : public HashTableBase<K, V, S> {
    * @endparblock
    * @param stream The CANN stream that is used to execute the operation.
    *
+   * @note In dual-bucket mode the two candidate buckets of a key are probed in
+   * turn, low half of the hash first, using the same mapping as
+   * `insert_or_assign`. This overload is the only `find` flavor that supports
+   * dual-bucket mode; the missed-keys and pointer overloads reject it.
+   *
    */
   void find(const size_type n, const key_type* keys,  // (n)
             value_type* values,                       // (n, DIM)
@@ -2301,7 +2307,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
-    require_single_bucket_mode("find");
+    // Dual-bucket mode is supported by this overload only; see the @note above.
     HKV_LOG_INFO("find(values): n={}, has_scores={}, is_fast_mode={}", n,
                  scores != nullptr ? 1 : 0, is_fast_mode() ? 1 : 0);
 
@@ -2311,7 +2317,27 @@ class HashTable : public HashTableBase<K, V, S> {
     }
 
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
-    if (is_fast_mode()) {
+    if (options_.enable_dual_bucket) {
+      // Dual-bucket always runs on pure HBM, so only the fast paths apply.
+      if (value_move_opt_.use_mte_move) {
+        using TaskQueue = GM2GMTaskPipelineQueueBase<THREAD_NUM_512>;
+        dual_bucket_find_kernel_with_mte<TaskQueue, K, V, S>
+            <<<block_dim_, TaskQueue::GetRequiredUbSize(), stream>>>(
+                table_->buckets, table_->capacity, table_->buckets_num,
+                static_cast<uint32_t>(table_->bucket_max_size), table_->dim,
+                const_cast<key_type*>(keys), values, scores, founds, n,
+                table_->max_bucket_shift, table_->capacity_divisor_magic,
+                table_->capacity_divisor_shift, n_align_warp);
+      } else {
+        dual_bucket_find_kernel<K, V, S><<<block_dim_, 0, stream>>>(
+            table_->buckets, table_->capacity, table_->buckets_num,
+            static_cast<uint32_t>(table_->bucket_max_size), value_move_opt_.dim,
+            const_cast<key_type*>(keys), values, scores, founds, n,
+            value_move_opt_.size, table_->max_bucket_shift,
+            table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+            n_align_warp, value_move_opt_.cg_size);
+      }
+    } else if (is_fast_mode()) {
       if (value_move_opt_.use_mte_move) {
         using TaskQueue = GM2GMTaskPipelineQueueBase<THREAD_NUM_512>;
         find_with_digest_kernel_with_mte<TaskQueue, K, V, S>
@@ -3250,6 +3276,20 @@ class HashTable : public HashTableBase<K, V, S> {
    * @return The number of buckets in the table.
    */
   size_type bucket_count() const noexcept { return table_->buckets_num; }
+
+  /**
+   * @brief Returns the device-side bucket array of the table.
+   *
+   * @note For diagnostics and test kernels only; the array is owned by the
+   * table and the returned pointer must never be freed. Writing through it
+   * bypasses the regular APIs, so `size()` / `load_factor()` may not match the
+   * slots.
+   *
+   * @return The bucket array, or `nullptr` if the table is not initialized.
+   */
+  npu::hkv::Bucket<key_type, value_type, score_type>* buckets() const noexcept {
+    return (table_ != nullptr) ? table_->buckets : nullptr;
+  }
 
   /**
    * @brief Indicates whether all value storage currently resides in HBM.

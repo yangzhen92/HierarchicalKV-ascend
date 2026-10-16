@@ -156,6 +156,58 @@ __forceinline__ __simt_callee__ OccupyResult probe_dual_bucket_empty(
   }
   return OccupyResult::INITIAL;
 }
+/// @brief Probe one bucket of the pair for the key, leaving it unlocked.
+/// @note Read-only twin of `probe_dual_bucket_duplicate`, and the dual-bucket
+///       twin of `find_without_lock`: the free-slot digest must be the one
+///       `init` / `clear` actually stored, otherwise the early exit never
+///       fires and every lookup scans the whole bucket.
+/// @return DUPLICATE with @p out_pos set, OCCUPIED_EMPTY at the first free
+///         slot, CONTINUE when the bucket holds neither.
+template <class K, class V, class S>
+__forceinline__ __simt_callee__ OccupyResult
+probe_dual_bucket_find(__gm__ K* __restrict__ bucket_keys, const K& key,
+                       const uint32_t key_pos, const VecD_Comp& target_digests,
+                       const uint32_t bucket_max_size, uint32_t& out_pos) {
+  using BUCKET = Bucket<K, V, S>;
+  constexpr uint32_t STRIDE = sizeof(VecD_Comp) / sizeof(D);
+  const VecD_Comp empty_digests_val = dual_bucket_empty_digests<K>();
+  uint32_t pos_base = key_pos;
+  pos_base = align_to<STRIDE>(pos_base);
+  for (uint32_t offset = 0; offset < bucket_max_size + STRIDE;
+       offset += STRIDE) {
+    const uint32_t pos_cur = (pos_base + offset) & (bucket_max_size - 1);
+    __gm__ D* digests_ptr =
+        BUCKET::digests(bucket_keys, bucket_max_size, pos_cur);
+    const VecD_Comp probe_digests =
+        ldg_l2nc_l1c(reinterpret_cast<__gm__ VecD_Comp*>(digests_ptr));
+    uint32_t cmp_result = vcmpeq4(probe_digests, target_digests) & 0x01010101;
+    while (cmp_result != 0) {
+      const uint32_t index = (__ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+      cmp_result &= (cmp_result - 1);
+      const uint32_t possible_pos = pos_cur + index;
+      // The digest only pre-filters; only the key word settles a hit.
+      if (ldg_l2nc_l1c(BUCKET::keys(bucket_keys, possible_pos)) == key) {
+        out_pos = possible_pos;
+        return OccupyResult::DUPLICATE;
+      }
+    }
+    cmp_result = vcmpeq4(probe_digests, empty_digests_val) & 0x01010101;
+    while (cmp_result != 0) {
+      const uint32_t index = (__ffs(static_cast<int32_t>(cmp_result)) - 1) >> 3;
+      cmp_result &= (cmp_result - 1);
+      const uint32_t possible_pos = pos_cur + index;
+      if (offset == 0 && possible_pos < key_pos) {
+        continue;
+      }
+      if (ldg_l2nc_l1c(BUCKET::keys(bucket_keys, possible_pos)) ==
+          static_cast<K>(EMPTY_KEY)) {
+        return OccupyResult::OCCUPIED_EMPTY;
+      }
+    }
+  }
+  return OccupyResult::CONTINUE;
+}
+
 /// `reduce_dual_bucket_min_score`'s "nothing evictable in the pair" sentinel.
 constexpr uint32_t DUAL_BUCKET_NONE = 2U;
 
