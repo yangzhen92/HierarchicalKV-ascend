@@ -234,7 +234,8 @@ void initialize_buckets(Table<K, V, S>** table, BaseAllocator* allocator,
     const size_t N = end - start + 1;
     const int grid_size = SAFE_GET_GRID_SIZE(N, block_size);
     create_atomic_keys_kernel<K, V, S><<<grid_size, 0, 0>>>(
-        (*table)->buckets, start, end, (*table)->bucket_max_size);
+        (*table)->buckets, start, end, (*table)->bucket_max_size,
+        (*table)->dual_bucket ? 1U : 0U);
   }
 
   {
@@ -297,10 +298,12 @@ void create_table(Table<K, V, S>** table, BaseAllocator* allocator,
                   const size_t bucket_max_size = 128,
                   const size_t num_of_buckets_per_alloc = 1,
                   const size_t tile_size = 32, const bool primary = true,
-                  IBucketAddressProvider* provider = nullptr) {
+                  IBucketAddressProvider* provider = nullptr,
+                  const bool dual_bucket = false) {
   allocator->alloc(MemoryType::Host, table, sizeof(Table<K, V, S>));
   (void)std::memset(reinterpret_cast<void*>(*table), 0, sizeof(Table<K, V, S>));
   (*table)->dim = dim;
+  (*table)->dual_bucket = dual_bucket;
   (*table)->bucket_max_size = bucket_max_size;
   (*table)->max_size = std::max(init_size, max_size);
   (*table)->tile_size = tile_size;

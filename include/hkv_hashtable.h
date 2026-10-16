@@ -45,6 +45,7 @@
 #include "kernels/assign_values_kernel/assign_values_kernel.h"
 #include "kernels/clear_kernel/clear_kernel.h"
 #include "kernels/contains_kernel/contains_kernel.h"
+#include "kernels/dual_bucket_insert_kernel/dual_bucket_insert_kernel.h"
 #include "kernels/dump_kernel/dump_kernel.h"
 #include "kernels/dump_kernel/dump_kernel_if.h"
 #include "kernels/dump_kernel/dump_kernel_if_v2.h"
@@ -987,13 +988,13 @@ class HashTable : public HashTableBase<K, V, S> {
         "max_bucket_size={}, num_of_buckets_per_alloc={}, "
         "max_hbm_for_vectors={}, io_by_cpu={}, block_size={}, "
         "reserved_key_start_bit={}, device_id={}, api_lock={}, "
-        "enable_async_fast_load_factor={}",
+        "enable_async_fast_load_factor={}, enable_dual_bucket={}",
         options.dim, options.init_capacity, options.max_capacity,
         options.max_bucket_size, options.num_of_buckets_per_alloc,
         options.max_hbm_for_vectors, options.io_by_cpu ? 1 : 0,
         options.block_size, options.reserved_key_start_bit, options.device_id,
-        options.api_lock ? 1 : 0,
-        options.enable_async_fast_load_factor ? 1 : 0);
+        options.api_lock ? 1 : 0, options.enable_async_fast_load_factor ? 1 : 0,
+        options.enable_dual_bucket ? 1 : 0);
     auto platform = platform_ascendc::PlatformAscendCManager::GetInstance();
     HKV_CHECK(platform != nullptr, "get platform failed.");
     block_dim_ = platform->GetCoreNumAiv();
@@ -1037,6 +1038,10 @@ class HashTable : public HashTableBase<K, V, S> {
         "Storage size of keys and scores in one bucket should be the mutiple "
         "of cache line size");
 
+    if (options_.enable_dual_bucket) {
+      check_dual_bucket_options();
+    }
+
     // Initialize bucket memory pool manager and construct table.
     bucket_memory_pool_manager_ = std::make_unique<
         BucketMemoryPoolManager<key_type, value_type, score_type>>();
@@ -1046,9 +1051,17 @@ class HashTable : public HashTableBase<K, V, S> {
         options_.max_capacity, options_.max_hbm_for_vectors,
         options_.max_bucket_size, options_.num_of_buckets_per_alloc,
         /* tile_size */ 32, /* primary */ true,
-        bucket_memory_pool_manager_.get());
+        bucket_memory_pool_manager_.get(), options_.enable_dual_bucket);
     options_.block_size = SAFE_GET_BLOCK_SIZE(options_.block_size);
     reach_max_capacity_ = (options_.init_capacity * 2 > options_.max_capacity);
+    if (options_.enable_dual_bucket) {
+      // The two candidates have to be distinct buckets, and they have to live
+      // in HBM so that both are reachable from the same kernel.
+      HKV_CHECK(table_->buckets_num >= 2,
+                "dual bucket mode requires at least two buckets.");
+      HKV_CHECK(table_->is_pure_hbm,
+                "dual bucket mode requires the vectors to be stored in HBM.");
+    }
     HKV_CHECK((!(options_.io_by_cpu && options_.max_hbm_for_vectors != 0)),
               "[HierarchicalKV] `io_by_cpu` should not be true when "
               "`max_hbm_for_vectors` is not 0!");
@@ -1072,11 +1085,12 @@ class HashTable : public HashTableBase<K, V, S> {
         "init done: block_dim={}, capacity={}, buckets_num={}, "
         "bucket_max_size={}, max_bucket_shift={}, dim={}, "
         "move_byte_per_value={}, use_mte_move={}, reach_max_capacity={}, "
-        "is_fast_mode={}",
+        "is_fast_mode={}, dual_bucket={}",
         block_dim_, table_->capacity, table_->buckets_num,
         table_->bucket_max_size, table_->max_bucket_shift, table_->dim,
         move_byte_per_value, value_move_opt_.use_mte_move ? 1 : 0,
-        reach_max_capacity_ ? 1 : 0, is_fast_mode() ? 1 : 0);
+        reach_max_capacity_ ? 1 : 0, is_fast_mode() ? 1 : 0,
+        options_.enable_dual_bucket ? 1 : 0);
     NpuCheckError();
   }
 
@@ -1160,7 +1174,14 @@ class HashTable : public HashTableBase<K, V, S> {
     }
 
     uint64_t n_align_warp = ((n + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
-    if (is_fast_mode()) {
+    if (options_.enable_dual_bucket) {
+      // No cross-batch duplicate handling yet, so keys must be unique.
+      HKV_CHECK(unique_key,
+                "dual bucket mode requires `unique_key` to be true.");
+      HKV_CHECK(is_fast_mode(), "dual bucket mode requires pure HBM storage.");
+      insert_or_assign_dual_bucket_impl<evict_strategy_>(
+          n, keys, values, scores, stream, n_align_warp);
+    } else if (is_fast_mode()) {
       if (unique_key) {
         if (value_move_opt_.use_mte_move) {
           using TaskQueue = AssignTaskQueue<K, THREAD_NUM_512>;
@@ -1257,6 +1278,40 @@ class HashTable : public HashTableBase<K, V, S> {
     NpuCheckError();
   }
 
+  /// @brief The dual-bucket flavor of `insert_or_assign`; see
+  ///        `dual_bucket_insert_kernel.h` for the insert path.
+  template <int evict_strategy_>
+  void insert_or_assign_dual_bucket_impl(
+      const size_type n, const key_type* keys, const value_type* values,
+      const score_type* scores, aclrtStream stream, uint64_t n_align_warp) {
+    HKV_CHECK(table_->buckets_num >= 2,
+              "dual bucket mode requires at least two buckets.");
+
+    if (value_move_opt_.use_mte_move) {
+      using TaskQueue = AssignTaskQueue<K, THREAD_NUM_512>;
+      insert_or_assign_dual_bucket_kernel_with_mte<K, V, S, TaskQueue,
+                                                   evict_strategy_>
+          <<<block_dim_, TaskQueue::GetRequiredUBSize(), stream>>>(
+              static_cast<void*>(table_->buckets), table_->buckets_size,
+              table_->capacity, table_->buckets_num, table_->bucket_max_size,
+              table_->dim, const_cast<key_type*>(keys),
+              const_cast<value_type*>(values), const_cast<score_type*>(scores),
+              n, global_epoch_, table_->max_bucket_shift,
+              table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+              n_align_warp);
+    } else {
+      insert_or_assign_dual_bucket_kernel<K, V, S, evict_strategy_>
+          <<<block_dim_, 0, stream>>>(
+              static_cast<void*>(table_->buckets), table_->buckets_size,
+              table_->capacity, table_->buckets_num, table_->bucket_max_size,
+              value_move_opt_.dim, const_cast<key_type*>(keys),
+              const_cast<value_type*>(values), const_cast<score_type*>(scores),
+              n, global_epoch_, value_move_opt_.size, table_->max_bucket_shift,
+              table_->capacity_divisor_magic, table_->capacity_divisor_shift,
+              n_align_warp, value_move_opt_.cg_size);
+    }
+  }
+
   /**
    * @brief Insert new key-value-score tuples into the hash table.
    * If the key already exists, the values and scores are assigned new values.
@@ -1311,6 +1366,7 @@ class HashTable : public HashTableBase<K, V, S> {
                         size_type* d_evicted_counter,  // (1)
                         aclrtStream stream = 0, bool unique_key = true,
                         bool ignore_evict_strategy = false) {
+    require_single_bucket_mode("insert_and_evict");
     if (n == 0) {
       return;
     }
@@ -1438,6 +1494,7 @@ class HashTable : public HashTableBase<K, V, S> {
                              score_type* evicted_scores,  // (n)
                              aclrtStream stream = 0, bool unique_key = true,
                              bool ignore_evict_strategy = false) {
+    require_single_bucket_mode("insert_and_evict");
     if (n == 0) {
       return 0;
     }
@@ -1504,6 +1561,7 @@ class HashTable : public HashTableBase<K, V, S> {
                        const score_type* scores = nullptr,  // (n)
                        aclrtStream stream = 0,
                        bool ignore_evict_strategy = false) {
+    require_single_bucket_mode("accum_or_assign");
     if constexpr (std::is_same<value_type, double>::value ||
                   std::is_same<value_type, uint16_t>::value ||
                   std::is_same<value_type, uint32_t>::value) {
@@ -1593,6 +1651,7 @@ class HashTable : public HashTableBase<K, V, S> {
                       score_type* scores = nullptr,             // (n)
                       aclrtStream stream = 0, bool unique_key = true,
                       bool ignore_evict_strategy = false) {
+    require_single_bucket_mode("find_or_insert");
     if (n == 0) {
       return;
     }
@@ -1741,6 +1800,7 @@ class HashTable : public HashTableBase<K, V, S> {
                       aclrtStream stream = 0, bool unique_key = true,
                       bool ignore_evict_strategy = false,
                       key_type** locked_key_ptrs = nullptr) {
+    require_single_bucket_mode("find_or_insert");
     if (n == 0) {
       return;
     }
@@ -1830,6 +1890,7 @@ class HashTable : public HashTableBase<K, V, S> {
                  key_type** locked_key_ptrs,  // (n)
                  bool* success = nullptr,     // (n)
                  aclrtStream stream = 0, score_type const* scores = nullptr) {
+    require_single_bucket_mode("lock_keys");
     if (n == 0) {
       return;
     }
@@ -1875,6 +1936,7 @@ class HashTable : public HashTableBase<K, V, S> {
                    const key_type* keys,                           // (n)
                    bool* success = nullptr,                        // (n)
                    aclrtStream stream = 0) {
+    require_single_bucket_mode("unlock_keys");
     if (n == 0) {
       return;
     }
@@ -1920,6 +1982,7 @@ class HashTable : public HashTableBase<K, V, S> {
               const value_type* values,            // (n, DIM)
               const score_type* scores = nullptr,  // (n)
               aclrtStream stream = 0, bool unique_key = true) {
+    require_single_bucket_mode("assign");
     if (n == 0) {
       return;
     }
@@ -2048,6 +2111,7 @@ class HashTable : public HashTableBase<K, V, S> {
                      const key_type* keys,                // (n)
                      const score_type* scores = nullptr,  // (n)
                      aclrtStream stream = 0, bool unique_key = true) {
+    require_single_bucket_mode("assign_scores");
     if (n == 0) {
       return;
     }
@@ -2109,6 +2173,7 @@ class HashTable : public HashTableBase<K, V, S> {
                      const key_type* keys,      // (n)
                      const value_type* values,  // (n, DIM)
                      aclrtStream stream = 0, bool unique_key = true) {
+    require_single_bucket_mode("assign_values");
     if (n == 0) {
       return;
     }
@@ -2236,6 +2301,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    require_single_bucket_mode("find");
     HKV_LOG_INFO("find(values): n={}, has_scores={}, is_fast_mode={}", n,
                  scores != nullptr ? 1 : 0, is_fast_mode() ? 1 : 0);
 
@@ -2313,6 +2379,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    require_single_bucket_mode("find");
     HKV_LOG_INFO("find(missed): n={}, has_scores={}, is_fast_mode={}", n,
                  scores != nullptr ? 1 : 0, is_fast_mode() ? 1 : 0);
     npu_memset(missed_size, 0, sizeof(int), stream);
@@ -2395,6 +2462,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    require_single_bucket_mode("find");
     HKV_LOG_INFO("find(ptr): n={}, unique_key={}, has_scores={}", n,
                  unique_key ? 1 : 0, scores != nullptr ? 1 : 0);
 
@@ -2441,6 +2509,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    require_single_bucket_mode("find_and_update");
     HKV_LOG_INFO("find_and_update: n={}, unique_key={}, has_scores={}", n,
                  unique_key ? 1 : 0, scores != nullptr ? 1 : 0);
 
@@ -2483,6 +2552,7 @@ class HashTable : public HashTableBase<K, V, S> {
     if (n == 0) {
       return;
     }
+    require_single_bucket_mode("contains");
     HKV_LOG_INFO("contains: n={}", n);
 
     std::unique_ptr<read_shared_lock> lock_ptr;
@@ -2507,6 +2577,7 @@ class HashTable : public HashTableBase<K, V, S> {
    *
    */
   void erase(const size_type n, const key_type* keys, aclrtStream stream = 0) {
+    require_single_bucket_mode("erase");
     if (n == 0) {
       return;
     }
@@ -2632,10 +2703,10 @@ class HashTable : public HashTableBase<K, V, S> {
       lock_ptr = std::make_unique<update_read_lock>(mutex_, stream);
     }
 
-    clear_kernel<K, V, S>
-        <<<block_dim_, 0, stream>>>(static_cast<void*>(table_->buckets),
-                                    static_cast<void*>(table_->buckets_size),
-                                    options_.max_bucket_size, table_->capacity);
+    clear_kernel<K, V, S><<<block_dim_, 0, stream>>>(
+        static_cast<void*>(table_->buckets),
+        static_cast<void*>(table_->buckets_size), options_.max_bucket_size,
+        table_->capacity, options_.enable_dual_bucket ? 1U : 0U);
     NpuCheckError();
   }
 
@@ -3033,6 +3104,7 @@ class HashTable : public HashTableBase<K, V, S> {
    * @param stream The CANN stream that is used to execute the operation.
    */
   void reserve(const size_type new_capacity, aclrtStream stream = 0) {
+    require_single_bucket_mode("reserve");
     HKV_LOG_INFO(
         "reserve begin: new_capacity={}, current_capacity={}, "
         "max_capacity={}, reach_max_capacity={}",
@@ -3323,6 +3395,7 @@ class HashTable : public HashTableBase<K, V, S> {
     HKV_CHECK(max_workspace_size >= tuple_size,
               "[HierarchicalKV] max_workspace_size is smaller than a single "
               "`key + score + value` tuple! Please set a larger value!");
+    require_single_bucket_mode("load");
     HKV_LOG_INFO(
         "load: capacity={}, dim={}, max_workspace_size={}, is_fast_mode={}",
         capacity(), dim(), max_workspace_size, is_fast_mode() ? 1 : 0);
@@ -3542,6 +3615,32 @@ class HashTable : public HashTableBase<K, V, S> {
                 "`set_global_epoch` when running on "
                 "Epoch LRU or Epoch LFU mode.");
     }
+  }
+
+  /// @brief Validate the constraints the dual-bucket layout relies on: a fixed
+  ///        capacity (no rehash), two distinct buckets, and pure HBM vectors.
+  inline void check_dual_bucket_options() const {
+    HKV_CHECK(options_.max_capacity > 0,
+              "dual bucket mode requires max_capacity > 0.");
+    HKV_CHECK(options_.init_capacity == options_.max_capacity,
+              "dual bucket mode requires init_capacity == max_capacity.");
+    HKV_CHECK(options_.max_bucket_size == 128,
+              "dual bucket mode requires max_bucket_size == 128.");
+    HKV_CHECK(!options_.io_by_cpu,
+              "dual bucket mode requires io_by_cpu == false.");
+    // With init_capacity == max_capacity, the bucket count follows from it.
+    const size_t buckets_num =
+        1 + ((options_.max_capacity - 1) / options_.max_bucket_size);
+    HKV_CHECK(buckets_num >= 2,
+              "dual bucket mode requires at least two buckets, i.e. a capacity "
+              "of at least 2 * max_bucket_size.");
+  }
+
+  /// @brief Reject the interfaces not yet adapted to the dual-bucket layout;
+  ///        they pin a single bucket and would otherwise return wrong results.
+  inline void require_single_bucket_mode(const char* api) const {
+    HKV_CHECK(!options_.enable_dual_bucket,
+              log_format("{} is not supported in dual bucket mode.", api));
   }
 
   /**

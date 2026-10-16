@@ -17,6 +17,7 @@
 #ifndef ASCENDC_CLEAR_KERNEL_H_
 #define ASCENDC_CLEAR_KERNEL_H_
 
+#include "dual_bucket_utils.h"
 #include "kernel_operator.h"
 #include "types.h"
 
@@ -29,7 +30,7 @@ __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_1024) inline void clear_kernel_vf(
     __gm__ void* buckets_addr_gm, __gm__ void* buckets_size_addr_gm,
     size_t bucket_max_size, size_t table_capacity, uint64_t thread_all,
-    uint32_t block_index) {
+    uint32_t block_index, const uint32_t dual_bucket) {
   if (buckets_addr_gm == nullptr) {
     return;
   }
@@ -42,6 +43,8 @@ LAUNCH_BOUND(THREAD_NUM_1024) inline void clear_kernel_vf(
       reinterpret_cast<__gm__ Bucket<K, V, S>*>(buckets_addr_gm);
   __gm__ int32_t* __restrict__ buckets_size =
       reinterpret_cast<__gm__ int32_t*>(buckets_size_addr_gm);
+  const D empty_slot_digest =
+      dual_bucket ? dual_bucket_empty_digest<K>() : empty_digest<K>();
 
   size_t t_id = block_index * blockDim.x + threadIdx.x;
   for (size_t t = t_id; t < table_capacity; t += thread_all) {
@@ -49,7 +52,7 @@ LAUNCH_BOUND(THREAD_NUM_1024) inline void clear_kernel_vf(
     size_t key_idx = t % bucket_max_size;
     __gm__ Bucket<K, V, S>* bucket = buckets + bkt_idx;
     // 1. 桶内key置空
-    buckets[bkt_idx].digests_[key_idx] = empty_digest<K>();
+    buckets[bkt_idx].digests_[key_idx] = empty_slot_digest;
     buckets[bkt_idx].keys_[key_idx] = EMPTY_KEY;
 
     // 2. 桶大小清0
@@ -63,11 +66,12 @@ template <class K, class V, class S>
 __global__ __vector__ void clear_kernel(__gm__ void* buckets,
                                         __gm__ void* buckets_size,
                                         size_t bucket_max_size,
-                                        size_t table_capacity) {
+                                        size_t table_capacity,
+                                        const uint32_t dual_bucket) {
   const uint64_t thread_all = THREAD_NUM_1024 * GetBlockNum();
   Simt::VF_CALL<clear_kernel_vf<K, V, S>>(
       Simt::Dim3{THREAD_NUM_1024}, buckets, buckets_size, bucket_max_size,
-      table_capacity, thread_all, GetBlockIdx());
+      table_capacity, thread_all, GetBlockIdx(), dual_bucket);
 }
 }  // namespace hkv
 }  // namespace npu
