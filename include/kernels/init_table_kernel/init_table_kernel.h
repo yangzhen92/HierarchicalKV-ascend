@@ -25,6 +25,7 @@
 #include <kernel_operator.h>
 #include <cstddef>
 #include <cstdint>
+#include "dual_bucket_utils.h"
 #include "types.h"
 #include "utils.h"
 
@@ -76,14 +77,17 @@ template <class K, class V, class S>
 __simt_vf__ __aicore__
 LAUNCH_BOUND(THREAD_NUM_512) inline void create_atomic_keys_vf(
     __gm__ Bucket<K, V, S>* buckets_gm, const size_t start, const size_t end,
-    const size_t bucket_max_size, uint32_t blockIdx) {
+    const size_t bucket_max_size, uint32_t blockIdx,
+    const uint32_t dual_bucket) {
   __gm__ Bucket<K, V, S>* buckets =
       reinterpret_cast<__gm__ Bucket<K, V, S>* __restrict>(buckets_gm);
+  const D empty_slot_digest =
+      dual_bucket ? dual_bucket_empty_digest<K>() : empty_digest<K>();
 
   size_t tid = (blockIdx * blockDim.x) + threadIdx.x;
   if (start + tid < end) {
     for (size_t i = 0; i < bucket_max_size; i++) {
-      buckets[start + tid].digests_[i] = empty_digest<K>();
+      buckets[start + tid].digests_[i] = empty_slot_digest;
       buckets[start + tid].keys_[i] = static_cast<K>(EMPTY_KEY);
     }
   }
@@ -118,10 +122,10 @@ __global__ __vector__ void allocate_bucket_others_kernel(
 template <class K, class V, class S>
 __global__ __vector__ void create_atomic_keys_kernel(
     __gm__ Bucket<K, V, S>* buckets_gm, const size_t start, const size_t end,
-    const size_t bucket_max_size) {
+    const size_t bucket_max_size, const uint32_t dual_bucket) {
   Simt::VF_CALL<create_atomic_keys_vf<K, V, S>>(
       Simt::Dim3{static_cast<uint32_t>(THREAD_NUM_512)}, buckets_gm, start, end,
-      bucket_max_size, GetBlockIdx());
+      bucket_max_size, GetBlockIdx(), dual_bucket);
 }
 
 template <class K, class V, class S>

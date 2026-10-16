@@ -64,6 +64,20 @@ struct HashTableOptions {
       device_memory_pool;  ///< Configuration options for device memory pool.
   MemoryPoolOptions
       host_memory_pool;  ///< Configuration options for host memory pool.
+  /*
+   * Enable the dual-bucket mode, in which every key is mapped to two
+   * independent buckets: the low half of its hash selects the first candidate
+   * and the high half the second, each with its own probe start position. On
+   * insertion, both buckets are probed for a duplicate; otherwise the less
+   * loaded candidate is chosen, and when both are full the entry with the
+   * globally minimum score across the two is evicted. Only `insert_or_assign`
+   * is supported in this mode; the other interfaces report an explicit error.
+   *
+   * The mode requires: `init_capacity == max_capacity`, `max_bucket_size ==
+   * 128`, at least two buckets, pure HBM storage and `unique_key == true` on
+   * every call.
+   */
+  bool enable_dual_bucket = false;  ///< The flag to enable dual-bucket mode.
 };
 
 }  // namespace hkv
