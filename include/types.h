@@ -249,6 +249,7 @@ struct Table {
   uint32_t max_bucket_shift = 0;        // log2(bucket_max_size) for kernel
   uint64_t capacity_divisor_magic = 0;  // quick div magic for kernel
   uint64_t capacity_divisor_shift = 0;  // quick div shift for kernel
+  bool dual_bucket = false;  // Use the dual-bucket layout's empty digest.
 };
 
 enum OccupyResult {
